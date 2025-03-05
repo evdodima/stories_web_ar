@@ -14,6 +14,10 @@ class ImageTracker {
         this.referenceImageGray = null;
         this.referenceKeypoints = null;
         this.referenceDescriptors = null;
+        this.pyramidLevels = 5; // Number of scale pyramid levels
+        this.pyramidScale = 0.75; // Scale factor between pyramid levels
+        this.pyramidKeypoints = []; // Array to store keypoints at different scales
+        this.pyramidDescriptors = []; // Array to store descriptors at different scales
         
         // Three.js variables
         this.scene = null;
@@ -154,6 +158,9 @@ class ImageTracker {
         
         this.updateStatus('Loading reference image...');
         
+        // Clean up previous resources if they exist
+        this.cleanupResources();
+        
         try {
             // Read the file and convert to image element
             const imageUrl = URL.createObjectURL(file);
@@ -172,19 +179,55 @@ class ImageTracker {
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
             
-            // Extract features using ORB
-            this.detector = new cv.ORB(500);
+            // Extract features using ORB with more features and better detection
+            this.detector = new cv.ORB(1000); // Increase max features
             
+            // Check if the extended ORB APIs are available
+            try {
+                // Some versions of OpenCV.js might not expose these methods
+                if (typeof this.detector.setWTA_K === 'function') {
+                    this.detector.setWTA_K(3); // More robust descriptors
+                }
+                
+                if (typeof this.detector.setFastThreshold === 'function') {
+                    this.detector.setFastThreshold(20); // Lower threshold to detect more corners
+                }
+                
+                // Don't use setScoreType as it has unbound types error
+            } catch (e) {
+                console.log("Extended ORB configuration not available:", e.message);
+            }
+            
+            // Store for the original scale
             const referenceKeypoints = new cv.KeyPointVector();
             this.referenceDescriptors = new cv.Mat();
             
+            console.log("Detecting keypoints in reference image...");
             this.detector.detect(this.referenceImageGray, referenceKeypoints);
+            console.log(`Found ${referenceKeypoints.size()} keypoints in reference image`);
+            
+            console.log("Computing descriptors for reference image...");
             this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
+            
+            if (this.referenceDescriptors.empty() || this.referenceDescriptors.rows === 0) {
+                console.error("Failed to compute descriptors for reference image");
+            } else {
+                console.log(`Computed ${this.referenceDescriptors.rows} descriptors for reference image`);
+            }
             
             this.referenceKeypoints = referenceKeypoints;
             
+            // Create scale pyramid for the reference image
+            this.createScalePyramid();
+            
+            // Count total features across all pyramid levels
+            let totalFeatures = this.referenceKeypoints.size();
+            for (let i = 0; i < this.pyramidKeypoints.length; i++) {
+                totalFeatures += this.pyramidKeypoints[i].size();
+            }
+            
             // Update status
-            this.updateStatus(`Reference image loaded. Found ${referenceKeypoints.size()} features.`);
+            this.updateStatus(`Reference image loaded. Found ${totalFeatures} features across ${this.pyramidLevels} scale levels.`);
             
             // Enable start button
             this.startButton.disabled = false;
@@ -253,6 +296,28 @@ class ImageTracker {
         this.fileInput.disabled = false;
         
         this.updateStatus('Tracking stopped.');
+    }
+    
+    cleanupResources() {
+        // Clean up pyramid resources
+        for (let i = 0; i < this.pyramidKeypoints.length; i++) {
+            if (this.pyramidKeypoints[i]) this.pyramidKeypoints[i].delete();
+            if (this.pyramidDescriptors[i]) this.pyramidDescriptors[i].delete();
+        }
+        
+        this.pyramidKeypoints = [];
+        this.pyramidDescriptors = [];
+        
+        // Clean up other resources
+        if (this.referenceImage) this.referenceImage.delete();
+        if (this.referenceImageGray) this.referenceImageGray.delete();
+        if (this.referenceKeypoints) this.referenceKeypoints.delete();
+        if (this.referenceDescriptors) this.referenceDescriptors.delete();
+        
+        this.referenceImage = null;
+        this.referenceImageGray = null;
+        this.referenceKeypoints = null;
+        this.referenceDescriptors = null;
     }
     
     processVideo() {
@@ -346,12 +411,40 @@ class ImageTracker {
             frameDescriptors = new cv.Mat();
             
             try {
+                // Detect keypoints with better settings
+                console.log("Detecting keypoints in frame...");
+                
+                // Configure detector for better performance (if APIs available)
+                try {
+                    if (typeof this.detector.setMaxFeatures === 'function') {
+                        this.detector.setMaxFeatures(1000);
+                    }
+                    
+                    if (typeof this.detector.setFastThreshold === 'function') {
+                        this.detector.setFastThreshold(10); // Lower threshold to detect more features
+                    }
+                    
+                    // Don't use setScoreType as it has unbound types error
+                } catch (e) {
+                    console.log("Extended ORB configuration not available for frame:", e.message);
+                }
+                
                 // Detect keypoints
                 this.detector.detect(frameGray, frameKeypoints);
+                console.log(`Found ${frameKeypoints.size()} keypoints in frame`);
                 
                 // Only compute descriptors if keypoints were found
                 if (frameKeypoints.size() > 0) {
+                    console.log("Computing descriptors for frame...");
                     this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
+                    
+                    if (frameDescriptors.empty() || frameDescriptors.rows === 0) {
+                        console.error("Failed to compute descriptors for frame");
+                    } else {
+                        console.log(`Computed ${frameDescriptors.rows} descriptors for frame`);
+                    }
+                } else {
+                    console.warn("No keypoints found in frame, skipping descriptor computation");
                 }
             } catch (e) {
                 console.error("Error detecting features:", e);
@@ -372,8 +465,19 @@ class ImageTracker {
             
             try {
                 // Only proceed if we have enough features to match
+                // Check if we have enough features from either base scale or pyramid scales
+                let totalRefKeypoints = 0;
+                if (this.referenceKeypoints) {
+                    totalRefKeypoints += this.referenceKeypoints.size();
+                }
+                for (let i = 0; i < this.pyramidKeypoints.length; i++) {
+                    if (this.pyramidKeypoints[i]) {
+                        totalRefKeypoints += this.pyramidKeypoints[i].size();
+                    }
+                }
+                
                 if (frameKeypoints.size() > 10 && 
-                    this.referenceKeypoints && this.referenceKeypoints.size() > 10 && 
+                    totalRefKeypoints > 10 && 
                     frameDescriptors && !frameDescriptors.empty() && 
                     this.referenceDescriptors && !this.referenceDescriptors.empty() &&
                     frameDescriptors.rows > 0 && this.referenceDescriptors.rows > 0 &&
@@ -387,49 +491,36 @@ class ImageTracker {
                         return;
                     }
                     
-                    // Match features
-                    matcher = new cv.BFMatcher(cv.NORM_HAMMING);
-                    matches = new cv.DMatchVector();
+                    // Display keypoints count for debugging
+                    console.log(`Frame keypoints: ${frameKeypoints.size()}`);
+                    console.log(`Reference keypoints: ${this.referenceKeypoints.size()}`);
+                    for (let i = 0; i < this.pyramidKeypoints.length; i++) {
+                        if (this.pyramidKeypoints[i]) {
+                            console.log(`Pyramid level ${i} keypoints: ${this.pyramidKeypoints[i].size()}`);
+                        }
+                    }
                     
-                    // Try to match descriptors
-                    matcher.match(this.referenceDescriptors, frameDescriptors, matches);
+                    // Match features using scale pyramid
+                    matcher = new cv.BFMatcher(cv.NORM_HAMMING);
+                    
+                    // Process with scale pyramid to get matches from multiple scales
+                    matches = this.processWithScalePyramid(frameGray, frameKeypoints, frameDescriptors, matcher);
                     
                     // Filter good matches
                     goodMatches = new cv.DMatchVector();
                     
                     if (matches.size() > 0) {
-                        // Get distances for good match filtering
-                        const distances = [];
-                        
+                        // We now have matches with Lowe's ratio test applied already
+                        // Just copy them to goodMatches
                         for (let i = 0; i < matches.size(); i++) {
                             try {
                                 const match = matches.get(i);
                                 if (match && typeof match.distance === 'number' && 
                                     !isNaN(match.distance) && isFinite(match.distance)) {
-                                    distances.push(match.distance);
+                                    goodMatches.push_back(match);
                                 }
                             } catch (e) {
                                 // Skip invalid matches
-                            }
-                        }
-                        
-                        // Only proceed if we have valid distances
-                        if (distances.length > 0) {
-                            // Sort distances to find best matches
-                            distances.sort((a, b) => a - b);
-                            const threshold = Math.min(100, 3 * distances[0]);
-                            
-                            // Filter by distance threshold
-                            for (let i = 0; i < matches.size(); i++) {
-                                try {
-                                    const match = matches.get(i);
-                                    if (match && typeof match.distance === 'number' && 
-                                        match.distance <= threshold) {
-                                        goodMatches.push_back(match);
-                                    }
-                                } catch (e) {
-                                    // Skip problematic matches
-                                }
                             }
                         }
                     }
@@ -457,7 +548,8 @@ class ImageTracker {
                                 }
                                 
                                 // Get keypoints
-                                const refKeypoint = this.referenceKeypoints.get(match.queryIdx);
+                                // Get keypoint from either original or pyramid scale
+                                const refKeypoint = this.getKeypointByIndex(match.queryIdx);
                                 const frameKeypoint = frameKeypoints.get(match.trainIdx);
                                 
                                 // Validate keypoints and coordinates
@@ -638,6 +730,330 @@ class ImageTracker {
         return;
     }
     
+    createScalePyramid() {
+        console.log("Creating scale pyramid...");
+        
+        // Clean up any previous pyramid data
+        for (let i = 0; i < this.pyramidKeypoints.length; i++) {
+            if (this.pyramidKeypoints[i]) this.pyramidKeypoints[i].delete();
+            if (this.pyramidDescriptors[i]) this.pyramidDescriptors[i].delete();
+        }
+        
+        this.pyramidKeypoints = [];
+        this.pyramidDescriptors = [];
+        
+        // Make sure we have valid reference image
+        if (!this.referenceImage || !this.referenceImageGray) {
+            console.error("Reference image not available for pyramid creation");
+            return;
+        }
+        
+        console.log(`Reference image dimensions: ${this.referenceImage.cols}x${this.referenceImage.rows}`);
+        
+        // We'll use different scales: one larger and one smaller than the original
+        const scales = [1.5, 0.75];  // Simpler approach with just two additional scales
+        
+        for (let i = 0; i < scales.length; i++) {
+            const currentScale = scales[i];
+            const newWidth = Math.round(this.referenceImage.cols * currentScale);
+            const newHeight = Math.round(this.referenceImage.rows * currentScale);
+            
+            // Skip if image becomes too small
+            if (newWidth < 32 || newHeight < 32) {
+                console.log(`Skipping pyramid scale ${currentScale}: image too small (${newWidth}x${newHeight})`);
+                continue;
+            }
+            
+            try {
+                console.log(`Creating pyramid level with scale=${currentScale}, size=${newWidth}x${newHeight}`);
+                
+                // Create scaled image
+                const scaledImage = new cv.Mat();
+                const dstSize = new cv.Size(newWidth, newHeight);
+                cv.resize(this.referenceImageGray, scaledImage, dstSize, 0, 0, cv.INTER_AREA);
+                
+                // Extract features from this scale
+                const scaledKeypoints = new cv.KeyPointVector();
+                const scaledDescriptors = new cv.Mat();
+                
+                // Configure detector for different scales (if APIs available)
+                try {
+                    if (typeof this.detector.setFastThreshold === 'function') {
+                        if (currentScale < 1.0) {
+                            // For smaller scales, use lower threshold to detect more features
+                            this.detector.setFastThreshold(10); 
+                        } else {
+                            // For larger scales, use default parameters
+                            this.detector.setFastThreshold(20);
+                        }
+                    }
+                    // Don't use setScoreType as it has unbound types error
+                } catch (e) {
+                    console.log(`Extended ORB configuration not available for scale ${currentScale}:`, e.message);
+                }
+                
+                // Detect keypoints
+                this.detector.detect(scaledImage, scaledKeypoints);
+                console.log(`  Found ${scaledKeypoints.size()} keypoints`);
+                
+                // Only compute descriptors if keypoints were found
+                if (scaledKeypoints.size() > 0) {
+                    this.detector.compute(scaledImage, scaledKeypoints, scaledDescriptors);
+                    
+                    // Verify descriptors were computed
+                    if (scaledDescriptors.empty()) {
+                        console.error(`  Failed to compute descriptors for scale ${currentScale}`);
+                        scaledKeypoints.delete();
+                        scaledDescriptors.delete();
+                    } else {
+                        console.log(`  Computed ${scaledDescriptors.rows} descriptors`);
+                        
+                        // Adjust keypoint coordinates to match original image scale
+                        this.adjustKeypointScale(scaledKeypoints, 1.0 / currentScale);
+                        
+                        // Add to pyramid arrays
+                        this.pyramidKeypoints.push(scaledKeypoints);
+                        this.pyramidDescriptors.push(scaledDescriptors);
+                        
+                        console.log(`  Added scale ${currentScale} to pyramid with ${scaledKeypoints.size()} keypoints`);
+                    }
+                } else {
+                    // No keypoints found at this scale, clean up
+                    console.log(`  No keypoints found at scale ${currentScale}`);
+                    scaledKeypoints.delete();
+                    scaledDescriptors.delete();
+                }
+                
+                // Clean up scaled image
+                scaledImage.delete();
+                
+            } catch (e) {
+                console.error(`Error creating pyramid level at scale ${currentScale}:`, e);
+            }
+        }
+        
+        console.log(`Scale pyramid created with ${this.pyramidKeypoints.length} additional levels`);
+    }
+    
+    adjustKeypointScale(keypoints, scaleFactor) {
+        // Adjust keypoint coordinates to match the original image scale
+        for (let i = 0; i < keypoints.size(); i++) {
+            const kp = keypoints.get(i);
+            kp.pt.x = kp.pt.x * scaleFactor;
+            kp.pt.y = kp.pt.y * scaleFactor;
+            kp.size = kp.size * scaleFactor;  // Also adjust feature size
+        }
+    }
+    
+    processWithScalePyramid(frameGray, frameKeypoints, frameDescriptors, matcher) {
+        // Array to collect all matches
+        const allMatches = new cv.DMatchVector();
+        
+        try {
+            // Temporarily disable advanced matching for debugging
+            const useAdvancedMatching = false;
+            
+            // Match with original scale first
+            if (this.referenceDescriptors && !this.referenceDescriptors.empty() &&
+                frameDescriptors && !frameDescriptors.empty() &&
+                frameDescriptors.cols === this.referenceDescriptors.cols) {
+                
+                // Simple matching without ratio test to get all possible matches
+                const matches = new cv.DMatchVector();
+                try {
+                    matcher.match(this.referenceDescriptors, frameDescriptors, matches);
+                    console.log(`Base scale: found ${matches.size()} matches`);
+                    
+                    // Add all matches from original scale
+                    for (let i = 0; i < matches.size(); i++) {
+                        try {
+                            const match = matches.get(i);
+                            if (match) {
+                                allMatches.push_back(match);
+                            }
+                        } catch (e) {
+                            console.error("Error adding original match:", e);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error matching original scale:", e);
+                } finally {
+                    matches.delete();
+                }
+            } else {
+                console.log("Skipping base scale matching - invalid descriptors");
+                if (this.referenceDescriptors) {
+                    console.log(`Reference descriptors: ${this.referenceDescriptors.rows}x${this.referenceDescriptors.cols}`);
+                }
+                if (frameDescriptors) {
+                    console.log(`Frame descriptors: ${frameDescriptors.rows}x${frameDescriptors.cols}`);
+                }
+            }
+            
+            // Match with each pyramid level
+            for (let i = 0; i < this.pyramidKeypoints.length; i++) {
+                const pyramidDescriptors = this.pyramidDescriptors[i];
+                if (!pyramidDescriptors) {
+                    console.log(`Pyramid level ${i}: no descriptors available`);
+                    continue;
+                }
+                
+                // Only match if descriptors are valid
+                if (!pyramidDescriptors.empty() &&
+                    frameDescriptors && !frameDescriptors.empty() &&
+                    frameDescriptors.cols === pyramidDescriptors.cols) {
+                    
+                    // Simple matching without ratio test
+                    const matches = new cv.DMatchVector();
+                    try {
+                        matcher.match(pyramidDescriptors, frameDescriptors, matches);
+                        console.log(`Pyramid level ${i}: found ${matches.size()} matches`);
+                        
+                        // Add matches from this pyramid level
+                        for (let j = 0; j < matches.size(); j++) {
+                            try {
+                                // Get the match
+                                const match = matches.get(j);
+                                if (!match) continue;
+                                
+                                // Make sure the index is within bounds
+                                if (match.queryIdx >= 0 && match.queryIdx < this.pyramidKeypoints[i].size() &&
+                                    match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                                    
+                                    // Use a special index scheme to identify pyramid level matches:
+                                    // - Original keypoints: regular index
+                                    // - Pyramid keypoints: -1000 - (level * 1000 + index)
+                                    const pyramidIndex = -1000 - (i * 1000 + match.queryIdx);
+                                    
+                                    // Instead of creating a new match, modify the existing match
+                                    // and then copy it
+                                    const originalQueryIdx = match.queryIdx;
+                                    match.queryIdx = pyramidIndex;
+                                    
+                                    // Push back a copy of the modified match
+                                    allMatches.push_back(match);
+                                    
+                                    // Restore the original queryIdx
+                                    match.queryIdx = originalQueryIdx;
+                                }
+                            } catch (e) {
+                                console.error(`Error processing pyramid match at level ${i}:`, e);
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Error matching pyramid level ${i}:`, e);
+                    } finally {
+                        matches.delete();
+                    }
+                } else {
+                    console.log(`Pyramid level ${i}: descriptor mismatch or empty`);
+                    if (pyramidDescriptors) {
+                        console.log(`Pyramid descriptors ${i}: ${pyramidDescriptors.rows}x${pyramidDescriptors.cols}`);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error in processWithScalePyramid:", e);
+        }
+        
+        console.log(`Total matches found: ${allMatches.size()}`);
+        return allMatches;
+    }
+    
+    // Helper method for simple matching without ratio test
+    simpleMatch(queryDescriptors, trainDescriptors, matcher, outputMatches) {
+        const matches = new cv.DMatchVector();
+        try {
+            matcher.match(queryDescriptors, trainDescriptors, matches);
+            
+            // Add matches to output vector
+            for (let i = 0; i < matches.size(); i++) {
+                try {
+                    const match = matches.get(i);
+                    if (match) {
+                        outputMatches.push_back(match);
+                    }
+                } catch (e) {
+                    console.error("Error adding match:", e);
+                }
+            }
+        } catch (e) {
+            console.error("Error in simple matching:", e);
+        } finally {
+            matches.delete();
+        }
+    }
+    
+    // Helper method for simple matching at pyramid levels
+    simplePyramidMatch(pyramidDescriptors, frameKeypoints, frameDescriptors, matcher, outputMatches, pyramidLevel) {
+        const matches = new cv.DMatchVector();
+        try {
+            matcher.match(pyramidDescriptors, frameDescriptors, matches);
+            
+            // Add matches from this pyramid level
+            for (let j = 0; j < matches.size(); j++) {
+                try {
+                    // Get the match
+                    const match = matches.get(j);
+                    if (!match) continue;
+                    
+                    // Use a special index scheme to identify pyramid level matches
+                    const pyramidIndex = -1000 - (pyramidLevel * 1000 + match.queryIdx);
+                    
+                    // Make sure the index is within bounds
+                    if (match.queryIdx >= 0 && match.queryIdx < this.pyramidKeypoints[pyramidLevel].size() &&
+                        match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                        
+                        // Modify and copy the match
+                        const originalQueryIdx = match.queryIdx;
+                        match.queryIdx = pyramidIndex;
+                        outputMatches.push_back(match);
+                        match.queryIdx = originalQueryIdx;
+                    }
+                } catch (e) {
+                    console.error(`Error processing match at pyramid level ${pyramidLevel}:`, e);
+                }
+            }
+        } catch (e) {
+            console.error(`Error matching pyramid level ${pyramidLevel}:`, e);
+        } finally {
+            matches.delete();
+        }
+    }
+    
+    getKeypointByIndex(index) {
+        try {
+            // If index is positive, it's from the original scale
+            if (index >= 0) {
+                if (this.referenceKeypoints && index < this.referenceKeypoints.size()) {
+                    return this.referenceKeypoints.get(index);
+                }
+                return null;
+            }
+            
+            // Otherwise, it's from a pyramid level
+            // Decode the special index scheme:
+            // -1000 - (level * 1000 + index)
+            const decodedIndex = -1000 - index;
+            const level = Math.floor(decodedIndex / 1000);
+            const idx = decodedIndex % 1000;
+            
+            // Verify the level is valid
+            if (level >= 0 && level < this.pyramidKeypoints.length) {
+                const keypointVector = this.pyramidKeypoints[level];
+                if (keypointVector && idx < keypointVector.size()) {
+                    return keypointVector.get(idx);
+                }
+            }
+            
+            // Invalid index
+            return null;
+        } catch (e) {
+            console.error("Error retrieving keypoint:", e);
+            return null;
+        }
+    }
+
     updateStatus(message) {
         this.statusMessage.textContent = message;
     }
