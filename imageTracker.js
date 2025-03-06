@@ -47,7 +47,7 @@ class ImageTracker {
         // Check if OpenCV is loaded and has all required features
         if (typeof cv === 'undefined' || 
             typeof cv.BFMatcher !== 'function' || 
-            typeof cv.ORB !== 'function' || 
+            typeof cv.AKAZE !== 'function' || 
             typeof cv.DMatchVector !== 'function') {
             
             this.updateStatus('Loading OpenCV...');
@@ -179,23 +179,25 @@ class ImageTracker {
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
             
-            // Extract features using ORB with more features and better detection
-            this.detector = new cv.ORB(1000); // Increase max features
+            // Extract features using AKAZE for better detection
+            this.detector = new cv.AKAZE();
             
-            // Check if the extended ORB APIs are available
+            // AKAZE has different parameters from ORB
             try {
                 // Some versions of OpenCV.js might not expose these methods
-                if (typeof this.detector.setWTA_K === 'function') {
-                    this.detector.setWTA_K(3); // More robust descriptors
+                if (typeof this.detector.setThreshold === 'function') {
+                    this.detector.setThreshold(0.001); // Detector threshold
                 }
                 
-                if (typeof this.detector.setFastThreshold === 'function') {
-                    this.detector.setFastThreshold(20); // Lower threshold to detect more corners
+                if (typeof this.detector.setDescriptorSize === 'function') {
+                    this.detector.setDescriptorSize(0); // Default descriptor size
                 }
                 
-                // Don't use setScoreType as it has unbound types error
+                if (typeof this.detector.setDescriptorChannels === 'function') {
+                    this.detector.setDescriptorChannels(3); // Number of channels in the descriptor
+                }
             } catch (e) {
-                console.log("Extended ORB configuration not available:", e.message);
+                console.log("Extended AKAZE configuration not available:", e.message);
             }
             
             // Store for the original scale
@@ -412,36 +414,39 @@ class ImageTracker {
             
             try {
                 // Detect keypoints with better settings
-                console.log("Detecting keypoints in frame...");
+                // console.log("Detecting keypoints in frame...");
                 
                 // Configure detector for better performance (if APIs available)
                 try {
-                    if (typeof this.detector.setMaxFeatures === 'function') {
-                        this.detector.setMaxFeatures(1000);
+                    // AKAZE parameter settings for frame processing
+                    if (typeof this.detector.setThreshold === 'function') {
+                        this.detector.setThreshold(0.001); // Using a consistent threshold for frames too
                     }
                     
-                    if (typeof this.detector.setFastThreshold === 'function') {
-                        this.detector.setFastThreshold(10); // Lower threshold to detect more features
+                    if (typeof this.detector.setDescriptorSize === 'function') {
+                        this.detector.setDescriptorSize(0); // Default descriptor size
                     }
                     
-                    // Don't use setScoreType as it has unbound types error
+                    if (typeof this.detector.setDescriptorChannels === 'function') {
+                        this.detector.setDescriptorChannels(3); // Number of channels in the descriptor
+                    }
                 } catch (e) {
-                    console.log("Extended ORB configuration not available for frame:", e.message);
+                    console.log("Extended AKAZE configuration not available for frame:", e.message);
                 }
                 
                 // Detect keypoints
                 this.detector.detect(frameGray, frameKeypoints);
-                console.log(`Found ${frameKeypoints.size()} keypoints in frame`);
+                // console.log(`Found ${frameKeypoints.size()} keypoints in frame`);
                 
                 // Only compute descriptors if keypoints were found
                 if (frameKeypoints.size() > 0) {
-                    console.log("Computing descriptors for frame...");
+                    // console.log("Computing descriptors for frame...");
                     this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
                     
                     if (frameDescriptors.empty() || frameDescriptors.rows === 0) {
                         console.error("Failed to compute descriptors for frame");
                     } else {
-                        console.log(`Computed ${frameDescriptors.rows} descriptors for frame`);
+                        // console.log(`Computed ${frameDescriptors.rows} descriptors for frame`);
                     }
                 } else {
                     console.warn("No keypoints found in frame, skipping descriptor computation");
@@ -492,15 +497,17 @@ class ImageTracker {
                     }
                     
                     // Display keypoints count for debugging
-                    console.log(`Frame keypoints: ${frameKeypoints.size()}`);
-                    console.log(`Reference keypoints: ${this.referenceKeypoints.size()}`);
+                    // console.log(`Frame keypoints: ${frameKeypoints.size()}`);
+                    // console.log(`Reference keypoints: ${this.referenceKeypoints.size()}`);
                     for (let i = 0; i < this.pyramidKeypoints.length; i++) {
                         if (this.pyramidKeypoints[i]) {
-                            console.log(`Pyramid level ${i} keypoints: ${this.pyramidKeypoints[i].size()}`);
+                            // console.log(`Pyramid level ${i} keypoints: ${this.pyramidKeypoints[i].size()}`);
                         }
                     }
                     
                     // Match features using scale pyramid
+                    // AKAZE uses NORM_HAMMING for binary descriptors or NORM_L2 for floating point descriptors
+                    // Default AKAZE descriptor type is AKAZE.DESCRIPTOR_MLDB which is binary (Hamming distance)
                     matcher = new cv.BFMatcher(cv.NORM_HAMMING);
                     
                     // Process with scale pyramid to get matches from multiple scales
@@ -778,18 +785,26 @@ class ImageTracker {
                 
                 // Configure detector for different scales (if APIs available)
                 try {
-                    if (typeof this.detector.setFastThreshold === 'function') {
+                    // AKAZE parameter settings for different scale levels
+                    if (typeof this.detector.setThreshold === 'function') {
                         if (currentScale < 1.0) {
                             // For smaller scales, use lower threshold to detect more features
-                            this.detector.setFastThreshold(10); 
+                            this.detector.setThreshold(0.0008); 
                         } else {
                             // For larger scales, use default parameters
-                            this.detector.setFastThreshold(20);
+                            this.detector.setThreshold(0.001);
                         }
                     }
-                    // Don't use setScoreType as it has unbound types error
+                    
+                    if (typeof this.detector.setDescriptorSize === 'function') {
+                        this.detector.setDescriptorSize(0); // Default descriptor size
+                    }
+                    
+                    if (typeof this.detector.setDescriptorChannels === 'function') {
+                        this.detector.setDescriptorChannels(3); // Number of channels in the descriptor
+                    }
                 } catch (e) {
-                    console.log(`Extended ORB configuration not available for scale ${currentScale}:`, e.message);
+                    console.log(`Extended AKAZE configuration not available for scale ${currentScale}:`, e.message);
                 }
                 
                 // Detect keypoints
@@ -956,7 +971,7 @@ class ImageTracker {
             console.error("Error in processWithScalePyramid:", e);
         }
         
-        console.log(`Total matches found: ${allMatches.size()}`);
+        // console.log(`Total matches found: ${allMatches.size()}`);
         return allMatches;
     }
     
