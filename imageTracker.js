@@ -387,52 +387,94 @@ class ImageTracker {
                         return;
                     }
                     
-                    // Match features
+                    // Match features using KNN
                     matcher = new cv.BFMatcher(cv.NORM_HAMMING);
-                    matches = new cv.DMatchVector();
+                    let knnMatches = new cv.DMatchVectorVector();
                     
-                    // Try to match descriptors
-                    matcher.match(this.referenceDescriptors, frameDescriptors, matches);
-                    
-                    // Filter good matches
-                    goodMatches = new cv.DMatchVector();
-                    
-                    if (matches.size() > 0) {
-                        // Get distances for good match filtering
-                        const distances = [];
+                    // Try to match descriptors with k=2 for Lowe's ratio test
+                    const k = 2;
+                    try {
+                        matcher.knnMatch(this.referenceDescriptors, frameDescriptors, knnMatches, k);
+                    } catch (e) {
+                        console.error("Error in KNN matching:", e);
+                        // Fallback to regular matching if KNN fails
+                        matches = new cv.DMatchVector();
+                        matcher.match(this.referenceDescriptors, frameDescriptors, matches);
                         
-                        for (let i = 0; i < matches.size(); i++) {
-                            try {
-                                const match = matches.get(i);
-                                if (match && typeof match.distance === 'number' && 
-                                    !isNaN(match.distance) && isFinite(match.distance)) {
-                                    distances.push(match.distance);
-                                }
-                            } catch (e) {
-                                // Skip invalid matches
-                            }
-                        }
-                        
-                        // Only proceed if we have valid distances
-                        if (distances.length > 0) {
-                            // Sort distances to find best matches
-                            distances.sort((a, b) => a - b);
-                            const threshold = Math.min(100, 3 * distances[0]);
-                            
-                            // Filter by distance threshold
+                        // Create a fallback goodMatches based on distance threshold
+                        goodMatches = new cv.DMatchVector();
+                        if (matches.size() > 0) {
+                            const distances = [];
                             for (let i = 0; i < matches.size(); i++) {
                                 try {
                                     const match = matches.get(i);
                                     if (match && typeof match.distance === 'number' && 
-                                        match.distance <= threshold) {
-                                        goodMatches.push_back(match);
+                                        !isNaN(match.distance) && isFinite(match.distance)) {
+                                        distances.push(match.distance);
                                     }
-                                } catch (e) {
-                                    // Skip problematic matches
+                                } catch (e) {}
+                            }
+                            
+                            if (distances.length > 0) {
+                                distances.sort((a, b) => a - b);
+                                const threshold = Math.min(100, 3 * distances[0]);
+                                
+                                for (let i = 0; i < matches.size(); i++) {
+                                    try {
+                                        const match = matches.get(i);
+                                        if (match && typeof match.distance === 'number' && 
+                                            match.distance <= threshold) {
+                                            goodMatches.push_back(match);
+                                        }
+                                    } catch (e) {}
                                 }
                             }
                         }
+                        return; // Skip the KNN ratio test code below
                     }
+                    
+                    // Using Lowe's ratio test from KNN matches
+                    matches = new cv.DMatchVector(); // For visualization
+                    goodMatches = new cv.DMatchVector();
+                    
+                    // Apply Lowe's ratio test
+                    const ratioThreshold = 0.75;
+                    
+                    for (let i = 0; i < knnMatches.size(); i++) {
+                        try {
+                            const matchPair = knnMatches.get(i);
+                            
+                            // First, add the best match to regular matches for visualization
+                            if (matchPair.size() >= 1) {
+                                const firstMatch = matchPair.get(0);
+                                if (firstMatch) {
+                                    matches.push_back(firstMatch);
+                                }
+                                
+                                // Apply ratio test if we have two matches
+                                if (matchPair.size() >= 2) {
+                                    const secondMatch = matchPair.get(1);
+                                    
+                                    if (firstMatch && secondMatch && 
+                                        typeof firstMatch.distance === 'number' && 
+                                        typeof secondMatch.distance === 'number' &&
+                                        !isNaN(firstMatch.distance) && !isNaN(secondMatch.distance) &&
+                                        isFinite(firstMatch.distance) && isFinite(secondMatch.distance)) {
+                                        
+                                        // Apply Lowe's ratio test
+                                        if (firstMatch.distance < ratioThreshold * secondMatch.distance) {
+                                            goodMatches.push_back(firstMatch);
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            // Skip problematic matches
+                        }
+                    }
+                    
+                    // Clean up KNN matches
+                    knnMatches.delete();
                     
                     // Only proceed with homography if we have enough good matches
                     if (goodMatches && goodMatches.size() >= 10) {
@@ -587,12 +629,12 @@ class ImageTracker {
                     
                     // Draw keypoints manually for each category
                     
-                    // All keypoints in white (smaller)
+                    // All keypoints in blue (smaller)
                     for (let i = 0; i < frameKeypoints.size(); i++) {
                         try {
                             const kp = frameKeypoints.get(i);
                             if (kp && kp.pt) {
-                                cv.circle(allKeypointsFrame, kp.pt, 1, [255, 255, 255, 255], -1);
+                                cv.circle(allKeypointsFrame, kp.pt, 1, [255, 0, 0, 255], -1);
                             }
                         } catch (e) {}
                     }
