@@ -580,9 +580,58 @@ class ImageTracker {
                     console.log("Basic requirements for matching not met");
                 }
                 
-                // Display processed frame on canvas
+                // Visualize keypoints based on status
                 try {
-                    cv.imshow(this.canvas, frame);
+                    // Create copies of the frame for each type of keypoint visualization
+                    let allKeypointsFrame = frame.clone();
+                    
+                    // Draw keypoints manually for each category
+                    
+                    // All keypoints in white (smaller)
+                    for (let i = 0; i < frameKeypoints.size(); i++) {
+                        try {
+                            const kp = frameKeypoints.get(i);
+                            if (kp && kp.pt) {
+                                cv.circle(allKeypointsFrame, kp.pt, 1, [255, 255, 255, 255], -1);
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    // If we have matches, draw matched keypoints in yellow (medium)
+                    if (matches && matches.size() > 0) {
+                        for (let i = 0; i < matches.size(); i++) {
+                            try {
+                                const match = matches.get(i);
+                                if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                                    const kp = frameKeypoints.get(match.trainIdx);
+                                    if (kp && kp.pt) {
+                                        cv.circle(allKeypointsFrame, kp.pt, 2, [255, 255, 0, 255], -1);
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                    
+                    // If we have good matches, draw them in green (larger)
+                    if (goodMatches && goodMatches.size() > 0) {
+                        for (let i = 0; i < goodMatches.size(); i++) {
+                            try {
+                                const match = goodMatches.get(i);
+                                if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                                    const kp = frameKeypoints.get(match.trainIdx);
+                                    if (kp && kp.pt) {
+                                        cv.circle(allKeypointsFrame, kp.pt, 2, [0, 255, 0, 255], -1);
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                    
+                    // Display processed frame on canvas
+                    cv.imshow(this.canvas, allKeypointsFrame);
+                    
+                    // Clean up the cloned frame
+                    allKeypointsFrame.delete();
                 } catch (e) {
                     console.error("Error displaying frame:", e);
                 }
