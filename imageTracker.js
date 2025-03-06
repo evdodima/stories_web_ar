@@ -15,6 +15,12 @@ class ImageTracker {
         this.referenceKeypoints = null;
         this.referenceDescriptors = null;
         
+        // Multiscale variables
+        this.referenceImagePyramid = [];
+        this.referenceKeypointsPyramid = [];
+        this.referenceDescriptorsPyramid = [];
+        this.bestScaleIndex = -1;
+        
         // Three.js variables
         this.scene = null;
         this.camera = null;
@@ -34,6 +40,7 @@ class ImageTracker {
         this.loadReferenceImage = this.loadReferenceImage.bind(this);
         this.initThreeJS = this.initThreeJS.bind(this);
         this.updateThreeJS = this.updateThreeJS.bind(this);
+        this.performMultiscaleMatching = this.performMultiscaleMatching.bind(this);
         
         // Initialize when OpenCV is ready
         this.waitForOpenCV();
@@ -172,8 +179,11 @@ class ImageTracker {
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
             
-            // Extract features using ORB
-            this.detector = new cv.ORB(500);
+            // Initialize detector first with higher feature count for better matching
+            this.detector = new cv.ORB(1000);
+            
+            // Create multiscale pyramid of reference images
+            this.createMultiscaleReferencePyramid();
             
             const referenceKeypoints = new cv.KeyPointVector();
             this.referenceDescriptors = new cv.Mat();
@@ -195,6 +205,66 @@ class ImageTracker {
             this.updateStatus(`Error loading reference image: ${error.message}`);
             console.error(error);
         }
+    }
+    
+    createMultiscaleReferencePyramid() {
+        // Create a pyramid of reference images at different scales
+        // This helps with detecting the image when it appears small in the frame
+        this.referenceImagePyramid = [];
+        this.referenceKeypointsPyramid = [];
+        this.referenceDescriptorsPyramid = [];
+        
+        // Store original reference image and its dimensions
+        const originalWidth = this.referenceImage.cols;
+        const originalHeight = this.referenceImage.rows;
+        
+        // Define scale factors for the pyramid (from smaller to larger)
+        const scaleFactors = [0.25, 0.5, 0.75, 1.0];
+        
+        for (let i = 0; i < scaleFactors.length; i++) {
+            const scaleFactor = scaleFactors[i];
+            
+            try {
+                // Create scaled reference image
+                const scaledRefImage = new cv.Mat();
+                const newWidth = Math.round(originalWidth * scaleFactor);
+                const newHeight = Math.round(originalHeight * scaleFactor);
+                
+                // Skip if scaled image would be too small
+                if (newWidth < 20 || newHeight < 20) {
+                    continue;
+                }
+                
+                // Resize the reference image
+                const dsize = new cv.Size(newWidth, newHeight);
+                cv.resize(this.referenceImageGray, scaledRefImage, dsize, 0, 0, cv.INTER_AREA);
+                
+                // Extract features from the scaled reference image
+                const scaledKeypoints = new cv.KeyPointVector();
+                const scaledDescriptors = new cv.Mat();
+                
+                // Use ORB detector on this scale
+                this.detector.detect(scaledRefImage, scaledKeypoints);
+                this.detector.compute(scaledRefImage, scaledKeypoints, scaledDescriptors);
+                
+                // Only keep scales that have enough features
+                if (scaledKeypoints.size() > 10) {
+                    // Store the scaled reference image and its features
+                    this.referenceImagePyramid.push(scaledRefImage);
+                    this.referenceKeypointsPyramid.push(scaledKeypoints);
+                    this.referenceDescriptorsPyramid.push(scaledDescriptors);
+                } else {
+                    // Clean up unused resources
+                    scaledRefImage.delete();
+                    scaledKeypoints.delete();
+                    scaledDescriptors.delete();
+                }
+            } catch (e) {
+                console.error(`Error creating scale ${scaleFactor}:`, e);
+            }
+        }
+        
+        console.log(`Created multiscale pyramid with ${this.referenceImagePyramid.length} levels`);
     }
     
     async startTracking() {
@@ -253,6 +323,35 @@ class ImageTracker {
         this.fileInput.disabled = false;
         
         this.updateStatus('Tracking stopped.');
+        
+        // Clean up pyramid resources when tracking stops
+        this.cleanupMultiscalePyramid();
+    }
+    
+    cleanupMultiscalePyramid() {
+        // Clean up multiscale pyramid resources
+        if (this.referenceImagePyramid && this.referenceImagePyramid.length > 0) {
+            for (let i = 0; i < this.referenceImagePyramid.length; i++) {
+                try {
+                    if (this.referenceImagePyramid[i]) {
+                        this.referenceImagePyramid[i].delete();
+                    }
+                    if (this.referenceKeypointsPyramid[i]) {
+                        this.referenceKeypointsPyramid[i].delete();
+                    }
+                    if (this.referenceDescriptorsPyramid[i]) {
+                        this.referenceDescriptorsPyramid[i].delete();
+                    }
+                } catch (e) {
+                    console.error("Error cleaning up pyramid level:", e);
+                }
+            }
+            
+            // Clear arrays
+            this.referenceImagePyramid = [];
+            this.referenceKeypointsPyramid = [];
+            this.referenceDescriptorsPyramid = [];
+        }
     }
     
     processVideo() {
@@ -387,94 +486,105 @@ class ImageTracker {
                         return;
                     }
                     
-                    // Match features using KNN
-                    matcher = new cv.BFMatcher(cv.NORM_HAMMING);
-                    let knnMatches = new cv.DMatchVectorVector();
+                    // Perform multiscale matching
+                    this.performMultiscaleMatching(frameDescriptors, frameKeypoints, matches, goodMatches);
                     
-                    // Try to match descriptors with k=2 for Lowe's ratio test
-                    const k = 2;
-                    try {
-                        matcher.knnMatch(this.referenceDescriptors, frameDescriptors, knnMatches, k);
-                    } catch (e) {
-                        console.error("Error in KNN matching:", e);
-                        // Fallback to regular matching if KNN fails
-                        matches = new cv.DMatchVector();
-                        matcher.match(this.referenceDescriptors, frameDescriptors, matches);
+                    // If we didn't get enough good matches from multiscale matching,
+                    // fall back to regular matching with the original reference image
+                    if (!goodMatches || goodMatches.size() < 10) {
+                        // Match features using KNN on original scale
+                        matcher = new cv.BFMatcher(cv.NORM_HAMMING);
+                        let knnMatches = new cv.DMatchVectorVector();
                         
-                        // Create a fallback goodMatches based on distance threshold
-                        goodMatches = new cv.DMatchVector();
-                        if (matches.size() > 0) {
-                            const distances = [];
-                            for (let i = 0; i < matches.size(); i++) {
-                                try {
-                                    const match = matches.get(i);
-                                    if (match && typeof match.distance === 'number' && 
-                                        !isNaN(match.distance) && isFinite(match.distance)) {
-                                        distances.push(match.distance);
-                                    }
-                                } catch (e) {}
-                            }
-                            
-                            if (distances.length > 0) {
-                                distances.sort((a, b) => a - b);
-                                const threshold = Math.min(100, 3 * distances[0]);
-                                
-                                for (let i = 0; i < matches.size(); i++) {
-                                    try {
-                                        const match = matches.get(i);
-                                        if (match && typeof match.distance === 'number' && 
-                                            match.distance <= threshold) {
-                                            goodMatches.push_back(match);
-                                        }
-                                    } catch (e) {}
-                                }
-                            }
-                        }
-                        return; // Skip the KNN ratio test code below
-                    }
-                    
-                    // Using Lowe's ratio test from KNN matches
-                    matches = new cv.DMatchVector(); // For visualization
-                    goodMatches = new cv.DMatchVector();
-                    
-                    // Apply Lowe's ratio test
-                    const ratioThreshold = 0.75;
-                    
-                    for (let i = 0; i < knnMatches.size(); i++) {
+                        // Try to match descriptors with k=2 for Lowe's ratio test
+                        const k = 2;
                         try {
-                            const matchPair = knnMatches.get(i);
+                            matcher.knnMatch(this.referenceDescriptors, frameDescriptors, knnMatches, k);
                             
-                            // First, add the best match to regular matches for visualization
-                            if (matchPair.size() >= 1) {
-                                const firstMatch = matchPair.get(0);
-                                if (firstMatch) {
-                                    matches.push_back(firstMatch);
-                                }
-                                
-                                // Apply ratio test if we have two matches
-                                if (matchPair.size() >= 2) {
-                                    const secondMatch = matchPair.get(1);
+                            // Using Lowe's ratio test from KNN matches
+                            matches = new cv.DMatchVector(); // For visualization
+                            goodMatches = new cv.DMatchVector();
+                            
+                            // Apply Lowe's ratio test
+                            const ratioThreshold = 0.75;
+                            
+                            for (let i = 0; i < knnMatches.size(); i++) {
+                                try {
+                                    const matchPair = knnMatches.get(i);
                                     
-                                    if (firstMatch && secondMatch && 
-                                        typeof firstMatch.distance === 'number' && 
-                                        typeof secondMatch.distance === 'number' &&
-                                        !isNaN(firstMatch.distance) && !isNaN(secondMatch.distance) &&
-                                        isFinite(firstMatch.distance) && isFinite(secondMatch.distance)) {
+                                    // First, add the best match to regular matches for visualization
+                                    if (matchPair.size() >= 1) {
+                                        const firstMatch = matchPair.get(0);
+                                        if (firstMatch) {
+                                            matches.push_back(firstMatch);
+                                        }
                                         
-                                        // Apply Lowe's ratio test
-                                        if (firstMatch.distance < ratioThreshold * secondMatch.distance) {
-                                            goodMatches.push_back(firstMatch);
+                                        // Apply ratio test if we have two matches
+                                        if (matchPair.size() >= 2) {
+                                            const secondMatch = matchPair.get(1);
+                                            
+                                            if (firstMatch && secondMatch && 
+                                                typeof firstMatch.distance === 'number' && 
+                                                typeof secondMatch.distance === 'number' &&
+                                                !isNaN(firstMatch.distance) && !isNaN(secondMatch.distance) &&
+                                                isFinite(firstMatch.distance) && isFinite(secondMatch.distance)) {
+                                                
+                                                // Apply Lowe's ratio test
+                                                if (firstMatch.distance < ratioThreshold * secondMatch.distance) {
+                                                    goodMatches.push_back(firstMatch);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (e) {
+                                    // Skip problematic matches
+                                }
+                            }
+                            
+                            // Clean up KNN matches
+                            knnMatches.delete();
+                        } catch (e) {
+                            console.error("Error in KNN matching:", e);
+                            // Fallback to regular matching if KNN fails
+                            if (!matches) matches = new cv.DMatchVector();
+                            if (!goodMatches) goodMatches = new cv.DMatchVector();
+                            
+                            try {
+                                matcher.match(this.referenceDescriptors, frameDescriptors, matches);
+                                
+                                // Create goodMatches based on distance threshold
+                                if (matches.size() > 0) {
+                                    const distances = [];
+                                    for (let i = 0; i < matches.size(); i++) {
+                                        try {
+                                            const match = matches.get(i);
+                                            if (match && typeof match.distance === 'number' && 
+                                                !isNaN(match.distance) && isFinite(match.distance)) {
+                                                distances.push(match.distance);
+                                            }
+                                        } catch (e) {}
+                                    }
+                                    
+                                    if (distances.length > 0) {
+                                        distances.sort((a, b) => a - b);
+                                        const threshold = Math.min(100, 3 * distances[0]);
+                                        
+                                        for (let i = 0; i < matches.size(); i++) {
+                                            try {
+                                                const match = matches.get(i);
+                                                if (match && typeof match.distance === 'number' && 
+                                                    match.distance <= threshold) {
+                                                    goodMatches.push_back(match);
+                                                }
+                                            } catch (e) {}
                                         }
                                     }
                                 }
+                            } catch (e2) {
+                                console.error("Error in fallback matching:", e2);
                             }
-                        } catch (e) {
-                            // Skip problematic matches
                         }
                     }
-                    
-                    // Clean up KNN matches
-                    knnMatches.delete();
                     
                     // Only proceed with homography if we have enough good matches
                     if (goodMatches && goodMatches.size() >= 10) {
@@ -727,6 +837,124 @@ class ImageTracker {
         // This method is now a no-op since we don't need 3D rendering
         // We're only keeping the green rectangle outline drawn with OpenCV
         return;
+    }
+    
+    performMultiscaleMatching(frameDescriptors, frameKeypoints, matches, goodMatches) {
+        // Initialize or clear match and good match vectors if they don't exist
+        if (!matches) matches = new cv.DMatchVector();
+        else matches.delete();
+        matches = new cv.DMatchVector();
+        
+        if (!goodMatches) goodMatches = new cv.DMatchVector();
+        else goodMatches.delete();
+        goodMatches = new cv.DMatchVector();
+        
+        // Skip if we don't have a pyramid
+        if (!this.referenceImagePyramid || this.referenceImagePyramid.length === 0) {
+            console.log("No reference pyramid available for multiscale matching");
+            return;
+        }
+        
+        // For each scale in the pyramid, try to match and keep the best matches
+        let bestMatchCount = 0;
+        this.bestScaleIndex = -1;
+        const ratioThreshold = 0.75;
+        
+        for (let i = 0; i < this.referenceImagePyramid.length; i++) {
+            try {
+                // Match with the current scale
+                const scaleKeypoints = this.referenceKeypointsPyramid[i];
+                const scaleDescriptors = this.referenceDescriptorsPyramid[i];
+                
+                if (!scaleKeypoints || !scaleDescriptors || scaleKeypoints.size() < 10 || scaleDescriptors.empty()) {
+                    continue;
+                }
+                
+                // Create a matcher for this scale
+                const scaleMatcher = new cv.BFMatcher(cv.NORM_HAMMING);
+                let scaleKnnMatches = new cv.DMatchVectorVector();
+                
+                try {
+                    // Try KNN matching with k=2 for Lowe's ratio test
+                    scaleMatcher.knnMatch(scaleDescriptors, frameDescriptors, scaleKnnMatches, 2);
+                    
+                    // Create temporary match vectors for this scale
+                    const scaleMatches = new cv.DMatchVector();
+                    const scaleGoodMatches = new cv.DMatchVector();
+                    
+                    // Apply ratio test to get good matches for this scale
+                    for (let j = 0; j < scaleKnnMatches.size(); j++) {
+                        const matchPair = scaleKnnMatches.get(j);
+                        
+                        if (matchPair.size() >= 1) {
+                            const firstMatch = matchPair.get(0);
+                            if (firstMatch) {
+                                scaleMatches.push_back(firstMatch);
+                                
+                                if (matchPair.size() >= 2) {
+                                    const secondMatch = matchPair.get(1);
+                                    
+                                    if (firstMatch && secondMatch && 
+                                        typeof firstMatch.distance === 'number' && 
+                                        typeof secondMatch.distance === 'number' &&
+                                        !isNaN(firstMatch.distance) && !isNaN(secondMatch.distance) &&
+                                        isFinite(firstMatch.distance) && isFinite(secondMatch.distance)) {
+                                        
+                                        // Apply Lowe's ratio test
+                                        if (firstMatch.distance < ratioThreshold * secondMatch.distance) {
+                                            scaleGoodMatches.push_back(firstMatch);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Check if this scale has better matches than previous scales
+                    if (scaleGoodMatches.size() > bestMatchCount) {
+                        bestMatchCount = scaleGoodMatches.size();
+                        this.bestScaleIndex = i;
+                        
+                        // Replace the output matches with the matches from this scale
+                        // First, clear any existing matches
+                        matches.delete();
+                        goodMatches.delete();
+                        
+                        // Create new match vectors
+                        matches = new cv.DMatchVector();
+                        goodMatches = new cv.DMatchVector();
+                        
+                        // Copy matches from this scale
+                        for (let j = 0; j < scaleMatches.size(); j++) {
+                            matches.push_back(scaleMatches.get(j));
+                        }
+                        
+                        for (let j = 0; j < scaleGoodMatches.size(); j++) {
+                            goodMatches.push_back(scaleGoodMatches.get(j));
+                        }
+                    }
+                    
+                    // Clean up resources for this scale
+                    scaleKnnMatches.delete();
+                    scaleMatches.delete();
+                    scaleGoodMatches.delete();
+                    scaleMatcher.delete();
+                } catch (e) {
+                    console.error(`Error matching at scale ${i}:`, e);
+                    if (scaleKnnMatches) scaleKnnMatches.delete();
+                    if (scaleMatcher) scaleMatcher.delete();
+                }
+            } catch (e) {
+                console.error(`Error processing scale ${i}:`, e);
+            }
+        }
+        
+        // Log the results of multiscale matching
+        if (this.bestScaleIndex >= 0) {
+            console.log(`Best match at scale index ${this.bestScaleIndex} with ${bestMatchCount} good matches`);
+        } else {
+            console.log("No good matches found in any scale");
+        }
     }
     
     updateStatus(message) {

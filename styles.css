@@ -72,7 +72,7 @@ input[type="file"] {
     display: none;
 }
 
-.status {
+.status, .info {
     text-align: center;
     margin-top: 10px;
 }
@@ -80,6 +80,24 @@ input[type="file"] {
 #statusMessage {
     font-weight: bold;
     color: #666;
+}
+
+.info {
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    padding: 8px;
+    max-width: 640px;
+    margin: 10px auto;
+}
+
+.info p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.info span {
+    font-size: 16px;
+    padding: 0 3px;
 }
 
 @media (max-width: 600px) {
