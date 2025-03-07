@@ -27,7 +27,13 @@ class ImageTracker {
         this.lastProcessingTime = 0;
 
         this.drawKeypoints = false;
-        this.maxDimension = 640; // Maximum allowed dimension while preserving aspect ratio
+        this.maxDimension = 1280; // Maximum allowed dimension while preserving aspect ratio
+        
+        // Kalman filter variables
+        this.kalmanFilter = null;
+        this.lastCorners = null;
+        this.cornerState = null;
+        this.predictionQuality = 0;
         
         // Bind methods
         this.init = this.init.bind(this);
@@ -42,7 +48,8 @@ class ImageTracker {
         this.waitForOpenCV();
     }
     
-    waitForOpenCV() {
+    async waitForOpenCV() {
+        window.cv = await cv;
         // Check if OpenCV is loaded and has all required features
         if (typeof cv === 'undefined' || 
             typeof cv.BFMatcher !== 'function' || 
@@ -79,6 +86,7 @@ class ImageTracker {
         
         // Initialize Three.js
         this.initThreeJS();
+        this.initKalmanFilter();
     }
     
     async startCamera() {
@@ -261,18 +269,82 @@ class ImageTracker {
         }
     }
     
+    initKalmanFilter() {
+        try {
+            // Reset filter variables
+            this.lastCorners = null;
+            this.cornerState = null;
+            this.predictionQuality = 0;
+    
+            // Initialize Kalman filter: 16 states (x, y, vx, vy for 4 corners), 8 measurements (x, y for 4 corners)
+            this.kalmanFilter = new cv.KalmanFilter(16, 8, 0, cv.CV_32F);
+    
+            // Transition matrix: constant velocity model (assuming dt = 1 frame)
+            const transitionMatrix = this.kalmanFilter.transitionMatrix;
+            for (let i = 0; i < 4; i++) {
+                const offset = 4 * i;
+                // x' = x + vx
+                transitionMatrix.floatPtr(offset, offset)[0] = 1;     // x to x
+                transitionMatrix.floatPtr(offset, offset + 2)[0] = 1; // vx to x
+                // y' = y + vy
+                transitionMatrix.floatPtr(offset + 1, offset + 1)[0] = 1; // y to y
+                transitionMatrix.floatPtr(offset + 1, offset + 3)[0] = 1; // vy to y
+                // vx' = vx, vy' = vy
+                transitionMatrix.floatPtr(offset + 2, offset + 2)[0] = 1; // vx to vx
+                transitionMatrix.floatPtr(offset + 3, offset + 3)[0] = 1; // vy to vy
+            }
+    
+            // Measurement matrix: observe positions only (8x16)
+            const measurementMatrix = this.kalmanFilter.measurementMatrix;
+            for (let i = 0; i < 4; i++) {
+                measurementMatrix.floatPtr(2 * i, 4 * i)[0] = 1;         // x_i
+                measurementMatrix.floatPtr(2 * i + 1, 4 * i + 1)[0] = 1; // y_i
+            }
+    
+            // Process noise covariance: noise on velocities (e.g., acceleration noise)
+            const processNoiseCov = this.kalmanFilter.processNoiseCov;
+            for (let i = 0; i < 4; i++) {
+                processNoiseCov.floatPtr(4 * i + 2, 4 * i + 2)[0] = 25; // vx variance (5 pixels/frame)
+                processNoiseCov.floatPtr(4 * i + 3, 4 * i + 3)[0] = 25; // vy variance (5 pixels/frame)
+            }
+    
+            // Measurement noise covariance: based on detection accuracy
+            const measurementNoiseCov = this.kalmanFilter.measurementNoiseCov;
+            for (let i = 0; i < 8; i++) {
+                measurementNoiseCov.floatPtr(i, i)[0] = 4; // variance of 2 pixels
+            }
+    
+            // Initial error covariance: high uncertainty
+            const errorCovPost = this.kalmanFilter.errorCovPost;
+            for (let i = 0; i < 16; i++) {
+                errorCovPost.floatPtr(i, i)[0] = 100;
+            }
+    
+            console.log("Kalman filter initialized with velocity model");
+        } catch (e) {
+            console.error("Error initializing Kalman filter:", e);
+            this.kalmanFilter = null;
+        }
+    }
+    
     stopTracking() {
-        // Update state
         this.isTracking = false;
-        
-        // Stop camera
         this.stopCamera();
-        
-        // Update UI
+    
+        if (this.kalmanFilter) {
+            this.kalmanFilter.delete();
+            this.kalmanFilter = null;
+        }
+        if (this.cornerState) {
+            this.cornerState.delete();
+            this.cornerState = null;
+        }
+        this.lastCorners = null;
+    
         this.startButton.disabled = false;
         this.stopButton.disabled = true;
         this.fileInput.disabled = false;
-        
+    
         this.updateStatus('Tracking stopped.');
     }
     
@@ -632,11 +704,53 @@ class ImageTracker {
                                                     contour.data32S.set(flatPoints);
                                                     contours.push_back(contour);
                                                     
-                                                    // Draw contour on frame
-                                                    cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 3);
-                                                    
-                                                    // We no longer update 3D model
-                                                    // Just drawing the green rectangle is enough
+                                                    // Apply Kalman filter to smooth the corners
+                                                    if (this.kalmanFilter) {
+                                                        const corners = [];
+                                                        for (let i = 0; i < 4; i++) {
+                                                            corners.push(transformedCorners.data32F[i * 2]); // x
+                                                            corners.push(transformedCorners.data32F[i * 2 + 1]); // y
+                                                        }
+                                                        
+                                                        // Apply Kalman filtering to these corners
+                                                        const filteredCorners = this.applyKalmanFilter(corners);
+                                                        
+                                                        if (filteredCorners) {
+                                                            // Create new contour with filtered corners
+                                                            let filteredContour = new cv.Mat();
+                                                            filteredContour.create(4, 1, cv.CV_32SC2);
+                                                            
+                                                            const filteredPoints = [
+                                                                new cv.Point(filteredCorners[0], filteredCorners[1]),
+                                                                new cv.Point(filteredCorners[2], filteredCorners[3]),
+                                                                new cv.Point(filteredCorners[4], filteredCorners[5]),
+                                                                new cv.Point(filteredCorners[6], filteredCorners[7])
+                                                            ];
+                                                            
+                                                            const flatFilteredPoints = filteredPoints.flatMap(p => [p.x, p.y]);
+                                                            
+                                                            filteredContour.data32S.set(flatFilteredPoints);
+                                                            
+                                                            // Create new contours with just the filtered contour
+                                                            const filteredContours = new cv.MatVector();
+                                                            filteredContours.push_back(filteredContour);
+                                                            
+                                                            // Draw contour with Kalman filtered corners
+                                                            cv.drawContours(frame, filteredContours, 0, [0, 255, 0, 255], 3);
+                                                            
+                                                            // Clean up
+                                                            filteredContours.delete();
+                                                            
+                                                            // Clean up
+                                                            filteredContour.delete();
+                                                        } else {
+                                                            // If Kalman filter isn't ready yet, use unfiltered corners
+                                                            cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 3);
+                                                        }
+                                                    } else {
+                                                        // If Kalman filter not available, use unfiltered contour
+                                                        cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 3);
+                                                    }
                                                 }
                                             } catch (e) {
                                                 console.error("Error drawing contour:", e);
@@ -658,9 +772,92 @@ class ImageTracker {
                         }
                     } else {
                         console.log("Not enough good matches");
+                        
+                        // If tracking failed but we have a Kalman filter with previous state,
+                        // we can use the predicted state to temporarily maintain tracking
+                        if (this.kalmanFilter && this.lastCorners && this.predictionQuality > 0) {
+                            try {
+                                const prediction = this.kalmanFilter.predict();
+                                const predictedCorners = [];
+                                for (let i = 0; i < 4; i++) {
+                                    predictedCorners.push(prediction.floatPtr(4 * i, 0)[0]);     // x_i
+                                    predictedCorners.push(prediction.floatPtr(4 * i + 1, 0)[0]); // y_i
+                                }
+                    
+                                const predictedContour = new cv.Mat();
+                                predictedContour.create(4, 1, cv.CV_32SC2);
+                                const predictedPoints = [
+                                    new cv.Point(predictedCorners[0], predictedCorners[1]),
+                                    new cv.Point(predictedCorners[2], predictedCorners[3]),
+                                    new cv.Point(predictedCorners[4], predictedCorners[5]),
+                                    new cv.Point(predictedCorners[6], predictedCorners[7])
+                                ];
+                                const flatPredictedPoints = predictedPoints.flatMap(p => [p.x, p.y]);
+                    
+                                if (predictedContour.data32S && predictedContour.data32S.length >= flatPredictedPoints.length) {
+                                    predictedContour.data32S.set(flatPredictedPoints);
+                                    const predictedContours = new cv.MatVector();
+                                    predictedContours.push_back(predictedContour);
+                    
+                                    cv.drawContours(frame, predictedContours, 0, [255, 255, 0, 255], 3);
+                                    this.updateStatus("Using Kalman prediction (tracking lost)");
+                                    this.predictionQuality = Math.max(0, this.predictionQuality - 0.1);
+                    
+                                    predictedContours.delete();
+                                    predictedContour.delete();
+                                }
+                            } catch (e) {
+                                console.error("Error using Kalman prediction:", e);
+                            }
+                        }
                     }
                 } else {
                     console.log("Basic requirements for matching not met");
+                    
+                    // Handle tracking loss with Kalman prediction
+                    if (this.kalmanFilter && this.lastCorners && this.predictionQuality > 0) {
+                        try {
+                            // Similar code as above for Kalman prediction when tracking is lost
+                            const prediction = this.kalmanFilter.predict();
+                            
+                            const predictedCorners = [];
+                            for (let i = 0; i < 8; i++) {
+                                predictedCorners.push(prediction.floatPtr(i, 0)[0]);
+                            }
+                            
+                            const predictedContour = new cv.Mat();
+                            predictedContour.create(4, 1, cv.CV_32SC2);
+                            
+                            const predictedPoints = [
+                                new cv.Point(predictedCorners[0], predictedCorners[1]),
+                                new cv.Point(predictedCorners[2], predictedCorners[3]),
+                                new cv.Point(predictedCorners[4], predictedCorners[5]),
+                                new cv.Point(predictedCorners[6], predictedCorners[7])
+                            ];
+                            
+                            const predictedContours = new cv.MatVector();
+                            const flatPredictedPoints = predictedPoints.flatMap(p => [p.x, p.y]);
+                            
+                            if (predictedContour.data32S && predictedContour.data32S.length >= flatPredictedPoints.length) {
+                                predictedContour.data32S.set(flatPredictedPoints);
+                                predictedContours.push_back(predictedContour);
+                                
+                                // Draw in yellow to indicate it's a prediction
+                                cv.drawContours(frame, predictedContours, 0, [255, 255, 0, 255], 3);
+                                
+                                this.updateStatus("Using Kalman prediction (tracking lost)");
+                                
+                                // Lower prediction quality as we keep predicting without measurements
+                                this.predictionQuality = Math.max(0, this.predictionQuality - 0.1);
+                                
+                                // Clean up
+                                predictedContours.delete();
+                                predictedContour.delete();
+                            }
+                        } catch (e) {
+                            console.error("Error using Kalman prediction:", e);
+                        }
+                    }
                 }
                 
                 // Visualize keypoints based on status
@@ -773,6 +970,60 @@ class ImageTracker {
         // This method is now a no-op since we don't need 3D rendering
         // We're only keeping the green rectangle outline drawn with OpenCV
         return;
+    }
+    
+    applyKalmanFilter(corners) {
+        if (!this.kalmanFilter || !corners || corners.length !== 8) {
+            return null;
+        }
+    
+        try {
+            // Create measurement matrix
+            const measurement = new cv.Mat(8, 1, cv.CV_32F);
+            for (let i = 0; i < 4; i++) {
+                measurement.floatPtr(2 * i, 0)[0] = corners[2 * i];     // x_i
+                measurement.floatPtr(2 * i + 1, 0)[0] = corners[2 * i + 1]; // y_i
+            }
+    
+            if (!this.cornerState) {
+                // Initialize state with positions and zero velocities
+                this.cornerState = new cv.Mat(16, 1, cv.CV_32F);
+                for (let i = 0; i < 4; i++) {
+                    this.cornerState.floatPtr(4 * i, 0)[0] = corners[2 * i];     // x
+                    this.cornerState.floatPtr(4 * i + 1, 0)[0] = corners[2 * i + 1]; // y
+                    this.cornerState.floatPtr(4 * i + 2, 0)[0] = 0;              // vx
+                    this.cornerState.floatPtr(4 * i + 3, 0)[0] = 0;              // vy
+                }
+                this.kalmanFilter.statePost.set(this.cornerState);
+                this.lastCorners = [...corners];
+                this.predictionQuality = 1;
+                measurement.delete();
+                return corners; // Return unfiltered corners initially
+            }
+    
+            // Predict next state
+            const prediction = this.kalmanFilter.predict();
+    
+            // Correct with measurement
+            const correctedState = this.kalmanFilter.correct(measurement);
+    
+            // Extract filtered positions
+            const filteredCorners = [];
+            for (let i = 0; i < 4; i++) {
+                filteredCorners.push(correctedState.floatPtr(4 * i, 0)[0]);     // x_i
+                filteredCorners.push(correctedState.floatPtr(4 * i + 1, 0)[0]); // y_i
+            }
+    
+            // Update state and quality
+            this.lastCorners = [...filteredCorners];
+            this.predictionQuality = 1; // Reset when measurement is available
+    
+            measurement.delete();
+            return filteredCorners;
+        } catch (e) {
+            console.error("Error in Kalman filter:", e);
+            return corners; // Fallback to unfiltered corners
+        }
     }
     
     updateStatus(message) {
