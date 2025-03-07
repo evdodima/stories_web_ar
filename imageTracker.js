@@ -25,6 +25,8 @@ class ImageTracker {
         this.isProcessing = false;
         this.isTracking = false;
         this.lastProcessingTime = 0;
+
+        this.drawKeypoints = false;
         
         // Bind methods
         this.init = this.init.bind(this);
@@ -171,6 +173,7 @@ class ImageTracker {
             // Convert to grayscale for feature detection
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
+            cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
             
             // Extract features using ORB
             this.detector = new cv.BRISK(50, 3, 1.0);
@@ -356,6 +359,7 @@ class ImageTracker {
                 console.error("Error converting to grayscale:", e);
                 return;
             }
+            // cv.GaussianBlur(frameGray, frameGray, new cv.Size(3, 3), 0);
             
             // Detect features with error handling
             frameKeypoints = new cv.KeyPointVector();
@@ -640,56 +644,61 @@ class ImageTracker {
                 
                 // Visualize keypoints based on status
                 try {
-                    // Create copies of the frame for each type of keypoint visualization
-                    let allKeypointsFrame = frame.clone();
-                    
-                    // Draw keypoints manually for each category
-                    
-                    // All keypoints in blue (smaller)
-                    for (let i = 0; i < frameKeypoints.size(); i++) {
-                        try {
-                            const kp = frameKeypoints.get(i);
-                            if (kp && kp.pt) {
-                                cv.circle(allKeypointsFrame, kp.pt, 1, [255, 0, 0, 255], -1);
+                    if (this.drawKeypoints) {
+                        // Create a clone of the frame for drawing keypoints
+                        let allKeypointsFrame = frame.clone();
+                        
+                        // Draw keypoints manually for each category
+                        
+                        // All keypoints in blue (smaller)
+                        for (let i = 0; i < frameKeypoints.size(); i++) {
+                            try {
+                                const kp = frameKeypoints.get(i);
+                                if (kp && kp.pt) {
+                                    cv.circle(allKeypointsFrame, kp.pt, 1, [255, 0, 0, 255], -1);
+                                }
+                            } catch (e) {}
+                        }
+                        
+                        // If we have matches, draw matched keypoints in yellow (medium)
+                        if (matches && matches.size() > 0) {
+                            for (let i = 0; i < matches.size(); i++) {
+                                try {
+                                    const match = matches.get(i);
+                                    if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                                        const kp = frameKeypoints.get(match.trainIdx);
+                                        if (kp && kp.pt) {
+                                            cv.circle(allKeypointsFrame, kp.pt, 2, [255, 255, 0, 255], -1);
+                                        }
+                                    }
+                                } catch (e) {}
                             }
-                        } catch (e) {}
-                    }
-                    
-                    // If we have matches, draw matched keypoints in yellow (medium)
-                    if (matches && matches.size() > 0) {
-                        for (let i = 0; i < matches.size(); i++) {
-                            try {
-                                const match = matches.get(i);
-                                if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
-                                    const kp = frameKeypoints.get(match.trainIdx);
-                                    if (kp && kp.pt) {
-                                        cv.circle(allKeypointsFrame, kp.pt, 2, [255, 255, 0, 255], -1);
-                                    }
-                                }
-                            } catch (e) {}
                         }
-                    }
-                    
-                    // If we have good matches, draw them in green (larger)
-                    if (goodMatches && goodMatches.size() > 0) {
-                        for (let i = 0; i < goodMatches.size(); i++) {
-                            try {
-                                const match = goodMatches.get(i);
-                                if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
-                                    const kp = frameKeypoints.get(match.trainIdx);
-                                    if (kp && kp.pt) {
-                                        cv.circle(allKeypointsFrame, kp.pt, 2, [0, 255, 0, 255], -1);
+                        
+                        // If we have good matches, draw them in green (larger)
+                        if (goodMatches && goodMatches.size() > 0) {
+                            for (let i = 0; i < goodMatches.size(); i++) {
+                                try {
+                                    const match = goodMatches.get(i);
+                                    if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                                        const kp = frameKeypoints.get(match.trainIdx);
+                                        if (kp && kp.pt) {
+                                            cv.circle(allKeypointsFrame, kp.pt, 2, [0, 255, 0, 255], -1);
+                                        }
                                     }
-                                }
-                            } catch (e) {}
+                                } catch (e) {}
+                            }
                         }
+                        
+                        // Display the processed frame with keypoints
+                        cv.imshow(this.canvas, allKeypointsFrame);
+                        
+                        // Clean up the cloned frame
+                        allKeypointsFrame.delete();
+                    } else {
+                        // If keypoints drawing is turned off, display the original frame
+                        cv.imshow(this.canvas, frame);
                     }
-                    
-                    // Display processed frame on canvas
-                    cv.imshow(this.canvas, allKeypointsFrame);
-                    
-                    // Clean up the cloned frame
-                    allKeypointsFrame.delete();
                 } catch (e) {
                     console.error("Error displaying frame:", e);
                 }
