@@ -173,8 +173,8 @@ class ImageTracker {
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
             
             // Extract features using ORB
-            this.detector = new cv.ORB(500);
-            
+            this.detector = new cv.BRISK(50, 3, 1.0);
+                        
             const referenceKeypoints = new cv.KeyPointVector();
             this.referenceDescriptors = new cv.Mat();
             
@@ -182,9 +182,25 @@ class ImageTracker {
             this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
             
             this.referenceKeypoints = referenceKeypoints;
+            const maxRefFeatures = 500;  // Adjust this number based on your needs
+            let refKeypointsArray = [];
+            for (let i = 0; i < this.referenceKeypoints.size(); i++) {
+                refKeypointsArray.push(this.referenceKeypoints.get(i));
+            }
+            refKeypointsArray.sort((a, b) => b.response - a.response);  // Sort by strength
+            if (refKeypointsArray.length > maxRefFeatures) {
+                refKeypointsArray = refKeypointsArray.slice(0, maxRefFeatures);
+            }
+            const selectedRefKeypoints = new cv.KeyPointVector();
+            for (let kp of refKeypointsArray) {
+                selectedRefKeypoints.push_back(kp);
+            }
+            this.referenceDescriptors = new cv.Mat();
+            this.detector.compute(this.referenceImageGray, selectedRefKeypoints, this.referenceDescriptors);
+            this.referenceKeypoints = selectedRefKeypoints;
             
             // Update status
-            this.updateStatus(`Reference image loaded. Found ${referenceKeypoints.size()} features.`);
+            this.updateStatus(`Reference image loaded. Found ${this.referenceKeypoints.size()} features.`);
             
             // Enable start button
             this.startButton.disabled = false;
@@ -438,7 +454,7 @@ class ImageTracker {
                     goodMatches = new cv.DMatchVector();
                     
                     // Apply Lowe's ratio test
-                    const ratioThreshold = 0.75;
+                    const ratioThreshold = 0.8;
                     
                     for (let i = 0; i < knnMatches.size(); i++) {
                         try {
@@ -477,7 +493,7 @@ class ImageTracker {
                     knnMatches.delete();
                     
                     // Only proceed with homography if we have enough good matches
-                    if (goodMatches && goodMatches.size() >= 10) {
+                    if (goodMatches && goodMatches.size() >= 5) {
                         // Extract point pairs from matches
                         const referencePoints = [];
                         const framePoints = [];
@@ -531,7 +547,7 @@ class ImageTracker {
                             framePointsMat = cv.matFromArray(framePoints.length / 2, 1, cv.CV_32FC2, framePoints);
                             
                             // Calculate homography matrix
-                            homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC);
+                            homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC, 5.0);
                             
                             // Only proceed if we got a valid homography
                             if (homography && !homography.empty()) {
