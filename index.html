@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR Image Tracking Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WebAR Image Tracking</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Load OpenCV.js asynchronously with more reliable loading -->
     <script src="opencv.js"></script>
@@ -13,14 +13,14 @@
     <div class="container">
         <h1>WebAR Image Tracking</h1>
         <div class="camera-container">
-            <video id="video" autoplay playsinline></video>
+            <video id="video" autoplay playsinline muted></video>
             <canvas id="output"></canvas>
         </div>
         <div class="controls">
             <input type="file" id="referenceImage" accept="image/*">
-            <label for="referenceImage">Upload Reference Image</label>
-            <button id="startTracking">Start Tracking</button>
-            <button id="stopTracking">Stop Tracking</button>
+            <label for="referenceImage">Upload Reference</label>
+            <button id="startTracking">Start</button>
+            <button id="stopTracking">Stop</button>
         </div>
         <div class="status">
             <p id="statusMessage">Please upload a reference image to start tracking.</p>
