@@ -29,11 +29,8 @@ class ImageTracker {
         this.drawKeypoints = false;
         this.maxDimension = 1280; // Maximum allowed dimension while preserving aspect ratio
         
-        // Kalman filter variables
-        this.kalmanFilter = null;
+        // Tracking variables
         this.lastCorners = null;
-        this.cornerState = null;
-        this.predictionQuality = 0;
         
         // Bind methods
         this.init = this.init.bind(this);
@@ -86,7 +83,6 @@ class ImageTracker {
         
         // Initialize Three.js
         this.initThreeJS();
-        this.initKalmanFilter();
     }
     
     async startCamera() {
@@ -302,16 +298,22 @@ class ImageTracker {
             }
     
             // Process noise covariance: noise on velocities (e.g., acceleration noise)
+            // Increased from 25 to 100 for more adaptive velocity changes
             const processNoiseCov = this.kalmanFilter.processNoiseCov;
             for (let i = 0; i < 4; i++) {
-                processNoiseCov.floatPtr(4 * i + 2, 4 * i + 2)[0] = 25; // vx variance (5 pixels/frame)
-                processNoiseCov.floatPtr(4 * i + 3, 4 * i + 3)[0] = 25; // vy variance (5 pixels/frame)
+                processNoiseCov.floatPtr(4 * i + 2, 4 * i + 2)[0] = 100; // vx variance (10 pixels/frame)
+                processNoiseCov.floatPtr(4 * i + 3, 4 * i + 3)[0] = 100; // vy variance (10 pixels/frame)
+                
+                // Add small process noise to positions for smoother transitions
+                processNoiseCov.floatPtr(4 * i, 4 * i)[0] = 1; // x variance
+                processNoiseCov.floatPtr(4 * i + 1, 4 * i + 1)[0] = 1; // y variance
             }
     
             // Measurement noise covariance: based on detection accuracy
+            // Reduced from 4 to 2 to trust measurements more
             const measurementNoiseCov = this.kalmanFilter.measurementNoiseCov;
             for (let i = 0; i < 8; i++) {
-                measurementNoiseCov.floatPtr(i, i)[0] = 4; // variance of 2 pixels
+                measurementNoiseCov.floatPtr(i, i)[0] = 2; // variance of 1.4 pixels
             }
     
             // Initial error covariance: high uncertainty
@@ -320,7 +322,7 @@ class ImageTracker {
                 errorCovPost.floatPtr(i, i)[0] = 100;
             }
     
-            console.log("Kalman filter initialized with velocity model");
+            console.log("Enhanced Kalman filter initialized with velocity model");
         } catch (e) {
             console.error("Error initializing Kalman filter:", e);
             this.kalmanFilter = null;
@@ -590,7 +592,7 @@ class ImageTracker {
                     knnMatches.delete();
                     
                     // Only proceed with homography if we have enough good matches
-                    if (goodMatches && goodMatches.size() >= 5) {
+                    if (goodMatches && goodMatches.size() >= 20) {
                         // Extract point pairs from matches
                         const referencePoints = [];
                         const framePoints = [];
@@ -772,94 +774,10 @@ class ImageTracker {
                         }
                     } else {
                         console.log("Not enough good matches");
-                        
-                        // If tracking failed but we have a Kalman filter with previous state,
-                        // we can use the predicted state to temporarily maintain tracking
-                        if (this.kalmanFilter && this.lastCorners && this.predictionQuality > 0) {
-                            try {
-                                const prediction = this.kalmanFilter.predict();
-                                const predictedCorners = [];
-                                for (let i = 0; i < 4; i++) {
-                                    predictedCorners.push(prediction.floatPtr(4 * i, 0)[0]);     // x_i
-                                    predictedCorners.push(prediction.floatPtr(4 * i + 1, 0)[0]); // y_i
-                                }
-                    
-                                const predictedContour = new cv.Mat();
-                                predictedContour.create(4, 1, cv.CV_32SC2);
-                                const predictedPoints = [
-                                    new cv.Point(predictedCorners[0], predictedCorners[1]),
-                                    new cv.Point(predictedCorners[2], predictedCorners[3]),
-                                    new cv.Point(predictedCorners[4], predictedCorners[5]),
-                                    new cv.Point(predictedCorners[6], predictedCorners[7])
-                                ];
-                                const flatPredictedPoints = predictedPoints.flatMap(p => [p.x, p.y]);
-                    
-                                if (predictedContour.data32S && predictedContour.data32S.length >= flatPredictedPoints.length) {
-                                    predictedContour.data32S.set(flatPredictedPoints);
-                                    const predictedContours = new cv.MatVector();
-                                    predictedContours.push_back(predictedContour);
-                    
-                                    cv.drawContours(frame, predictedContours, 0, [255, 255, 0, 255], 3);
-                                    this.updateStatus("Using Kalman prediction (tracking lost)");
-                                    this.predictionQuality = Math.max(0, this.predictionQuality - 0.1);
-                    
-                                    predictedContours.delete();
-                                    predictedContour.delete();
-                                }
-                            } catch (e) {
-                                console.error("Error using Kalman prediction:", e);
-                            }
-                        }
                     }
                 } else {
                     console.log("Basic requirements for matching not met");
-                    
-                    // Handle tracking loss with Kalman prediction
-                    if (this.kalmanFilter && this.lastCorners && this.predictionQuality > 0) {
-                        try {
-                            // Similar code as above for Kalman prediction when tracking is lost
-                            const prediction = this.kalmanFilter.predict();
-                            
-                            const predictedCorners = [];
-                            for (let i = 0; i < 8; i++) {
-                                predictedCorners.push(prediction.floatPtr(i, 0)[0]);
-                            }
-                            
-                            const predictedContour = new cv.Mat();
-                            predictedContour.create(4, 1, cv.CV_32SC2);
-                            
-                            const predictedPoints = [
-                                new cv.Point(predictedCorners[0], predictedCorners[1]),
-                                new cv.Point(predictedCorners[2], predictedCorners[3]),
-                                new cv.Point(predictedCorners[4], predictedCorners[5]),
-                                new cv.Point(predictedCorners[6], predictedCorners[7])
-                            ];
-                            
-                            const predictedContours = new cv.MatVector();
-                            const flatPredictedPoints = predictedPoints.flatMap(p => [p.x, p.y]);
-                            
-                            if (predictedContour.data32S && predictedContour.data32S.length >= flatPredictedPoints.length) {
-                                predictedContour.data32S.set(flatPredictedPoints);
-                                predictedContours.push_back(predictedContour);
-                                
-                                // Draw in yellow to indicate it's a prediction
-                                cv.drawContours(frame, predictedContours, 0, [255, 255, 0, 255], 3);
-                                
-                                this.updateStatus("Using Kalman prediction (tracking lost)");
-                                
-                                // Lower prediction quality as we keep predicting without measurements
-                                this.predictionQuality = Math.max(0, this.predictionQuality - 0.1);
-                                
-                                // Clean up
-                                predictedContours.delete();
-                                predictedContour.delete();
-                            }
-                        } catch (e) {
-                            console.error("Error using Kalman prediction:", e);
-                        }
-                    }
                 }
-                
                 // Visualize keypoints based on status
                 try {
                     if (this.drawKeypoints) {
@@ -971,60 +889,183 @@ class ImageTracker {
         // We're only keeping the green rectangle outline drawn with OpenCV
         return;
     }
-    
-    applyKalmanFilter(corners) {
-        if (!this.kalmanFilter || !corners || corners.length !== 8) {
-            return null;
+
+// Then update the applyKalmanFilter method:
+applyKalmanFilter(corners) {
+    if (!this.kalmanFilter || !corners || corners.length !== 8) {
+        return null;
+    }
+
+    try {
+        // Create measurement matrix
+        const measurement = new cv.Mat(8, 1, cv.CV_32F);
+        for (let i = 0; i < 4; i++) {
+            measurement.floatPtr(2 * i, 0)[0] = corners[2 * i];     // x_i
+            measurement.floatPtr(2 * i + 1, 0)[0] = corners[2 * i + 1]; // y_i
         }
-    
-        try {
-            // Create measurement matrix
-            const measurement = new cv.Mat(8, 1, cv.CV_32F);
+
+        // If this is the first detection or we need to reset after just 3 frames of tracking loss
+        if (!this.cornerState || this.framesSinceLastMeasurement > 3) {
+            console.log("Initializing/Resetting Kalman filter");
+            
+            // Clean up old state if it exists
+            if (this.cornerState) {
+                this.cornerState.delete();
+            }
+            
+            // Initialize state with positions and zero velocities
+            this.cornerState = new cv.Mat(16, 1, cv.CV_32F);
             for (let i = 0; i < 4; i++) {
-                measurement.floatPtr(2 * i, 0)[0] = corners[2 * i];     // x_i
-                measurement.floatPtr(2 * i + 1, 0)[0] = corners[2 * i + 1]; // y_i
+                this.cornerState.floatPtr(4 * i, 0)[0] = corners[2 * i];     // x
+                this.cornerState.floatPtr(4 * i + 1, 0)[0] = corners[2 * i + 1]; // y
+                this.cornerState.floatPtr(4 * i + 2, 0)[0] = 0;              // vx
+                this.cornerState.floatPtr(4 * i + 3, 0)[0] = 0;              // vy
             }
-    
-            if (!this.cornerState) {
-                // Initialize state with positions and zero velocities
-                this.cornerState = new cv.Mat(16, 1, cv.CV_32F);
+            
+            // Properly set the initial state by copying values directly
+            for (let i = 0; i < 16; i++) {
+                this.kalmanFilter.statePost.floatPtr(i, 0)[0] = this.cornerState.floatPtr(i, 0)[0];
+            }
+            
+            // Reset error covariance to high uncertainty
+            const errorCovPost = this.kalmanFilter.errorCovPost;
+            for (let i = 0; i < 16; i++) {
+                errorCovPost.floatPtr(i, i)[0] = 100;
+            }
+            
+            this.lastCorners = [...corners];
+            this.predictionQuality = 1.0;
+            this.framesSinceLastMeasurement = 0;
+            measurement.delete();
+            return corners; // Return unfiltered corners initially
+        }
+
+        // Predict next state
+        const prediction = this.kalmanFilter.predict();
+
+        // Check if the measurement is too far from prediction (potential outlier)
+        let isOutlier = false;
+        let maxDistance = 0;
+        // Reduced maxJump to be more sensitive to changes
+        const maxJump = 300; // Maximum allowed jump in pixels (reduced from 50)
+        
+        for (let i = 0; i < 4; i++) {
+            const predX = prediction.floatPtr(4 * i, 0)[0];
+            const predY = prediction.floatPtr(4 * i + 1, 0)[0];
+            const measX = corners[2 * i];
+            const measY = corners[2 * i + 1];
+            
+            const distance = Math.sqrt(Math.pow(predX - measX, 2) + Math.pow(predY - measY, 2));
+            maxDistance = Math.max(maxDistance, distance);
+            
+            if (distance > maxJump) {
+                isOutlier = true;
+                break;
+            }
+        }
+        
+        // Accept measurements more readily after just 2 frames of prediction
+        if (this.framesSinceLastMeasurement > 2 && maxDistance < 100) {
+            isOutlier = false;
+            console.log("Accepting measurement after brief prediction-only period");
+        }
+        
+        // If measurement is an outlier, use prediction with reduced confidence
+        if (isOutlier) {
+            console.log("Outlier detected, using prediction");
+            
+            // Reduce prediction quality very aggressively
+            this.predictionQuality = Math.max(0.1, this.predictionQuality - 0.5);
+            this.framesSinceLastMeasurement++;
+            
+            // Extract predicted positions
+            const predictedCorners = [];
+            for (let i = 0; i < 4; i++) {
+                predictedCorners.push(prediction.floatPtr(4 * i, 0)[0]);     // x_i
+                predictedCorners.push(prediction.floatPtr(4 * i + 1, 0)[0]); // y_i
+            }
+            
+            // Dampen velocities immediately after just 1 frame
+            if (this.framesSinceLastMeasurement > 1) {
+                // Stronger damping factor to quickly reduce velocity
                 for (let i = 0; i < 4; i++) {
-                    this.cornerState.floatPtr(4 * i, 0)[0] = corners[2 * i];     // x
-                    this.cornerState.floatPtr(4 * i + 1, 0)[0] = corners[2 * i + 1]; // y
-                    this.cornerState.floatPtr(4 * i + 2, 0)[0] = 0;              // vx
-                    this.cornerState.floatPtr(4 * i + 3, 0)[0] = 0;              // vy
+                    const dampingFactor = Math.max(0, 1 - (this.framesSinceLastMeasurement - 1) * 0.5);
+                    this.kalmanFilter.statePost.floatPtr(4 * i + 2, 0)[0] *= dampingFactor; // vx
+                    this.kalmanFilter.statePost.floatPtr(4 * i + 3, 0)[0] *= dampingFactor; // vy
                 }
-                this.kalmanFilter.statePost.set(this.cornerState);
-                this.lastCorners = [...corners];
-                this.predictionQuality = 1;
-                measurement.delete();
-                return corners; // Return unfiltered corners initially
+                console.log(`Damping velocities after ${this.framesSinceLastMeasurement} frames without measurement`);
             }
-    
-            // Predict next state
-            const prediction = this.kalmanFilter.predict();
-    
-            // Correct with measurement
-            const correctedState = this.kalmanFilter.correct(measurement);
-    
+            
+            // Freeze position after just 3 frames
+            if (this.framesSinceLastMeasurement > 2) {
+                for (let i = 0; i < 4; i++) {
+                    this.kalmanFilter.statePost.floatPtr(4 * i + 2, 0)[0] = 0; // vx = 0
+                    this.kalmanFilter.statePost.floatPtr(4 * i + 3, 0)[0] = 0; // vy = 0
+                }
+                console.log("Freezing position after brief tracking loss");
+            }
+            
+            this.lastCorners = [...predictedCorners];
+            measurement.delete();
+            return predictedCorners;
+        }
+
+        // We have a good measurement - reset the counter
+        this.framesSinceLastMeasurement = 0;
+
+        // If we're recovering from prediction-only tracking, even briefly
+        if (this.predictionQuality < 0.8) {
+            // Higher blend factor to trust new measurements more
+            const blendFactor = 0.7; // How much to trust the new measurement (increased from 0.3)
+            const blendedMeasurement = new cv.Mat(8, 1, cv.CV_32F);
+            
+            for (let i = 0; i < 8; i++) {
+                const predValue = prediction.floatPtr(Math.floor(i/2)*4 + i%2, 0)[0];
+                const measValue = measurement.floatPtr(i, 0)[0];
+                blendedMeasurement.floatPtr(i, 0)[0] = 
+                    predValue * (1 - blendFactor) + measValue * blendFactor;
+            }
+            
+            // Use the blended measurement for correction
+            const correctedState = this.kalmanFilter.correct(blendedMeasurement);
+            blendedMeasurement.delete();
+            
+            // Rapidly increase prediction quality
+            this.predictionQuality = Math.min(1.5, this.predictionQuality + 0.5);
+            
             // Extract filtered positions
             const filteredCorners = [];
             for (let i = 0; i < 4; i++) {
                 filteredCorners.push(correctedState.floatPtr(4 * i, 0)[0]);     // x_i
                 filteredCorners.push(correctedState.floatPtr(4 * i + 1, 0)[0]); // y_i
             }
-    
-            // Update state and quality
+            
             this.lastCorners = [...filteredCorners];
-            this.predictionQuality = 1; // Reset when measurement is available
-    
             measurement.delete();
             return filteredCorners;
-        } catch (e) {
-            console.error("Error in Kalman filter:", e);
-            return corners; // Fallback to unfiltered corners
         }
+
+        // Normal case - good measurement, good prediction quality
+        const correctedState = this.kalmanFilter.correct(measurement);
+
+        // Extract filtered positions
+        const filteredCorners = [];
+        for (let i = 0; i < 4; i++) {
+            filteredCorners.push(correctedState.floatPtr(4 * i, 0)[0]);     // x_i
+            filteredCorners.push(correctedState.floatPtr(4 * i + 1, 0)[0]); // y_i
+        }
+
+        // Update state and quality
+        this.lastCorners = [...filteredCorners];
+        this.predictionQuality = 1.5; // Strong prediction quality when we have good measurements
+
+        measurement.delete();
+        return filteredCorners;
+    } catch (e) {
+        console.error("Error in Kalman filter:", e);
+        return corners; // Fallback to unfiltered corners
     }
+}
     
     updateStatus(message) {
         this.statusMessage.textContent = message;
