@@ -255,7 +255,7 @@ class CameraManager {
  */
 class FeatureDetector {
     constructor(options = {}) {
-        this.maxFeatures = options.maxFeatures || 1000;
+        this.maxFeatures = options.maxFeatures || 700;
         this.detector = null;
         this.referenceImage = null;
         this.referenceImageGray = null;
@@ -286,7 +286,7 @@ class FeatureDetector {
             // Convert to grayscale for feature detection
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
-            cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
+            // cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
             cv.equalizeHist(this.referenceImageGray, this.referenceImageGray);
             
             // Extract features using BRISK
@@ -428,6 +428,7 @@ class FeatureDetector {
             try {
                 frameGray = new cv.Mat();
                 cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
+                // cv.GaussianBlur(frameGray, frameGray, new cv.Size(3, 3), 0);
                 cv.equalizeHist(frameGray, frameGray);
             } catch (e) {
                 return {
