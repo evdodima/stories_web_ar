@@ -27,6 +27,7 @@ class ImageTracker {
         this.lastProcessingTime = 0;
 
         this.drawKeypoints = false;
+        this.maxDimension = 640; // Maximum allowed dimension while preserving aspect ratio
         
         // Bind methods
         this.init = this.init.bind(this);
@@ -174,6 +175,7 @@ class ImageTracker {
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
             cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
+            cv.equalizeHist(this.referenceImageGray, this.referenceImageGray);
             
             // Extract features using ORB
             this.detector = new cv.BRISK(50, 3, 1.0);
@@ -340,6 +342,24 @@ class ImageTracker {
                 
                 // Read the image data from the canvas into an OpenCV matrix
                 frame = cv.imread(captureCanvas);
+   
+                if (frame.cols > this.maxDimension || frame.rows > this.maxDimension) {
+                    let scaleFactor = Math.min(this.maxDimension / frame.cols, this.maxDimension / frame.rows);
+                    let newSize = new cv.Size(
+                        Math.round(frame.cols * scaleFactor),
+                        Math.round(frame.rows * scaleFactor)
+                    );
+                    let resizedFrame = new cv.Mat();
+                    cv.resize(frame, resizedFrame, newSize, 0, 0, cv.INTER_AREA);
+                    
+                    // Optionally update the canvas dimensions to match the new frame size
+                    this.canvas.width = newSize.width;
+                    this.canvas.height = newSize.height;
+                    
+                    frame.delete();
+                    frame = resizedFrame;
+                    console.log('Frame scaled to', newSize.width, 'x', newSize.height);
+                }
             } catch (e) {
                 console.error("Error capturing video frame:", e);
                 return;
@@ -360,6 +380,7 @@ class ImageTracker {
                 return;
             }
             // cv.GaussianBlur(frameGray, frameGray, new cv.Size(3, 3), 0);
+            cv.equalizeHist(frameGray, frameGray);
             
             // Detect features with error handling
             frameKeypoints = new cv.KeyPointVector();
