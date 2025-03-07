@@ -191,7 +191,7 @@ class ImageTracker {
             this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
             
             this.referenceKeypoints = referenceKeypoints;
-            const maxRefFeatures = 500;  // Adjust this number based on your needs
+            const maxRefFeatures = 1000;  // Adjust this number based on your needs
             let refKeypointsArray = [];
             for (let i = 0; i < this.referenceKeypoints.size(); i++) {
                 refKeypointsArray.push(this.referenceKeypoints.get(i));
