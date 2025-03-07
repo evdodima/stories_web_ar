@@ -262,6 +262,17 @@ class FeatureDetector {
         this.referenceKeypoints = null;
         this.referenceDescriptors = null;
         this.initialized = false;
+        
+        // LK Optical Flow tracking as fallback
+        this.useOpticalFlow = options.useOpticalFlow !== false;
+        this.prevFrameGray = null;
+        this.trackingPoints = null;
+        this.trackingStatus = null;
+        this.lastGoodFeaturePoints = null;  // Track feature points, not just corners
+        this.opticalFlowActive = false;
+        this.framesWithoutFeatures = 0;
+        this.maxFramesWithoutFeatures = options.maxFramesWithoutFeatures || 30;
+        this.minTrackedPoints = options.minTrackedPoints || 15;  // Minimum number of points to track
     }
 
     initialize() {
@@ -286,7 +297,7 @@ class FeatureDetector {
             // Convert to grayscale for feature detection
             this.referenceImageGray = new cv.Mat();
             cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
-            // cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
+            cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
             cv.equalizeHist(this.referenceImageGray, this.referenceImageGray);
             
             // Extract features using BRISK
@@ -315,6 +326,7 @@ class FeatureDetector {
             this.referenceDescriptors = new cv.Mat();
             this.detector.compute(this.referenceImageGray, selectedRefKeypoints, this.referenceDescriptors);
             this.referenceKeypoints = selectedRefKeypoints;
+            this.detector = new cv.BRISK(50, 3, 1.0);
             
             return {
                 success: true,
@@ -438,6 +450,9 @@ class FeatureDetector {
                 };
             }
             
+            // We only test optical flow later if needed - this is a fallback mechanism
+            
+            // REGULAR FEATURE DETECTION AND MATCHING
             // Detect features with error handling
             try {
                 frameKeypoints = new cv.KeyPointVector();
@@ -463,6 +478,9 @@ class FeatureDetector {
                 frameDescriptors.rows <= 0 || 
                 frameDescriptors.cols !== this.referenceDescriptors.cols) {
                 
+                // When we have too few features, increment our counter
+                this.framesWithoutFeatures++;
+                
                 // Return processed frame for visualization but no tracking results
                 return {
                     success: false,
@@ -470,6 +488,9 @@ class FeatureDetector {
                     processedFrame: frame.clone()
                 };
             }
+            
+            // Reset the counter for frames without features
+            this.framesWithoutFeatures = 0;
             
             // Match features using KNN with extensive error handling
             try {
@@ -594,6 +615,89 @@ class FeatureDetector {
             
             // Check if we have enough good matches for homography
             if (!goodMatches || goodMatches.size() < 10) {
+                // FALLBACK: Try optical flow if available
+                if (this.useOpticalFlow && this.opticalFlowActive && this.prevFrameGray && frameGray) {
+                    try {
+                        console.log("Not enough good matches, trying optical flow fallback");
+                        
+                        // Try to track using optical flow
+                        const trackedCorners = this.trackWithOpticalFlow(frameGray, frame);
+                        
+                        // If tracking was successful, return the result
+                        if (trackedCorners && trackedCorners.length === 8) {
+                            // Reset the counter for frames without features
+                            this.framesWithoutFeatures = 0;
+                            
+                            // Create a dummy homography for compatibility
+                            const dummyHomography = cv.Mat.eye(3, 3, cv.CV_64F);
+                            
+                            // Draw keypoints if requested
+                            if (drawKeypoints) {
+                                try {
+                                    this._drawKeypoints(frame, frameKeypoints, matches, goodMatches);
+                                } catch (e) {
+                                    console.warn("Failed to draw keypoints:", e);
+                                }
+                            }
+                            
+                            // Draw the tracked points and contour
+                            try {
+                                const contourPoints = [];
+                                
+                                for (let i = 0; i < 4; i++) {
+                                    const point = new cv.Point(
+                                        trackedCorners[i * 2], 
+                                        trackedCorners[i * 2 + 1]
+                                    );
+                                    contourPoints.push(point);
+                                }
+                                
+                                // Draw contour in purple for optical flow tracking
+                                contours = new cv.MatVector();
+                                contour = new cv.Mat();
+                                contour.create(4, 1, cv.CV_32SC2);
+                                
+                                const flatPoints = contourPoints.flatMap(p => [p.x, p.y]);
+                                if (contour.data32S && contour.data32S.length >= flatPoints.length) {
+                                    contour.data32S.set(flatPoints);
+                                    contours.push_back(contour);
+                                    cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 2); // Purple contour
+                                }
+                                
+                                // Clean up contour resources
+                                if (contours) {
+                                    contours.delete();
+                                    contours = null;
+                                }
+                                if (contour) {
+                                    contour.delete();
+                                    contour = null;
+                                }
+                                
+                            } catch (e) {
+                                console.warn("Error drawing optical flow results:", e);
+                            }
+                            
+                            // Return success with the tracked corners
+                            return {
+                                success: true,
+                                corners: trackedCorners,
+                                homography: dummyHomography,
+                                processedFrame: frame.clone(),
+                                usingOpticalFlow: true
+                            };
+                        } else {
+                            // If optical flow also failed, clean up and continue with normal error
+                            console.log("Optical flow fallback also failed");
+                            // Don't clean up optical flow yet - it might still work on next frame
+                        }
+                    } catch (flowError) {
+                        console.error("Error in optical flow fallback:", flowError);
+                        // Clean up optical flow resources
+                        this.cleanupOpticalFlow();
+                    }
+                }
+                
                 // Draw keypoints if requested and return
                 if (drawKeypoints) {
                     try {
@@ -663,6 +767,90 @@ class FeatureDetector {
                 
                 // Only continue if we have enough valid points for homography
                 if (referencePoints.length < 16 || framePoints.length < 16) {
+                    // FALLBACK: Try optical flow if available
+                    if (this.useOpticalFlow && this.opticalFlowActive && this.prevFrameGray && frameGray) {
+                        try {
+                            console.log("Not enough points for homography, trying optical flow fallback");
+                            
+                            // Try to track using optical flow
+                            const trackedCorners = this.trackWithOpticalFlow(frameGray, frame);
+                            
+                            // If tracking was successful, return the result
+                            if (trackedCorners && trackedCorners.length === 8) {
+                                // Reset the counter for frames without features
+                                this.framesWithoutFeatures = 0;
+                                
+                                // Create a dummy homography for compatibility
+                                const dummyHomography = cv.Mat.eye(3, 3, cv.CV_64F);
+                                
+                                // Draw keypoints if requested
+                                if (drawKeypoints) {
+                                    try {
+                                        this._drawKeypoints(frame, frameKeypoints, matches, goodMatches);
+                                    } catch (e) {
+                                        console.warn("Failed to draw keypoints:", e);
+                                    }
+                                }
+                                
+                                // Draw the tracked points and contour
+                                try {
+                                    const contourPoints = [];
+                                    
+                                    for (let i = 0; i < 4; i++) {
+                                        const point = new cv.Point(
+                                            trackedCorners[i * 2], 
+                                            trackedCorners[i * 2 + 1]
+                                        );
+                                        contourPoints.push(point);
+                                    }
+                                    
+                                    // Draw contour in purple for optical flow tracking
+                                    contours = new cv.MatVector();
+                                    contour = new cv.Mat();
+                                    contour.create(4, 1, cv.CV_32SC2);
+                                    
+                                    const flatPoints = contourPoints.flatMap(p => [p.x, p.y]);
+                                    if (contour.data32S && contour.data32S.length >= flatPoints.length) {
+                                        contour.data32S.set(flatPoints);
+                                        contours.push_back(contour);
+                                        cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 2); // Purple contour
+                                    }
+                                    
+                                    // Clean up contour resources
+                                    if (contours) {
+                                        contours.delete();
+                                        contours = null;
+                                    }
+                                    if (contour) {
+                                        contour.delete();
+                                        contour = null;
+                                    }
+                                    
+                                } catch (e) {
+                                    console.warn("Error drawing optical flow results:", e);
+                                }
+                                
+                                // Return success with the tracked corners
+                                return {
+                                    success: true,
+                                    corners: trackedCorners,
+                                    homography: dummyHomography,
+                                    processedFrame: frame.clone(),
+                                    usingOpticalFlow: true
+                                };
+                            } else {
+                                // If optical flow also failed, clean up and continue with normal error
+                                console.log("Optical flow fallback also failed");
+                                this.cleanupOpticalFlow();
+                            }
+                        } catch (flowError) {
+                            console.error("Error in optical flow fallback:", flowError);
+                            // Clean up optical flow resources
+                            this.cleanupOpticalFlow();
+                        }
+                    }
+                    
+                    // If we got here, both normal matching and optical flow failed
                     // Draw keypoints if requested and return
                     if (drawKeypoints) {
                         try {
@@ -826,15 +1014,7 @@ class FeatureDetector {
                                 
                                 // Draw contour with a more visible style
                                 // First draw a thicker green outline
-                                cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 4);
-                                
-                                // Then draw corner points as larger circles
-                                for (let i = 0; i < contourPoints.length; i++) {
-                                    const point = contourPoints[i];
-                                    // Draw larger circle at each corner
-                                    cv.circle(frame, point, 8, [255, 0, 0, 255], -1); // Filled red circle
-                                    cv.circle(frame, point, 8, [255, 255, 255, 255], 2); // White outline
-                                }
+                                cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 2);
                             }
                         } catch (e) {
                             console.error("Error drawing contour:", e);
@@ -863,11 +1043,29 @@ class FeatureDetector {
                             console.warn("Failed to clean up contour resources:", e);
                         }
                         
+                        // Store good matched keypoints for optical flow if needed later
+                        const goodMatchFrameIdxs = [];
+                        for (let i = 0; i < Math.min(goodMatches.size(), 30); i++) {
+                            try {
+                                const match = goodMatches.get(i);
+                                if (match && typeof match.trainIdx === 'number' && 
+                                    match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
+                                    goodMatchFrameIdxs.push(match.trainIdx);
+                                }
+                            } catch (e) {}
+                        }
+                        
+                        // Store keypoints with corners for optical flow fallback
+                        if (this.useOpticalFlow) {
+                            this.startOpticalFlow(frameGray, frameKeypoints, goodMatchFrameIdxs, cornerArray);
+                        }
+                        
                         return {
                             success: true,
                             corners: cornerArray,
                             homography: homography,
-                            processedFrame: frame.clone()
+                            processedFrame: frame.clone(),
+                            usingOpticalFlow: false
                         };
                     } catch (e) {
                         console.error("Error drawing contour section:", e);
@@ -924,6 +1122,182 @@ class FeatureDetector {
         }
     }
     
+    // Start optical flow tracking with the provided feature points and compute homography points
+    startOpticalFlow(frameGray, frameKeypoints, goodMatchIdxs, corners) {
+        try {
+            // Clean up any previous optical flow resources
+            this.cleanupOpticalFlow();
+            
+            if (!frameKeypoints || frameKeypoints.size() === 0 || !corners || corners.length < 8) {
+                return false;
+            }
+            
+            // Save current frame as previous frame for next iteration
+            this.prevFrameGray = frameGray.clone();
+            
+            // Get good keypoints from the frameKeypoints
+            const featurePoints = [];
+            
+            // If we have match indexes, use those specific keypoints
+            if (goodMatchIdxs && goodMatchIdxs.length > 0) {
+                for (let i = 0; i < goodMatchIdxs.length; i++) {
+                    const idx = goodMatchIdxs[i];
+                    if (idx >= 0 && idx < frameKeypoints.size()) {
+                        const kp = frameKeypoints.get(idx);
+                        if (kp && kp.pt) {
+                            featurePoints.push(kp.pt.x, kp.pt.y);
+                        }
+                    }
+                }
+            } 
+            // Otherwise, just use the top N keypoints
+            else {
+                const count = Math.min(30, frameKeypoints.size());
+                for (let i = 0; i < count; i++) {
+                    const kp = frameKeypoints.get(i);
+                    if (kp && kp.pt) {
+                        featurePoints.push(kp.pt.x, kp.pt.y);
+                    }
+                }
+            }
+            
+            // Add the corner points as well for easier homography calculation later
+            for (let i = 0; i < corners.length; i++) {
+                featurePoints.push(corners[i]);
+            }
+            
+            // Make sure we have enough points
+            if (featurePoints.length < this.minTrackedPoints * 2) {
+                console.log("Not enough feature points to track");
+                return false;
+            }
+            
+            // Initialize tracking points array with feature points
+            this.trackingPoints = new cv.Mat(featurePoints.length / 2, 1, cv.CV_32FC2);
+            
+            // Populate tracking points from corners (x,y pairs)
+            for (let i = 0; i < featurePoints.length / 2; i++) {
+                this.trackingPoints.data32F[i * 2] = featurePoints[i * 2];
+                this.trackingPoints.data32F[i * 2 + 1] = featurePoints[i * 2 + 1];
+            }
+            
+            // Store the corners part of these points separately for homography calculation
+            this.lastGoodFeaturePoints = [...featurePoints];
+            
+            // Mark optical flow as active
+            this.opticalFlowActive = true;
+            console.log("LK optical flow tracking started with " + (featurePoints.length / 2) + " feature points");
+            
+            return true;
+        } catch (e) {
+            console.error("Error starting optical flow:", e);
+            this.cleanupOpticalFlow();
+            return false;
+        }
+    }
+    
+    // Track using optical flow with current frame
+    trackWithOpticalFlow(frameGray, frame) {
+        if (!this.opticalFlowActive || !this.prevFrameGray || !this.trackingPoints) {
+            return null;
+        }
+        
+        try {
+            // Create matrices for the new points and status
+            const nextPoints = new cv.Mat();
+            const status = new cv.Mat();
+            const err = new cv.Mat();
+            
+            // Calculate optical flow
+            const winSize = new cv.Size(15, 15);
+            const maxLevel = 3;
+            const criteria = new cv.TermCriteria(
+                cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 
+                20, 0.03
+            );
+            
+            // Run Lucas-Kanade optical flow
+            cv.calcOpticalFlowPyrLK(
+                this.prevFrameGray, frameGray, 
+                this.trackingPoints, nextPoints, 
+                status, err, winSize, maxLevel, criteria
+            );
+            
+            // Check how many points were successfully tracked
+            let validCount = 0;
+            for (let i = 0; i < status.rows; i++) {
+                if (status.data[i] === 1) {
+                    validCount++;
+                }
+            }
+            
+            // We need a minimum number of points to consider tracking valid
+            if (validCount < this.minTrackedPoints) {
+                console.log(`LK tracking lost - only ${validCount} points valid out of ${status.rows}`);
+                status.delete();
+                err.delete();
+                nextPoints.delete();
+                return null;
+            }
+            
+            // Update tracking points to new positions
+            if (this.trackingPoints) this.trackingPoints.delete();
+            this.trackingPoints = nextPoints.clone();
+            
+            // Draw tracking points for visualization if frame is provided
+            if (frame) {
+                for (let i = 0; i < status.rows; i++) {
+                    if (status.data[i] === 1) {
+                        const point = {
+                            x: nextPoints.data32F[i * 2],
+                            y: nextPoints.data32F[i * 2 + 1]
+                        };
+                    }
+                }
+            }
+            
+            // Calculate homography from tracked points
+            // We need the last 4 points, which are our corners
+            const pointCount = nextPoints.rows;
+            const cornerCount = 4;
+            const trackedCorners = [];
+            
+            // Extract the corner points (last 4 points in our tracking array)
+            for (let i = 0; i < cornerCount; i++) {
+                const idx = Math.max(0, pointCount - cornerCount) + i;
+                if (idx < status.rows && status.data[idx] === 1) {
+                    trackedCorners.push(nextPoints.data32F[idx * 2]);
+                    trackedCorners.push(nextPoints.data32F[idx * 2 + 1]);
+                } else {
+                    // If this corner point is not valid, use the last good position
+                    const fallbackIdx = this.lastGoodFeaturePoints.length - (cornerCount * 2) + (i * 2);
+                    if (fallbackIdx >= 0 && fallbackIdx < this.lastGoodFeaturePoints.length - 1) {
+                        trackedCorners.push(this.lastGoodFeaturePoints[fallbackIdx]);
+                        trackedCorners.push(this.lastGoodFeaturePoints[fallbackIdx + 1]);
+                    } else {
+                        // Last resort fallback
+                        trackedCorners.push(0);
+                        trackedCorners.push(0);
+                    }
+                }
+            }
+            
+            // Update previous frame for next iteration
+            if (this.prevFrameGray) this.prevFrameGray.delete();
+            this.prevFrameGray = frameGray.clone();
+            
+            // Clean up
+            status.delete();
+            err.delete();
+            nextPoints.delete();
+            
+            return trackedCorners;
+        } catch (e) {
+            console.error("Error in optical flow tracking:", e);
+            return null;
+        }
+    }
+    
     _drawKeypoints(frame, frameKeypoints, matches, goodMatches) {
         try {
             // Draw all keypoints in blue (smaller)
@@ -965,11 +1339,45 @@ class FeatureDetector {
                     } catch (e) {}
                 }
             }
+            
+            // If optical flow is active, draw tracking points
+            if (this.opticalFlowActive && this.trackingPoints) {
+                for (let i = 0; i < this.trackingPoints.rows; i++) {
+                    try {
+                        const point = {
+                            x: this.trackingPoints.data32F[i * 2],
+                            y: this.trackingPoints.data32F[i * 2 + 1]
+                        };
+                        // Draw optical flow points in magenta 
+                        cv.circle(frame, point, 4, [255, 0, 255, 255], -1);
+                        cv.circle(frame, point, 5, [255, 255, 255, 255], 1); // White outline
+                    } catch (e) {}
+                }
+            }
         } catch (e) {
             console.error("Error drawing keypoints:", e);
         }
     }
 
+    cleanupOpticalFlow() {
+        if (this.prevFrameGray) {
+            this.prevFrameGray.delete();
+            this.prevFrameGray = null;
+        }
+        
+        if (this.trackingPoints) {
+            this.trackingPoints.delete();
+            this.trackingPoints = null;
+        }
+        
+        if (this.trackingStatus) {
+            this.trackingStatus.delete();
+            this.trackingStatus = null;
+        }
+        
+        this.opticalFlowActive = false;
+    }
+    
     cleanup() {
         if (this.referenceImage) {
             this.referenceImage.delete();
@@ -996,6 +1404,7 @@ class FeatureDetector {
             this.detector = null;
         }
         
+        this.cleanupOpticalFlow();
         this.initialized = false;
     }
 }
@@ -1466,7 +1875,10 @@ class ImageTracker {
         });
         
         this.featureDetector = new FeatureDetector({
-            maxFeatures: options.maxFeatures || 1000
+            maxFeatures: options.maxFeatures || 1000,
+            useOpticalFlow: options.useOpticalFlow !== false,
+            maxFramesWithoutFeatures: options.maxFramesWithoutFeatures || 30,
+            minTrackedPoints: options.minTrackedPoints || 15
         });
         
         this.kalmanFilter = new KalmanFilterTracker();
@@ -1896,6 +2308,9 @@ document.addEventListener('DOMContentLoaded', () => {
         maxFPS: 30,
         maxDimension: 640, // Use a more conservative value to avoid memory issues
         drawKeypoints: false,
+        useOpticalFlow: true, // Enable optical flow tracking for fast camera movement
+        maxFramesWithoutFeatures: 30, // Reset after this many frames without features
+        minTrackedPoints: 15, // Minimum points needed for valid optical flow tracking
         
         // Register callbacks
         onInitialized: () => {
@@ -1940,7 +2355,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             
-            updateStatus('OpenCV loaded. Please upload a reference image.');
+            // Automatically load reference.jpg and start tracking
+            updateStatus('Loading default reference image...');
+            
+            // Create an image element and load reference.jpg
+            const defaultImage = new Image();
+            defaultImage.onload = () => {
+                // Load the reference image once it's loaded
+                tracker.loadReferenceImage(defaultImage);
+                // Start tracking automatically after reference image is loaded
+                // This will happen via the onReferenceImageLoaded callback
+            };
+            defaultImage.onerror = (err) => {
+                updateStatus(`Error loading default image: ${err.message}`);
+                console.error('Error loading reference.jpg:', err);
+            };
+            defaultImage.src = 'reference.jpg';
         },
         
         onError: (error) => {
@@ -1961,6 +2391,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (startButton) {
                 startButton.disabled = false;
             }
+            
+            // Automatically start tracking after reference image is loaded
+            tracker.startTracking();
         },
         
         onTrackingStarted: () => {
