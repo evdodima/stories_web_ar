@@ -35,6 +35,7 @@ class ImageTracker {
         this.stopCamera = this.stopCamera.bind(this);
         this.processVideo = this.processVideo.bind(this);
         this.loadReferenceImage = this.loadReferenceImage.bind(this);
+        this.loadDefaultReferenceImage = this.loadDefaultReferenceImage.bind(this);
         this.initThreeJS = this.initThreeJS.bind(this);
         this.updateThreeJS = this.updateThreeJS.bind(this);
         
@@ -53,8 +54,10 @@ class ImageTracker {
             setTimeout(this.waitForOpenCV.bind(this), 500);
         } else {
             // OpenCV is fully loaded with all required features
-            this.updateStatus('OpenCV loaded. Please upload a reference image.');
+            this.updateStatus('OpenCV loaded. Loading reference image...');
             this.init();
+            // Auto-load the default reference image
+            this.loadDefaultReferenceImage();
         }
     }
     
@@ -79,6 +82,68 @@ class ImageTracker {
         
         // Initialize Three.js
         this.initThreeJS();
+    }
+    
+    // Method to load the default reference image
+    async loadDefaultReferenceImage() {
+        this.updateStatus('Loading default reference image...');
+        
+        try {
+            const img = new Image();
+            
+            // Wait for image to load
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load reference.jpg'));
+                img.src = 'reference.jpg';
+            });
+            
+            // Convert to OpenCV format
+            this.referenceImage = cv.imread(img);
+            
+            // Convert to grayscale for feature detection
+            this.referenceImageGray = new cv.Mat();
+            cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
+            cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
+            cv.equalizeHist(this.referenceImageGray, this.referenceImageGray);
+            
+            // Extract features using BRISK
+            this.detector = new cv.BRISK(50, 3, 1.0);
+                        
+            const referenceKeypoints = new cv.KeyPointVector();
+            this.referenceDescriptors = new cv.Mat();
+            
+            this.detector.detect(this.referenceImageGray, referenceKeypoints);
+            this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
+            
+            this.referenceKeypoints = referenceKeypoints;
+            const maxRefFeatures = 500;  // Adjust this number based on your needs
+            let refKeypointsArray = [];
+            for (let i = 0; i < this.referenceKeypoints.size(); i++) {
+                refKeypointsArray.push(this.referenceKeypoints.get(i));
+            }
+            refKeypointsArray.sort((a, b) => b.response - a.response);  // Sort by strength
+            if (refKeypointsArray.length > maxRefFeatures) {
+                refKeypointsArray = refKeypointsArray.slice(0, maxRefFeatures);
+            }
+            const selectedRefKeypoints = new cv.KeyPointVector();
+            for (let kp of refKeypointsArray) {
+                selectedRefKeypoints.push_back(kp);
+            }
+            this.referenceDescriptors = new cv.Mat();
+            this.detector.compute(this.referenceImageGray, selectedRefKeypoints, this.referenceDescriptors);
+            this.referenceKeypoints = selectedRefKeypoints;
+            
+            // Update status
+            this.updateStatus(`Reference image loaded. Found ${this.referenceKeypoints.size()} features.`);
+            
+            // Auto start tracking
+            setTimeout(() => this.startTracking(), 500);
+            
+        } catch (error) {
+            this.updateStatus(`Error loading reference image: ${error.message}`);
+            console.error(error);
+        }
     }
     
     async startCamera() {
@@ -518,7 +583,7 @@ class ImageTracker {
                     knnMatches.delete();
                     
                     // Only proceed with homography if we have enough good matches
-                    if (goodMatches && goodMatches.size() >= 5) {
+                    if (goodMatches && goodMatches.size() >= 20) {
                         // Extract point pairs from matches
                         const referencePoints = [];
                         const framePoints = [];

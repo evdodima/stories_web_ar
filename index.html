@@ -6,24 +6,22 @@
     <title>WebAR Image Tracking Demo</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Load OpenCV.js asynchronously with more reliable loading -->
-    <script src="https://docs.opencv.org/4.7.0/opencv.js" async></script>
+    <script src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js" async></script>
     <script src="imageTracker.js" defer></script>
 </head>
 <body>
     <div class="container">
-        <h1>WebAR Image Tracking</h1>
         <div class="camera-container">
             <video id="video" autoplay playsinline></video>
             <canvas id="output"></canvas>
         </div>
         <div class="controls">
-            <input type="file" id="referenceImage" accept="image/*">
-            <label for="referenceImage">Upload Reference Image</label>
-            <button id="startTracking">Start Tracking</button>
+            <input type="file" id="referenceImage" accept="image/*" style="display: none;">
+            <button id="startTracking" style="display: none;">Start Tracking</button>
             <button id="stopTracking">Stop Tracking</button>
         </div>
         <div class="status">
-            <p id="statusMessage">Please upload a reference image to start tracking.</p>
+            <p id="statusMessage">Loading...</p>
         </div>
     </div>
 </body>
