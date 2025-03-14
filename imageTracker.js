@@ -84,20 +84,11 @@ class ImageTracker {
         this.initThreeJS();
     }
     
-    // Method to load the default reference image
-    async loadDefaultReferenceImage() {
-        this.updateStatus('Loading default reference image...');
+    // Common method to process a reference image
+    async processReferenceImage(img, options = {}) {
+        const { maxRefFeatures = 1000, briskThreshold = 50, autoStart = false } = options;
         
         try {
-            const img = new Image();
-            
-            // Wait for image to load
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = () => reject(new Error('Failed to load reference.jpg'));
-                img.src = 'reference.jpg';
-            });
-            
             // Convert to OpenCV format
             this.referenceImage = cv.imread(img);
             
@@ -108,7 +99,7 @@ class ImageTracker {
             cv.equalizeHist(this.referenceImageGray, this.referenceImageGray);
             
             // Extract features using BRISK
-            this.detector = new cv.BRISK(50, 3, 1.0);
+            this.detector = new cv.BRISK(briskThreshold, 3, 1.0);
                         
             const referenceKeypoints = new cv.KeyPointVector();
             this.referenceDescriptors = new cv.Mat();
@@ -117,7 +108,6 @@ class ImageTracker {
             this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
             
             this.referenceKeypoints = referenceKeypoints;
-            const maxRefFeatures = 500;  // Adjust this number based on your needs
             let refKeypointsArray = [];
             for (let i = 0; i < this.referenceKeypoints.size(); i++) {
                 refKeypointsArray.push(this.referenceKeypoints.get(i));
@@ -137,8 +127,39 @@ class ImageTracker {
             // Update status
             this.updateStatus(`Reference image loaded. Found ${this.referenceKeypoints.size()} features.`);
             
-            // Auto start tracking
-            setTimeout(() => this.startTracking(), 500);
+            // Auto start tracking if requested
+            if (autoStart) {
+                setTimeout(() => this.startTracking(), 500);
+            }
+            
+            return true;
+        } catch (error) {
+            this.updateStatus(`Error loading reference image: ${error.message}`);
+            console.error(error);
+            return false;
+        }
+    }
+
+    // Method to load the default reference image
+    async loadDefaultReferenceImage() {
+        this.updateStatus('Loading default reference image...');
+        
+        try {
+            const img = new Image();
+            
+            // Wait for image to load
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load reference.jpg'));
+                img.src = 'reference.jpg';
+            });
+            
+            // Process the reference image
+            await this.processReferenceImage(img, { 
+                maxRefFeatures: 500, 
+                briskThreshold: 50,
+                autoStart: true
+            });
             
         } catch (error) {
             this.updateStatus(`Error loading reference image: ${error.message}`);
@@ -148,18 +169,73 @@ class ImageTracker {
     
     async startCamera() {
         try {
+            // Improved constraints for mobile devices
             const constraints = {
                 video: {
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    facingMode: 'environment'
+                    width: { ideal: 1280 },
+                    height: { ideal: 960 },
+                    facingMode: { exact: 'environment' }, // Force rear camera
+                    // Disable automatic switching and optimization
+                    advanced: [
+                        { zoom: 1 }, // Start with no zoom
+                        { focusMode: "continuous" }, // Continuous auto-focus
+                        { exposureMode: "continuous" }, // Continuous auto-exposure
+                        { whiteBalanceMode: "continuous" } // Continuous auto white balance
+                    ]
                 },
                 audio: false
             };
             
-            // Request camera access
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.video.srcObject = stream;
+            // Request camera access with fixed settings
+            try {
+                // First try with exact environment constraint
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                this.video.srcObject = stream;
+            } catch (err) {
+                console.warn("Couldn't get exact environment camera, falling back to default:", err);
+                // Fallback to standard environment preference without exact
+                const fallbackConstraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 960 },
+                        facingMode: 'environment'
+                    },
+                    audio: false
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                this.video.srcObject = stream;
+            }
+            
+            // Apply fixed settings to video tracks to prevent automatic switching
+            const videoTrack = this.video.srcObject.getVideoTracks()[0];
+            if (videoTrack) {
+                // Try to apply constraints to prevent auto-switching
+                try {
+                    const capabilities = videoTrack.getCapabilities();
+                    console.log("Camera capabilities:", capabilities);
+                    
+                    // Only apply constraints for capabilities that exist
+                    const trackConstraints = {};
+                    
+                    // Disable auto zoom if supported
+                    if (capabilities.zoom) {
+                        trackConstraints.zoom = 1;
+                    }
+                    
+                    // Set focus mode if supported
+                    if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
+                        trackConstraints.focusMode = "continuous";
+                    }
+                    
+                    // Apply the constraints
+                    if (Object.keys(trackConstraints).length > 0) {
+                        await videoTrack.applyConstraints(trackConstraints);
+                    }
+                } catch (err) {
+                    console.warn("Couldn't apply advanced camera constraints:", err);
+                }
+            }
+            
             this.video.play();
             
             // Wait for video to be ready with dimensions
@@ -181,7 +257,6 @@ class ImageTracker {
                             );
                         }
                         
-                        // We don't need VideoCapture with our new approach
                         resolve();
                     } else {
                         // Check again in a short while
@@ -233,47 +308,16 @@ class ImageTracker {
                 img.src = imageUrl;
             });
             
-            // Convert to OpenCV format
-            this.referenceImage = cv.imread(img);
+            // Process the reference image
+            const success = await this.processReferenceImage(img, { 
+                maxRefFeatures: 500, 
+                briskThreshold: 60
+            });
             
-            // Convert to grayscale for feature detection
-            this.referenceImageGray = new cv.Mat();
-            cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
-            cv.GaussianBlur(this.referenceImageGray, this.referenceImageGray, new cv.Size(3, 3), 0);
-            cv.equalizeHist(this.referenceImageGray, this.referenceImageGray);
-            
-            // Extract features using ORB
-            this.detector = new cv.BRISK(50, 3, 1.0);
-                        
-            const referenceKeypoints = new cv.KeyPointVector();
-            this.referenceDescriptors = new cv.Mat();
-            
-            this.detector.detect(this.referenceImageGray, referenceKeypoints);
-            this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
-            
-            this.referenceKeypoints = referenceKeypoints;
-            const maxRefFeatures = 500;  // Adjust this number based on your needs
-            let refKeypointsArray = [];
-            for (let i = 0; i < this.referenceKeypoints.size(); i++) {
-                refKeypointsArray.push(this.referenceKeypoints.get(i));
+            if (success) {
+                // Enable start button
+                this.startButton.disabled = false;
             }
-            refKeypointsArray.sort((a, b) => b.response - a.response);  // Sort by strength
-            if (refKeypointsArray.length > maxRefFeatures) {
-                refKeypointsArray = refKeypointsArray.slice(0, maxRefFeatures);
-            }
-            const selectedRefKeypoints = new cv.KeyPointVector();
-            for (let kp of refKeypointsArray) {
-                selectedRefKeypoints.push_back(kp);
-            }
-            this.referenceDescriptors = new cv.Mat();
-            this.detector.compute(this.referenceImageGray, selectedRefKeypoints, this.referenceDescriptors);
-            this.referenceKeypoints = selectedRefKeypoints;
-            
-            // Update status
-            this.updateStatus(`Reference image loaded. Found ${this.referenceKeypoints.size()} features.`);
-            
-            // Enable start button
-            this.startButton.disabled = false;
             
             // Clean up URL object
             URL.revokeObjectURL(imageUrl);
@@ -353,7 +397,7 @@ class ImageTracker {
         const now = performance.now();
         const elapsed = now - this.lastProcessingTime;
         
-        if (elapsed < 30) {
+        if (elapsed < 1) {
             return; // Skip this frame to maintain frame rate cap
         }
         
@@ -445,7 +489,7 @@ class ImageTracker {
                 return;
             }
             // cv.GaussianBlur(frameGray, frameGray, new cv.Size(3, 3), 0);
-            cv.equalizeHist(frameGray, frameGray);
+            // cv.equalizeHist(frameGray, frameGray);
             
             // Detect features with error handling
             frameKeypoints = new cv.KeyPointVector();
@@ -544,7 +588,7 @@ class ImageTracker {
                     goodMatches = new cv.DMatchVector();
                     
                     // Apply Lowe's ratio test
-                    const ratioThreshold = 0.8;
+                    const ratioThreshold = 0.6;
                     
                     for (let i = 0; i < knnMatches.size(); i++) {
                         try {
