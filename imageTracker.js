@@ -172,8 +172,8 @@ class ImageTracker {
             // Improved constraints for mobile devices
             const constraints = {
                 video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 960 },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
                     facingMode: { exact: 'environment' }, // Force rear camera
                     // Disable automatic switching and optimization
                     advanced: [
@@ -196,8 +196,8 @@ class ImageTracker {
                 // Fallback to standard environment preference without exact
                 const fallbackConstraints = {
                     video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 960 },
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
                         facingMode: 'environment'
                     },
                     audio: false
@@ -588,7 +588,7 @@ class ImageTracker {
                     goodMatches = new cv.DMatchVector();
                     
                     // Apply Lowe's ratio test
-                    const ratioThreshold = 0.6;
+                    const ratioThreshold = 0.7;
                     
                     for (let i = 0; i < knnMatches.size(); i++) {
                         try {
