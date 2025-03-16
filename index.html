@@ -16,12 +16,24 @@
             <canvas id="output"></canvas>
         </div>
         <div class="controls">
-            <input type="file" id="referenceImage" accept="image/*" style="display: none;">
-            <button id="startTracking" style="display: none;">Start Tracking</button>
+            <input type="file" id="referenceImage" accept="image/*">
+            <button id="startTracking">Start Tracking</button>
             <button id="stopTracking">Stop Tracking</button>
+            <div class="tracking-options">
+                <label>
+                    <input type="checkbox" id="useOpticalFlow" checked>
+                    Use Optical Flow Tracking
+                </label>
+                <label title="Lower values = smoother tracking but slower to adapt">
+                    Detection Interval:
+                    <input type="range" id="detectionInterval" min="10" max="60" value="30">
+                    <span id="intervalValue">30</span>
+                </label>
+            </div>
         </div>
         <div class="status">
             <p id="statusMessage">Loading...</p>
+            <p id="trackingMode">Tracking mode: <span id="currentMode">Initializing...</span></p>
         </div>
     </div>
 </body>

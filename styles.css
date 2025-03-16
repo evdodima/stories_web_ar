@@ -41,8 +41,35 @@ body {
     bottom: 20px;
     width: 100%;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     z-index: 20;
+}
+
+.tracking-options {
+    margin-top: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    color: white;
+}
+
+.tracking-options label {
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+}
+
+.tracking-options input[type="checkbox"] {
+    margin-right: 5px;
+}
+
+.tracking-options input[type="range"] {
+    margin: 0 10px;
+    width: 100px;
 }
 
 button {
@@ -72,13 +99,26 @@ button:disabled {
     width: 100%;
     text-align: center;
     z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-#statusMessage {
+#statusMessage, #trackingMode {
     font-weight: bold;
     color: white;
     background-color: rgba(0, 0, 0, 0.5);
     padding: 5px 10px;
     border-radius: 4px;
     display: inline-block;
+    margin: 5px 0;
+}
+
+#trackingMode {
+    font-size: 0.9em;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+#currentMode {
+    font-weight: normal;
 }

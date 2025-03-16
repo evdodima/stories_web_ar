@@ -1,6 +1,7 @@
 /**
  * WebAR Image Tracking Module
  * A modular system for detecting and tracking reference images in a video stream.
+ * Features best-in-class optical flow tracking for robust performance.
  */
 
 // Main application coordinator
@@ -13,6 +14,11 @@ class ImageTracker {
             lastProcessingTime: 0,
             drawKeypoints: false,
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
+            useOpticalFlow: true, // Enable optical flow tracking by default
+            detectionInterval: 30, // Run full detection every N frames
+            frameCount: 0, // Current frame counter
+            lastCorners: null, // Last detected corners for optical flow
+            lastFrame: null, // Last processed frame for optical flow
         };
 
         // Initialize sub-modules
@@ -20,6 +26,7 @@ class ImageTracker {
         this.camera = new CameraManager();
         this.referenceImage = new ReferenceImageManager();
         this.detector = null;
+        this.opticalFlow = null;
         this.visualizer = new Visualizer();
         
         // Initialize when OpenCV is ready
@@ -49,8 +56,9 @@ class ImageTracker {
             onReferenceImageLoad: (event) => this.referenceImage.loadFromFile(event)
         });
         
-        // Initialize detector once OpenCV is ready
+        // Initialize detector and optical flow tracker once OpenCV is ready
         this.detector = new FeatureDetector();
+        this.opticalFlow = new OpticalFlowTracker();
     }
 
     async startTracking() {
@@ -109,6 +117,14 @@ class ImageTracker {
         // Stop camera
         this.camera.stop();
         
+        // Clean up optical flow resources
+        if (this.state.lastFrame) {
+            this.state.lastFrame.delete();
+            this.state.lastFrame = null;
+        }
+        this.state.lastCorners = null;
+        this.state.frameCount = 0;
+        
         // Update UI
         this.ui.updateControlsForTracking(false);
         this.ui.updateStatus('Tracking stopped.');
@@ -138,11 +154,76 @@ class ImageTracker {
             const frame = this.camera.captureFrame(this.state.maxDimension);
             if (!frame) return;
             
-            // Detect and match features
-            const trackingResult = this.detector.detectAndMatch(
-                frame, 
-                this.referenceImage.getData()
-            );
+            // Increment frame counter
+            this.state.frameCount++;
+            
+            let trackingResult;
+            
+            // Decide whether to use feature detection or optical flow
+            if (!this.state.useOpticalFlow || 
+                !this.state.lastCorners || 
+                !this.state.lastFrame || 
+                this.state.frameCount % this.state.detectionInterval === 0) {
+                
+                // Run full feature detection periodically or when we don't have previous tracking data
+                trackingResult = this.detector.detectAndMatch(
+                    frame, 
+                    this.referenceImage.getData()
+                );
+                
+                // Store frame and corners for optical flow tracking if detection was successful
+                if (trackingResult.success && trackingResult.corners) {
+                    // Clean up previous frame if it exists
+                    if (this.state.lastFrame) {
+                        this.state.lastFrame.delete();
+                    }
+                    
+                    // Store current frame and corners for next optical flow tracking
+                    this.state.lastFrame = frame.clone();
+                    this.state.lastCorners = trackingResult.corners.slice();
+                } else if (this.state.lastFrame && this.state.lastCorners) {
+                    // If detection failed but we have previous data, try optical flow as fallback
+                    trackingResult = this.opticalFlow.track(
+                        this.state.lastFrame,
+                        frame,
+                        this.state.lastCorners
+                    );
+                    
+                    // Update our tracking data if optical flow was successful
+                    if (trackingResult.success) {
+                        // Clean up previous frame
+                        if (this.state.lastFrame) {
+                            this.state.lastFrame.delete();
+                        }
+                        
+                        // Update with new frame and corners
+                        this.state.lastFrame = frame.clone();
+                        this.state.lastCorners = trackingResult.corners.slice();
+                    }
+                }
+            } else {
+                // Use optical flow for most frames (more efficient)
+                trackingResult = this.opticalFlow.track(
+                    this.state.lastFrame,
+                    frame,
+                    this.state.lastCorners
+                );
+                
+                // Update our tracking data if optical flow was successful
+                if (trackingResult.success) {
+                    // Clean up previous frame
+                    if (this.state.lastFrame) {
+                        this.state.lastFrame.delete();
+                    }
+                    
+                    // Update with new frame and corners
+                    this.state.lastFrame = frame.clone();
+                    this.state.lastCorners = trackingResult.corners.slice();
+                } else {
+                    // If optical flow fails, force a full detection on next frame
+                    this.state.frameCount = this.state.detectionInterval - 1;
+                }
+            }
             
             // Visualize results
             this.visualizer.renderResults(
@@ -151,6 +232,9 @@ class ImageTracker {
                 this.ui.canvas,
                 this.state.drawKeypoints
             );
+            
+            // Update tracking mode indicator
+            this.ui.updateTrackingMode();
         } catch (error) {
             console.error('Error in processVideo:', error);
         } finally {
@@ -173,9 +257,17 @@ class UIManager {
         this.stopButton = document.getElementById('stopTracking');
         this.fileInput = document.getElementById('referenceImage');
         this.statusMessage = document.getElementById('statusMessage');
+        this.currentMode = document.getElementById('currentMode');
+        this.useOpticalFlow = document.getElementById('useOpticalFlow');
+        this.detectionInterval = document.getElementById('detectionInterval');
+        this.intervalValue = document.getElementById('intervalValue');
         
         // Initial UI state
         this.stopButton.disabled = true;
+        this.useOpticalFlow.checked = tracker.state.useOpticalFlow;
+        this.detectionInterval.value = tracker.state.detectionInterval;
+        this.intervalValue.textContent = tracker.state.detectionInterval;
+        this.currentMode.textContent = 'Waiting for reference image';
         
         // Make elements accessible to other modules that need them
         this.elements = {
@@ -184,7 +276,8 @@ class UIManager {
             startButton: this.startButton,
             stopButton: this.stopButton,
             fileInput: this.fileInput,
-            statusMessage: this.statusMessage
+            statusMessage: this.statusMessage,
+            currentMode: this.currentMode
         };
     }
     
@@ -201,16 +294,57 @@ class UIManager {
         
         this.stopButton.addEventListener('click', onStopTracking);
         this.fileInput.addEventListener('change', onReferenceImageLoad);
+        
+        // Set up optical flow UI interactions
+        this.useOpticalFlow.addEventListener('change', () => {
+            this.tracker.state.useOpticalFlow = this.useOpticalFlow.checked;
+            this.updateTrackingMode();
+        });
+        
+        this.detectionInterval.addEventListener('input', () => {
+            const value = parseInt(this.detectionInterval.value);
+            this.tracker.state.detectionInterval = value;
+            this.intervalValue.textContent = value;
+        });
     }
     
     updateControlsForTracking(isTracking) {
         this.startButton.disabled = isTracking;
         this.stopButton.disabled = !isTracking;
         this.fileInput.disabled = isTracking;
+        
+        if (isTracking) {
+            this.updateTrackingMode('Initializing tracking...');
+        } else {
+            this.updateTrackingMode('Tracking stopped');
+        }
     }
     
     updateStatus(message) {
         this.statusMessage.textContent = message;
+    }
+    
+    updateTrackingMode(forcedMessage = null) {
+        if (forcedMessage) {
+            this.currentMode.textContent = forcedMessage;
+            return;
+        }
+        
+        if (!this.tracker.state.isTracking) {
+            this.currentMode.textContent = 'Tracking stopped';
+            return;
+        }
+        
+        // Show current tracking mode
+        if (this.tracker.state.useOpticalFlow) {
+            if (this.tracker.state.frameCount % this.tracker.state.detectionInterval === 0) {
+                this.currentMode.textContent = 'Feature detection (periodic refresh)';
+            } else {
+                this.currentMode.textContent = `Optical flow (${this.tracker.state.detectionInterval - (this.tracker.state.frameCount % this.tracker.state.detectionInterval)} frames until refresh)`;
+            }
+        } else {
+            this.currentMode.textContent = 'Feature detection only (optical flow disabled)';
+        }
     }
 }
 
@@ -876,6 +1010,214 @@ class FeatureDetector {
             if (cornerPoints) cornerPoints.delete();
             if (transformedCorners) transformedCorners.delete();
         }
+    }
+}
+
+/**
+ * Handles optical flow tracking between frames
+ * Implements Lucas-Kanade sparse optical flow for efficient tracking
+ */
+class OpticalFlowTracker {
+    constructor() {
+        // Parameters for optical flow
+        this.params = {
+            winSize: new cv.Size(21, 21),
+            maxLevel: 3,
+            criteria: new cv.TermCriteria(
+                cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 
+                30, 
+                0.01
+            ),
+            minEigThreshold: 0.001,
+            maxCorners: 1000
+        };
+    }
+    
+    track(prevFrame, currentFrame, prevCorners) {
+        // Response object structure
+        const result = {
+            success: false,
+            corners: null,
+            flowStatus: null,
+            trackingQuality: 0
+        };
+        
+        if (!prevFrame || !currentFrame || !prevCorners || prevCorners.length !== 4) {
+            return result;
+        }
+        
+        // OpenCV resources to be cleaned up
+        let prevGray = null;
+        let currentGray = null;
+        let prevPoints = null;
+        let nextPoints = null;
+        let status = null;
+        let err = null;
+        
+        try {
+            // Convert frames to grayscale
+            prevGray = new cv.Mat();
+            currentGray = new cv.Mat();
+            cv.cvtColor(prevFrame, prevGray, cv.COLOR_RGBA2GRAY);
+            cv.cvtColor(currentFrame, currentGray, cv.COLOR_RGBA2GRAY);
+            
+            // Create arrays for tracking points 
+            const pointsToTrack = [];
+            
+            // Add the 4 corners as points to track
+            for (const corner of prevCorners) {
+                pointsToTrack.push(corner.x, corner.y);
+            }
+            
+            // Add additional points within the quadrilateral for more robust tracking
+            const additionalPoints = this.generatePointsInsideQuad(prevCorners, 20);
+            pointsToTrack.push(...additionalPoints);
+            
+            // Create OpenCV point arrays
+            prevPoints = cv.matFromArray(pointsToTrack.length / 2, 1, cv.CV_32FC2, pointsToTrack);
+            nextPoints = new cv.Mat();
+            status = new cv.Mat();
+            err = new cv.Mat();
+            
+            // Calculate optical flow
+            cv.calcOpticalFlowPyrLK(
+                prevGray, 
+                currentGray, 
+                prevPoints, 
+                nextPoints, 
+                status, 
+                err, 
+                this.params.winSize, 
+                this.params.maxLevel, 
+                this.params.criteria,
+                cv.OPTFLOW_USE_INITIAL_FLOW,
+                this.params.minEigThreshold
+            );
+            
+            // Process results
+            const corners = [];
+            let validPoints = 0;
+            let totalPoints = Math.min(status.rows, 4); // Just check the 4 corners
+            
+            // Extract the first 4 points (the corners)
+            for (let i = 0; i < totalPoints; i++) {
+                if (status.data[i] === 1) { // Point was found
+                    validPoints++;
+                    const x = nextPoints.data32F[i * 2];
+                    const y = nextPoints.data32F[i * 2 + 1];
+                    
+                    if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
+                        continue;
+                    }
+                    
+                    corners.push(new cv.Point(x, y));
+                } else {
+                    // If a corner tracking failed, use original position
+                    // This helps avoid sudden jumps when tracking fails
+                    corners.push(new cv.Point(prevCorners[i].x, prevCorners[i].y));
+                }
+            }
+            
+            // Compute tracking quality
+            let trackingQuality = validPoints / totalPoints;
+            
+            // Store results
+            result.flowStatus = status;
+            result.trackingQuality = trackingQuality;
+            
+            // Check if we have a valid quadrilateral
+            if (corners.length === 4) {
+                // Validate tracking quality and geometry
+                if (trackingQuality >= 0.5 && this.isValidQuadrilateral(corners)) {
+                    result.corners = corners;
+                    result.success = true;
+                }
+            }
+            
+            return result;
+        } catch (error) {
+            console.error("Error in optical flow tracking:", error);
+            return result;
+        } finally {
+            // Clean up OpenCV resources
+            if (prevGray) prevGray.delete();
+            if (currentGray) currentGray.delete();
+            if (prevPoints) prevPoints.delete();
+            if (nextPoints) nextPoints.delete();
+            if (status && !result.flowStatus) status.delete();
+            if (err) err.delete();
+        }
+    }
+    
+    // Generate additional tracking points inside the quadrilateral for better tracking
+    generatePointsInsideQuad(corners, pointCount) {
+        const points = [];
+        if (!corners || corners.length !== 4) return points;
+        
+        // Get bounds of the quadrilateral
+        const xs = corners.map(c => c.x);
+        const ys = corners.map(c => c.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        
+        // Generate points
+        for (let i = 0; i < pointCount; i++) {
+            // Generate random barycentric coordinates
+            const a = Math.random();
+            const b = Math.random() * (1 - a);
+            const c = Math.random() * (1 - a - b);
+            const d = 1 - a - b - c;
+            
+            // Convert to Cartesian coordinates using the corners
+            const x = corners[0].x * a + corners[1].x * b + 
+                      corners[2].x * c + corners[3].x * d;
+            const y = corners[0].y * a + corners[1].y * b + 
+                      corners[2].y * c + corners[3].y * d;
+            
+            // Add point if within bounds (redundant check but safer)
+            if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                points.push(x, y);
+            }
+        }
+        
+        return points;
+    }
+    
+    // Check if the tracked quadrilateral is valid (not too distorted)
+    isValidQuadrilateral(corners) {
+        if (corners.length !== 4) return false;
+        
+        // Calculate edge lengths
+        const edges = [];
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            const dx = corners[next].x - corners[i].x;
+            const dy = corners[next].y - corners[i].y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            edges.push(length);
+        }
+        
+        // Calculate perimeter and area
+        const perimeter = edges.reduce((sum, length) => sum + length, 0);
+        
+        // Use shoelace formula to calculate area
+        let area = 0;
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            area += corners[i].x * corners[next].y - corners[next].x * corners[i].y;
+        }
+        area = Math.abs(area) / 2;
+        
+        // Check if area is reasonable (not too small)
+        if (area < 100) return false;
+        
+        // Check compactness (circle has value 1, lower values are less compact)
+        const compactness = (4 * Math.PI * area) / (perimeter * perimeter);
+        
+        // Reject extremely distorted quadrilaterals
+        return compactness > 0.1;
     }
 }
 
