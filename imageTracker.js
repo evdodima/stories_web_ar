@@ -15,7 +15,7 @@ class ImageTracker {
             drawKeypoints: false,
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
             useOpticalFlow: true, // Enable optical flow tracking by default
-            detectionInterval: 30, // Run full detection every N frames
+            detectionInterval: 10, // Run full detection every N frames
             frameCount: 0, // Current frame counter
             lastCorners: null, // Last detected corners for optical flow
             lastFrame: null, // Last processed frame for optical flow
@@ -1046,7 +1046,10 @@ class OpticalFlowTracker {
                 0.03
             ),
             minEigThreshold: 0.001,
-            maxCorners: 100 // Reduced to avoid memory issues
+            maxFeaturePoints: 100, // Maximum feature points to track
+            featureQualityLevel: 0.01, // Quality level for feature detection
+            featureMinDistance: 10, // Minimum distance between features
+            ransacReprojThreshold: 3.0 // RANSAC reprojection threshold for homography
         };
     }
     
@@ -1066,10 +1069,17 @@ class OpticalFlowTracker {
         // OpenCV resources to be cleaned up
         let prevGray = null;
         let currentGray = null;
+        let prevMask = null;
+        let featurePoints = null;
         let prevPoints = null;
         let nextPoints = null;
         let status = null;
         let err = null;
+        let prevPointsMat = null;
+        let nextPointsMat = null;
+        let homography = null;
+        let cornerPoints = null;
+        let transformedCorners = null;
         
         try {
             // Convert frames to grayscale
@@ -1078,27 +1088,55 @@ class OpticalFlowTracker {
             cv.cvtColor(prevFrame, prevGray, cv.COLOR_RGBA2GRAY);
             cv.cvtColor(currentFrame, currentGray, cv.COLOR_RGBA2GRAY);
             
-            // Create arrays for tracking points 
-            const pointsToTrack = [];
+            // Create a mask for feature detection inside the quadrilateral
+            prevMask = new cv.Mat.zeros(prevGray.rows, prevGray.cols, cv.CV_8UC1);
+            const roiCorners = new cv.MatVector();
+            const roi = new cv.Mat(4, 1, cv.CV_32SC2);
             
-            // Add the 4 corners as points to track
-            for (const corner of prevCorners) {
-                pointsToTrack.push(corner.x, corner.y);
+            for (let i = 0; i < 4; i++) {
+                roi.data32S[i * 2] = Math.round(prevCorners[i].x);
+                roi.data32S[i * 2 + 1] = Math.round(prevCorners[i].y);
             }
             
-            // Add additional points within the quadrilateral for more robust tracking
-            // Limit to 10 additional points to prevent memory issues
-            const additionalPoints = this.generatePointsInsideQuad(prevCorners, 10);
-            pointsToTrack.push(...additionalPoints);
+            roiCorners.push_back(roi);
+            cv.fillPoly(prevMask, roiCorners, new cv.Scalar(255));
+            
+            // Clean up ROI resources
+            roi.delete();
+            roiCorners.delete();
+            
+            // Detect good features to track inside the quadrilateral
+            featurePoints = new cv.Mat();
+            cv.goodFeaturesToTrack(
+                prevGray,
+                featurePoints,
+                this.params.maxFeaturePoints,
+                this.params.featureQualityLevel,
+                this.params.featureMinDistance,
+                prevMask
+            );
+            
+            // Only proceed if we have enough feature points
+            if (!featurePoints || featurePoints.rows < 8) {
+                return result;
+            }
+            
+            // Convert feature points to array format for optical flow
+            const pointsToTrack = [];
+            for (let i = 0; i < featurePoints.rows; i++) {
+                const x = featurePoints.data32F[i * 2];
+                const y = featurePoints.data32F[i * 2 + 1];
+                pointsToTrack.push(x, y);
+            }
             
             // Create OpenCV point arrays
-            prevPoints = cv.matFromArray(pointsToTrack.length / 2, 1, cv.CV_32FC2, pointsToTrack);
+            prevPoints = cv.matFromArray(featurePoints.rows, 1, cv.CV_32FC2, pointsToTrack);
             nextPoints = new cv.Mat();
             status = new cv.Mat();
             err = new cv.Mat();
             
             try {
-                // Calculate optical flow - use standard flag instead of OPTFLOW_USE_INITIAL_FLOW
+                // Calculate optical flow
                 cv.calcOpticalFlowPyrLK(
                     prevGray, 
                     currentGray, 
@@ -1135,43 +1173,86 @@ class OpticalFlowTracker {
                 );
             }
             
-            // Process results
-            const corners = [];
-            let validPoints = 0;
-            let totalPoints = Math.min(status.rows, 4); // Just check the 4 corners
+            // Build point pairs for homography calculation
+            const prevPts = [];
+            const nextPts = [];
+            let validPointCount = 0;
             
-            // Extract the first 4 points (the corners)
-            for (let i = 0; i < totalPoints; i++) {
-                if (status.data[i] === 1) { // Point was found
-                    validPoints++;
-                    const x = nextPoints.data32F[i * 2];
-                    const y = nextPoints.data32F[i * 2 + 1];
+            for (let i = 0; i < status.rows; i++) {
+                if (status.data[i] === 1) { // Point was tracked successfully
+                    validPointCount++;
                     
-                    if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
-                        continue;
+                    const prevX = prevPoints.data32F[i * 2];
+                    const prevY = prevPoints.data32F[i * 2 + 1];
+                    const nextX = nextPoints.data32F[i * 2];
+                    const nextY = nextPoints.data32F[i * 2 + 1];
+                    
+                    // Validate point coordinates
+                    if (!isNaN(prevX) && !isNaN(prevY) && !isNaN(nextX) && !isNaN(nextY) &&
+                        isFinite(prevX) && isFinite(prevY) && isFinite(nextX) && isFinite(nextY)) {
+                        prevPts.push(prevX, prevY);
+                        nextPts.push(nextX, nextY);
                     }
-                    
-                    corners.push(new cv.Point(x, y));
-                } else {
-                    // If a corner tracking failed, use original position
-                    // This helps avoid sudden jumps when tracking fails
-                    corners.push(new cv.Point(prevCorners[i].x, prevCorners[i].y));
                 }
             }
             
-            // Compute tracking quality
-            let trackingQuality = validPoints / totalPoints;
-            
-            // Store results
-            result.flowStatus = status;
+            // Calculate tracking quality
+            const trackingQuality = validPointCount / status.rows;
             result.trackingQuality = trackingQuality;
             
-            // Check if we have a valid quadrilateral
-            if (corners.length === 4) {
-                // Validate tracking quality and geometry
-                if (trackingQuality >= 0.5 && this.isValidQuadrilateral(corners)) {
-                    result.corners = corners;
-                    result.success = true;
+            // Only proceed with homography if we have enough matched points
+            if (prevPts.length >= 16 && nextPts.length >= 16 && trackingQuality > 0.5) {
+                // Create point matrices for homography
+                prevPointsMat = cv.matFromArray(prevPts.length / 2, 1, cv.CV_32FC2, prevPts);
+                nextPointsMat = cv.matFromArray(nextPts.length / 2, 1, cv.CV_32FC2, nextPts);
+                
+                // Calculate homography matrix with RANSAC
+                homography = cv.findHomography(prevPointsMat, nextPointsMat, cv.RANSAC, this.params.ransacReprojThreshold);
+                
+                // Only proceed if we got a valid homography
+                if (homography && !homography.empty()) {
+                    // Set up corners of the original quadrilateral for transformation
+                    cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
+                    
+                    // Make sure we can safely access the cornerData
+                    if (cornerPoints.data32F && cornerPoints.data32F.length >= 8) {
+                        const cornerData = cornerPoints.data32F;
+                        
+                        // Set corners based on the original tracking rectangle
+                        for (let i = 0; i < 4; i++) {
+                            cornerData[i * 2] = prevCorners[i].x;
+                            cornerData[i * 2 + 1] = prevCorners[i].y;
+                        }
+                        
+                        // Transform corners using homography
+                        transformedCorners = new cv.Mat();
+                        cv.perspectiveTransform(cornerPoints, transformedCorners, homography);
+                        
+                        // Extract transformed corners
+                        if (transformedCorners && transformedCorners.data32F && 
+                            transformedCorners.data32F.length >= 8) {
+                            
+                            const corners = [];
+                            let validCorners = true;
+                            
+                            for (let i = 0; i < 4; i++) {
+                                const x = transformedCorners.data32F[i * 2];
+                                const y = transformedCorners.data32F[i * 2 + 1];
+                                
+                                if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
+                                    validCorners = false;
+                                    break;
+                                }
+                                
+                                corners.push(new cv.Point(x, y));
+                            }
+                            
+                            if (validCorners && this.isValidQuadrilateral(corners)) {
+                                result.corners = corners;
+                                result.success = true;
+                            }
+                        }
+                    }
                 }
             }
             
@@ -1183,10 +1264,17 @@ class OpticalFlowTracker {
             // Clean up OpenCV resources
             if (prevGray) prevGray.delete();
             if (currentGray) currentGray.delete();
+            if (prevMask) prevMask.delete();
+            if (featurePoints) featurePoints.delete();
             if (prevPoints) prevPoints.delete();
             if (nextPoints) nextPoints.delete();
             if (status && !result.flowStatus) status.delete();
             if (err) err.delete();
+            if (prevPointsMat) prevPointsMat.delete();
+            if (nextPointsMat) nextPointsMat.delete();
+            if (homography) homography.delete();
+            if (cornerPoints) cornerPoints.delete();
+            if (transformedCorners) transformedCorners.delete();
         }
     }
     
