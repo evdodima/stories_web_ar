@@ -13,12 +13,15 @@ class ImageTracker {
             isTracking: false,
             lastProcessingTime: 0,
             drawKeypoints: false,
+            visualizeFlowPoints: true, // Visualize optical flow tracking points
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
             useOpticalFlow: true, // Enable optical flow tracking by default
             detectionInterval: 10, // Run full detection every N frames
             frameCount: 0, // Current frame counter
             lastCorners: null, // Last detected corners for optical flow
             lastFrame: null, // Last processed frame for optical flow
+            featurePoints: null, // Feature points used in optical flow tracking
+            flowStatus: null, // Status of optical flow tracking points
         };
 
         // Initialize sub-modules
@@ -198,6 +201,12 @@ class ImageTracker {
                         this.state.lastCorners
                     );
                     
+                    // Save feature points for visualization if enabled
+                    if (this.state.visualizeFlowPoints) {
+                        this.state.featurePoints = trackingResult.nextFeaturePoints;
+                        this.state.flowStatus = trackingResult.flowStatus;
+                    }
+                    
                     // Update our tracking data if optical flow was successful
                     if (trackingResult.success) {
                         // Clean up previous frame
@@ -218,6 +227,12 @@ class ImageTracker {
                     frameToProcess,
                     this.state.lastCorners
                 );
+                
+                // Save feature points for visualization if enabled
+                if (this.state.visualizeFlowPoints) {
+                    this.state.featurePoints = trackingResult.nextFeaturePoints;
+                    this.state.flowStatus = trackingResult.flowStatus;
+                }
                 
                 // Update our tracking data if optical flow was successful
                 if (trackingResult.success) {
@@ -241,7 +256,9 @@ class ImageTracker {
                 frameToProcess,
                 trackingResult,
                 this.ui.canvas,
-                this.state.drawKeypoints
+                this.state.drawKeypoints,
+                this.state.visualizeFlowPoints ? this.state.featurePoints : null,
+                this.state.flowStatus
             );
             
             // Update tracking mode indicator
@@ -278,12 +295,14 @@ class UIManager {
         this.useOpticalFlow = document.getElementById('useOpticalFlow');
         this.detectionInterval = document.getElementById('detectionInterval');
         this.intervalValue = document.getElementById('intervalValue');
+        this.visualizeFlowPoints = document.getElementById('visualizeFlowPoints');
         
         // Initial UI state
         this.stopButton.disabled = true;
         this.useOpticalFlow.checked = tracker.state.useOpticalFlow;
         this.detectionInterval.value = tracker.state.detectionInterval;
         this.intervalValue.textContent = tracker.state.detectionInterval;
+        this.visualizeFlowPoints.checked = tracker.state.visualizeFlowPoints;
         this.currentMode.textContent = 'Waiting for reference image';
         
         // Make elements accessible to other modules that need them
@@ -322,6 +341,11 @@ class UIManager {
             const value = parseInt(this.detectionInterval.value);
             this.tracker.state.detectionInterval = value;
             this.intervalValue.textContent = value;
+        });
+        
+        // Set up visualization options
+        this.visualizeFlowPoints.addEventListener('change', () => {
+            this.tracker.state.visualizeFlowPoints = this.visualizeFlowPoints.checked;
         });
     }
     
@@ -1038,8 +1062,8 @@ class OpticalFlowTracker {
     constructor() {
         // Parameters for optical flow
         this.params = {
-            winSize: new cv.Size(15, 15), // Smaller window for better performance
-            maxLevel: 2, // Reduced pyramid levels for stability
+            winSize: new cv.Size(30, 30), // Smaller window for better performance
+            maxLevel: 3, // Reduced pyramid levels for stability
             criteria: new cv.TermCriteria(
                 cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 
                 10, 
@@ -1059,7 +1083,10 @@ class OpticalFlowTracker {
             success: false,
             corners: null,
             flowStatus: null,
-            trackingQuality: 0
+            trackingQuality: 0,
+            featurePoints: null, // For visualization
+            prevFeaturePoints: null,
+            nextFeaturePoints: null
         };
         
         if (!prevFrame || !currentFrame || !prevCorners || prevCorners.length !== 4) {
@@ -1129,6 +1156,9 @@ class OpticalFlowTracker {
                 pointsToTrack.push(x, y);
             }
             
+            // Store the original feature points for visualization
+            result.prevFeaturePoints = this.pointsArrayToPoints(pointsToTrack);
+            
             // Create OpenCV point arrays
             prevPoints = cv.matFromArray(featurePoints.rows, 1, cv.CV_32FC2, pointsToTrack);
             nextPoints = new cv.Mat();
@@ -1149,43 +1179,49 @@ class OpticalFlowTracker {
                     this.params.criteria
                 );
             } catch (error) {
-                // Fallback with default parameters if custom parameters fail
                 console.warn("Optical flow error with custom params, trying fallback:", error);
-                
                 // Clean up resources from failed attempt
                 if (nextPoints) nextPoints.delete();
                 if (status) status.delete();
                 if (err) err.delete();
-                
-                // Create new matrices for second attempt
-                nextPoints = new cv.Mat();
-                status = new cv.Mat();
-                err = new cv.Mat();
-                
-                // Try with minimal parameters
-                cv.calcOpticalFlowPyrLK(
-                    prevGray, 
-                    currentGray, 
-                    prevPoints, 
-                    nextPoints, 
-                    status, 
-                    err
-                );
             }
+            
+            // Save status for visualization
+            result.flowStatus = new Uint8Array(status.data.slice());
             
             // Build point pairs for homography calculation
             const prevPts = [];
             const nextPts = [];
+            const nextVisualPoints = [];
             let validPointCount = 0;
+            let pointsOutsideRoi = 0;
             
             for (let i = 0; i < status.rows; i++) {
+                const nextX = nextPoints.data32F[i * 2];
+                const nextY = nextPoints.data32F[i * 2 + 1];
+                
+                // Always store next points for visualization, regardless of status
+                if (!isNaN(nextX) && !isNaN(nextY) && isFinite(nextX) && isFinite(nextY)) {
+                    nextVisualPoints.push(new cv.Point(nextX, nextY));
+                } else {
+                    nextVisualPoints.push(null); // Placeholder for invalid points
+                }
+                
                 if (status.data[i] === 1) { // Point was tracked successfully
-                    validPointCount++;
-                    
                     const prevX = prevPoints.data32F[i * 2];
                     const prevY = prevPoints.data32F[i * 2 + 1];
-                    const nextX = nextPoints.data32F[i * 2];
-                    const nextY = nextPoints.data32F[i * 2 + 1];
+                    
+                    // Check if the point is inside the ROI in the current frame
+                    const pointInCurrentROI = this.isPointInPolygon(prevCorners, nextX, nextY);
+                    
+                    // Count points that have drifted outside the ROI
+                    if (!pointInCurrentROI) {
+                        pointsOutsideRoi++;
+                        // Do not include the point in the calculation if it's outside the ROI
+                        continue;
+                    }
+                    
+                    validPointCount++;
                     
                     // Validate point coordinates
                     if (!isNaN(prevX) && !isNaN(prevY) && !isNaN(nextX) && !isNaN(nextY) &&
@@ -1196,8 +1232,11 @@ class OpticalFlowTracker {
                 }
             }
             
-            // Calculate tracking quality
-            const trackingQuality = validPointCount / status.rows;
+            // Store the tracked points for visualization
+            result.nextFeaturePoints = nextVisualPoints;
+            
+            // Calculate tracking quality based on valid points inside ROI
+            const trackingQuality = validPointCount / (status.rows - pointsOutsideRoi || 1);
             result.trackingQuality = trackingQuality;
             
             // Only proceed with homography if we have enough matched points
@@ -1323,6 +1362,20 @@ class OpticalFlowTracker {
         }
     }
     
+    // Generate cv.Point objects from flat point array
+    pointsArrayToPoints(pointsArray) {
+        const points = [];
+        if (!pointsArray || pointsArray.length < 2) return points;
+        
+        for (let i = 0; i < pointsArray.length; i += 2) {
+            if (i + 1 < pointsArray.length) {
+                points.push(new cv.Point(pointsArray[i], pointsArray[i + 1]));
+            }
+        }
+        
+        return points;
+    }
+    
     // Helper method to check if a point is inside a polygon using ray casting algorithm
     isPointInPolygon(corners, x, y) {
         let inside = false;
@@ -1379,24 +1432,15 @@ class OpticalFlowTracker {
  * Handles visualization of tracking results
  */
 class Visualizer {
-    renderResults(frame, trackingResult, canvas, drawKeypoints) {
+    renderResults(frame, trackingResult, canvas, drawKeypoints, flowPoints, flowStatus) {
         // Resources to clean up
         let displayFrame = null;
         let contours = null;
         let contour = null;
         
         try {
-            if (drawKeypoints) {
-                // Create a clone of the frame for drawing
-                displayFrame = frame.clone();
-                
-                // Draw keypoints if available
-                if (trackingResult.keypoints) {
-                    this.drawKeypoints(displayFrame, trackingResult);
-                }
-            } else {
-                displayFrame = frame.clone();
-            }
+            // Create a clone of the frame for drawing
+            displayFrame = frame.clone();
             
             // If tracking was successful, draw the contour
             if (trackingResult.success && trackingResult.corners) {
@@ -1421,6 +1465,19 @@ class Visualizer {
                 }
             }
             
+            // Draw keypoints if available and enabled
+            if (drawKeypoints && trackingResult.keypoints) {
+                this.drawKeypoints(displayFrame, trackingResult);
+            }
+            
+            // Draw optical flow tracking points if available
+            if (flowPoints && flowPoints.length > 0) {
+                // Pass the tracking corners to the drawFlowPoints method for better visualization
+                const corners = trackingResult.success && trackingResult.corners ? 
+                    trackingResult.corners : null;
+                this.drawFlowPoints(displayFrame, flowPoints, flowStatus, corners);
+            }
+            
             // Display the processed frame
             cv.imshow(canvas, displayFrame);
         } catch (e) {
@@ -1430,6 +1487,56 @@ class Visualizer {
             if (displayFrame) displayFrame.delete();
             if (contours) contours.delete();
             if (contour) contour.delete();
+        }
+    }
+    
+    drawFlowPoints(frame, points, flowStatus, corners) {
+        try {
+            if (!points || points.length === 0) return;
+            
+            // Use the provided corners if available, otherwise use a fallback
+            let cornerPoints = corners || [];
+            
+            // If no corners were provided, create a fallback
+            if (!cornerPoints || cornerPoints.length !== 4) {
+                // Create a simplistic approximation of the marker boundaries
+                if (frame.cols > 0 && frame.rows > 0) {
+                    const padding = 0;
+                    cornerPoints = [
+                        new cv.Point(padding, padding),
+                        new cv.Point(frame.cols - padding, padding),
+                        new cv.Point(frame.cols - padding, frame.rows - padding),
+                        new cv.Point(padding, frame.rows - padding)
+                    ];
+                }
+            }
+            
+            for (let i = 0; i < points.length; i++) {
+                const point = points[i];
+                if (!point) continue;
+                
+                // Determine color based on tracking status and location
+                let color;
+                const isTracked = flowStatus && flowStatus.length > i && flowStatus[i] === 1;
+                
+                if (isTracked) {
+                    // For tracked points, use green for points inside the marker region,
+                    // yellow for points that might be outside the marker
+                    if (cornerPoints.length === 4) {
+                        const isInside = this.isPointInPolygon(cornerPoints, point.x, point.y);
+                        color = isInside ? [0, 255, 0, 255] : [255, 255, 0, 255]; // Green if inside, yellow if outside
+                    } else {
+                        color = [0, 255, 0, 255]; // Default to green if we can't determine location
+                    }
+                } else {
+                    color = [255, 0, 0, 255]; // Red for lost points
+                }
+                
+                // Draw the point
+                cv.circle(frame, point, 3, color, -1);
+            }
+        } catch (e) {
+            console.error("Error drawing flow points:", e);
         }
     }
     

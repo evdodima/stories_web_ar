@@ -26,8 +26,12 @@
                 </label>
                 <label title="Lower values = smoother tracking but slower to adapt">
                     Detection Interval:
-                    <input type="range" id="detectionInterval" min="10" max="60" value="30">
-                    <span id="intervalValue">30</span>
+                    <input type="range" id="detectionInterval" min="1" max="60" value="1">
+                    <span id="intervalValue">1</span>
+                </label>
+                <label>
+                    <input type="checkbox" id="visualizeFlowPoints" checked>
+                    Show Tracking Points
                 </label>
             </div>
         </div>
