@@ -22,6 +22,7 @@ class ImageTracker {
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
+            maxFeatures: 500, // Maximum number of feature points to extract per frame
         };
 
         // Initialize sub-modules
@@ -60,8 +61,8 @@ class ImageTracker {
         });
         
         // Initialize detector and optical flow tracker once OpenCV is ready
-        this.detector = new FeatureDetector();
-        this.opticalFlow = new OpticalFlowTracker();
+        this.detector = new FeatureDetector(this.state);
+        this.opticalFlow = new OpticalFlowTracker(this.state);
     }
 
     async startTracking() {
@@ -296,6 +297,8 @@ class UIManager {
         this.detectionInterval = document.getElementById('detectionInterval');
         this.intervalValue = document.getElementById('intervalValue');
         this.visualizeFlowPoints = document.getElementById('visualizeFlowPoints');
+        this.maxFeatures = document.getElementById('maxFeatures');
+        this.maxFeaturesValue = document.getElementById('maxFeaturesValue');
         
         // Initial UI state
         this.stopButton.disabled = true;
@@ -303,6 +306,10 @@ class UIManager {
         this.detectionInterval.value = tracker.state.detectionInterval;
         this.intervalValue.textContent = tracker.state.detectionInterval;
         this.visualizeFlowPoints.checked = tracker.state.visualizeFlowPoints;
+        if (this.maxFeatures) {
+            this.maxFeatures.value = tracker.state.maxFeatures;
+            this.maxFeaturesValue.textContent = tracker.state.maxFeatures;
+        }
         this.currentMode.textContent = 'Waiting for reference image';
         
         // Make elements accessible to other modules that need them
@@ -347,6 +354,15 @@ class UIManager {
         this.visualizeFlowPoints.addEventListener('change', () => {
             this.tracker.state.visualizeFlowPoints = this.visualizeFlowPoints.checked;
         });
+        
+        // Set up max features slider
+        if (this.maxFeatures) {
+            this.maxFeatures.addEventListener('input', () => {
+                const value = parseInt(this.maxFeatures.value);
+                this.tracker.state.maxFeatures = value;
+                this.maxFeaturesValue.textContent = value;
+            });
+        }
     }
     
     updateControlsForTracking(isTracking) {
@@ -676,7 +692,7 @@ class ReferenceImageManager {
     }
     
     async processImage(img, options = {}) {
-        const { maxFeatures = 1000, briskThreshold = 50, autoStart = false } = options;
+        const { maxFeatures = 500, briskThreshold = 50, autoStart = false } = options;
         
         try {
             // Clean up previous resources
@@ -768,8 +784,9 @@ class ReferenceImageManager {
  * Handles feature detection and matching
  */
 class FeatureDetector {
-    constructor() {
+    constructor(state) {
         this.detector = new cv.BRISK(50, 3, 1.0);
+        this.state = state;
     }
     
     detectAndMatch(frame, referenceData) {
@@ -814,8 +831,29 @@ class FeatureDetector {
             
             this.detector.detect(frameGray, frameKeypoints);
             
-            // Only compute descriptors if keypoints were found
+            // Limit the number of feature points to prevent lagging
             if (frameKeypoints.size() > 0) {
+                // Extract keypoints to array for sorting
+                let keypointsArray = [];
+                for (let i = 0; i < frameKeypoints.size(); i++) {
+                    keypointsArray.push(frameKeypoints.get(i));
+                }
+                
+                // Sort by response strength and limit to max features from state
+                keypointsArray.sort((a, b) => b.response - a.response);
+                const maxFeatures = this.state ? this.state.maxFeatures : 500;
+                if (keypointsArray.length > maxFeatures) {
+                    keypointsArray = keypointsArray.slice(0, maxFeatures);
+                }
+                
+                // Replace original keypoints with limited set
+                frameKeypoints.delete();
+                frameKeypoints = new cv.KeyPointVector();
+                for (let kp of keypointsArray) {
+                    frameKeypoints.push_back(kp);
+                }
+                
+                // Compute descriptors on the limited set of keypoints
                 this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
             }
             
@@ -1059,18 +1097,19 @@ class FeatureDetector {
  * Implements Lucas-Kanade sparse optical flow for efficient tracking
  */
 class OpticalFlowTracker {
-    constructor() {
+    constructor(state) {
+        this.state = state;
+        
         // Parameters for optical flow
         this.params = {
             winSize: new cv.Size(30, 30), // Smaller window for better performance
-            maxLevel: 3, // Reduced pyramid levels for stability
+            maxLevel: 5, // Reduced pyramid levels for stability
             criteria: new cv.TermCriteria(
                 cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 
                 10, 
                 0.03
             ),
             minEigThreshold: 0.001,
-            maxFeaturePoints: 100, // Maximum feature points to track
             featureQualityLevel: 0.01, // Quality level for feature detection
             featureMinDistance: 10, // Minimum distance between features
             ransacReprojThreshold: 3.0 // RANSAC reprojection threshold for homography
@@ -1114,7 +1153,7 @@ class OpticalFlowTracker {
         cv.goodFeaturesToTrack(
             prevGray,
             featurePoints,
-            this.params.maxFeaturePoints,
+            this.state ? this.state.maxFeatures : 100,
             this.params.featureQualityLevel,
             this.params.featureMinDistance,
             prevMask
