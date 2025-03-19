@@ -1078,243 +1078,178 @@ class OpticalFlowTracker {
     }
     
     track(prevFrame, currentFrame, prevCorners) {
-        // Response object structure
         const result = {
             success: false,
             corners: null,
             flowStatus: null,
             trackingQuality: 0,
-            featurePoints: null, // For visualization
+            featurePoints: null,
             prevFeaturePoints: null,
             nextFeaturePoints: null
         };
-        
+    
         if (!prevFrame || !currentFrame || !prevCorners || prevCorners.length !== 4) {
             return result;
         }
-        
-        // OpenCV resources to be cleaned up
-        let prevGray = null;
-        let currentGray = null;
-        let prevMask = null;
-        let featurePoints = null;
-        let prevPoints = null;
-        let nextPoints = null;
-        let status = null;
-        let err = null;
-        let prevPointsMat = null;
-        let nextPointsMat = null;
-        let homography = null;
-        let cornerPoints = null;
-        let transformedCorners = null;
-        
-        try {
-            // Convert frames to grayscale
-            prevGray = new cv.Mat();
-            currentGray = new cv.Mat();
-            cv.cvtColor(prevFrame, prevGray, cv.COLOR_RGBA2GRAY);
-            cv.cvtColor(currentFrame, currentGray, cv.COLOR_RGBA2GRAY);
-            
-            // Create a mask for feature detection inside the quadrilateral
-            prevMask = new cv.Mat.zeros(prevGray.rows, prevGray.cols, cv.CV_8UC1);
-            const roiCorners = new cv.MatVector();
-            const roi = new cv.Mat(4, 1, cv.CV_32SC2);
-            
-            for (let i = 0; i < 4; i++) {
-                roi.data32S[i * 2] = Math.round(prevCorners[i].x);
-                roi.data32S[i * 2 + 1] = Math.round(prevCorners[i].y);
-            }
-            
-            roiCorners.push_back(roi);
-            cv.fillPoly(prevMask, roiCorners, new cv.Scalar(255));
-            
-            // Clean up ROI resources
-            roi.delete();
-            roiCorners.delete();
-            
-            // Detect good features to track inside the quadrilateral
-            featurePoints = new cv.Mat();
-            cv.goodFeaturesToTrack(
-                prevGray,
-                featurePoints,
-                this.params.maxFeaturePoints,
-                this.params.featureQualityLevel,
-                this.params.featureMinDistance,
-                prevMask
-            );
-            
-            // Only proceed if we have enough feature points
-            if (!featurePoints || featurePoints.rows < 8) {
-                return result;
-            }
-            
-            // Convert feature points to array format for optical flow
-            const pointsToTrack = [];
-            for (let i = 0; i < featurePoints.rows; i++) {
-                const x = featurePoints.data32F[i * 2];
-                const y = featurePoints.data32F[i * 2 + 1];
-                pointsToTrack.push(x, y);
-            }
-            
-            // Store the original feature points for visualization
-            result.prevFeaturePoints = this.pointsArrayToPoints(pointsToTrack);
-            
-            // Create OpenCV point arrays
-            prevPoints = cv.matFromArray(featurePoints.rows, 1, cv.CV_32FC2, pointsToTrack);
-            nextPoints = new cv.Mat();
-            status = new cv.Mat();
-            err = new cv.Mat();
-            
-            try {
-                // Calculate optical flow
-                cv.calcOpticalFlowPyrLK(
-                    prevGray, 
-                    currentGray, 
-                    prevPoints, 
-                    nextPoints, 
-                    status, 
-                    err, 
-                    this.params.winSize, 
-                    this.params.maxLevel, 
-                    this.params.criteria
-                );
-            } catch (error) {
-                console.warn("Optical flow error with custom params, trying fallback:", error);
-                // Clean up resources from failed attempt
-                if (nextPoints) nextPoints.delete();
-                if (status) status.delete();
-                if (err) err.delete();
-            }
-            
-            // Save status for visualization
-            result.flowStatus = new Uint8Array(status.data.slice());
-            
-            // Build point pairs for homography calculation
-            const prevPts = [];
-            const nextPts = [];
-            const nextVisualPoints = [];
-            let validPointCount = 0;
-            let pointsOutsideRoi = 0;
-            
-            for (let i = 0; i < status.rows; i++) {
-                const nextX = nextPoints.data32F[i * 2];
-                const nextY = nextPoints.data32F[i * 2 + 1];
-                
-                // Always store next points for visualization, regardless of status
-                if (!isNaN(nextX) && !isNaN(nextY) && isFinite(nextX) && isFinite(nextY)) {
-                    nextVisualPoints.push(new cv.Point(nextX, nextY));
-                } else {
-                    nextVisualPoints.push(null); // Placeholder for invalid points
-                }
-                
-                if (status.data[i] === 1) { // Point was tracked successfully
-                    const prevX = prevPoints.data32F[i * 2];
-                    const prevY = prevPoints.data32F[i * 2 + 1];
-                    
-                    // Check if the point is inside the ROI in the current frame
-                    const pointInCurrentROI = this.isPointInPolygon(prevCorners, nextX, nextY);
-                    
-                    // Count points that have drifted outside the ROI
-                    if (!pointInCurrentROI) {
-                        pointsOutsideRoi++;
-                        // Do not include the point in the calculation if it's outside the ROI
-                        continue;
-                    }
-                    
-                    validPointCount++;
-                    
-                    // Validate point coordinates
-                    if (!isNaN(prevX) && !isNaN(prevY) && !isNaN(nextX) && !isNaN(nextY) &&
-                        isFinite(prevX) && isFinite(prevY) && isFinite(nextX) && isFinite(nextY)) {
-                        prevPts.push(prevX, prevY);
-                        nextPts.push(nextX, nextY);
-                    }
-                }
-            }
-            
-            // Store the tracked points for visualization
-            result.nextFeaturePoints = nextVisualPoints;
-            
-            // Calculate tracking quality based on valid points inside ROI
-            const trackingQuality = validPointCount / (status.rows - pointsOutsideRoi || 1);
-            result.trackingQuality = trackingQuality;
-            
-            // Only proceed with homography if we have enough matched points
-            if (prevPts.length >= 16 && nextPts.length >= 16 && trackingQuality > 0.5) {
-                // Create point matrices for homography
-                prevPointsMat = cv.matFromArray(prevPts.length / 2, 1, cv.CV_32FC2, prevPts);
-                nextPointsMat = cv.matFromArray(nextPts.length / 2, 1, cv.CV_32FC2, nextPts);
-                
-                // Calculate homography matrix with RANSAC
-                homography = cv.findHomography(prevPointsMat, nextPointsMat, cv.RANSAC, this.params.ransacReprojThreshold);
-                
-                // Only proceed if we got a valid homography
-                if (homography && !homography.empty()) {
-                    // Set up corners of the original quadrilateral for transformation
-                    cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
-                    
-                    // Make sure we can safely access the cornerData
-                    if (cornerPoints.data32F && cornerPoints.data32F.length >= 8) {
-                        const cornerData = cornerPoints.data32F;
-                        
-                        // Set corners based on the original tracking rectangle
-                        for (let i = 0; i < 4; i++) {
-                            cornerData[i * 2] = prevCorners[i].x;
-                            cornerData[i * 2 + 1] = prevCorners[i].y;
-                        }
-                        
-                        // Transform corners using homography
-                        transformedCorners = new cv.Mat();
-                        cv.perspectiveTransform(cornerPoints, transformedCorners, homography);
-                        
-                        // Extract transformed corners
-                        if (transformedCorners && transformedCorners.data32F && 
-                            transformedCorners.data32F.length >= 8) {
-                            
-                            const corners = [];
-                            let validCorners = true;
-                            
-                            for (let i = 0; i < 4; i++) {
-                                const x = transformedCorners.data32F[i * 2];
-                                const y = transformedCorners.data32F[i * 2 + 1];
-                                
-                                if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
-                                    validCorners = false;
-                                    break;
-                                }
-                                
-                                corners.push(new cv.Point(x, y));
-                            }
-                            
-                            if (validCorners && this.isValidQuadrilateral(corners)) {
-                                result.corners = corners;
-                                result.success = true;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            return result;
-        } catch (error) {
-            console.error("Error in optical flow tracking:", error);
-            return result;
-        } finally {
-            // Clean up OpenCV resources
-            if (prevGray) prevGray.delete();
-            if (currentGray) currentGray.delete();
-            if (prevMask) prevMask.delete();
-            if (featurePoints) featurePoints.delete();
-            if (prevPoints) prevPoints.delete();
-            if (nextPoints) nextPoints.delete();
-            if (status && !result.flowStatus) status.delete();
-            if (err) err.delete();
-            if (prevPointsMat) prevPointsMat.delete();
-            if (nextPointsMat) nextPointsMat.delete();
-            if (homography) homography.delete();
-            if (cornerPoints) cornerPoints.delete();
-            if (transformedCorners) transformedCorners.delete();
+    
+        let prevGray = new cv.Mat();
+        let currentGray = new cv.Mat();
+        cv.cvtColor(prevFrame, prevGray, cv.COLOR_RGBA2GRAY);
+        cv.cvtColor(currentFrame, currentGray, cv.COLOR_RGBA2GRAY);
+    
+        // Create a mask for feature detection inside the quadrilateral
+        let prevMask = new cv.Mat.zeros(prevGray.rows, prevGray.cols, cv.CV_8UC1);
+        let roiCorners = new cv.MatVector();
+        let roi = new cv.Mat(4, 1, cv.CV_32SC2);
+        for (let i = 0; i < 4; i++) {
+            roi.data32S[i * 2] = Math.round(prevCorners[i].x);
+            roi.data32S[i * 2 + 1] = Math.round(prevCorners[i].y);
         }
+        roiCorners.push_back(roi);
+        cv.fillPoly(prevMask, roiCorners, new cv.Scalar(255));
+        roi.delete(); roiCorners.delete();
+    
+        // Detect good features inside the quadrilateral
+        let featurePoints = new cv.Mat();
+        cv.goodFeaturesToTrack(
+            prevGray,
+            featurePoints,
+            this.params.maxFeaturePoints,
+            this.params.featureQualityLevel,
+            this.params.featureMinDistance,
+            prevMask
+        );
+    
+        if (!featurePoints || featurePoints.rows < 8) {
+            // Not enough points – return empty result
+            prevGray.delete(); currentGray.delete(); prevMask.delete();
+            featurePoints.delete();
+            return result;
+        }
+    
+        // Convert feature points to an array and store for visualization
+        let pointsToTrack = [];
+        for (let i = 0; i < featurePoints.rows; i++) {
+            pointsToTrack.push(featurePoints.data32F[i * 2], featurePoints.data32F[i * 2 + 1]);
+        }
+        result.prevFeaturePoints = this.pointsArrayToPoints(pointsToTrack);
+    
+        // Create matrices for tracking
+        let prevPoints = cv.matFromArray(featurePoints.rows, 1, cv.CV_32FC2, pointsToTrack);
+        let nextPoints = new cv.Mat();
+        let status = new cv.Mat();
+        let err = new cv.Mat();
+    
+        // Forward optical flow: previous -> current
+        cv.calcOpticalFlowPyrLK(
+            prevGray, 
+            currentGray, 
+            prevPoints, 
+            nextPoints, 
+            status, 
+            err, 
+            this.params.winSize, 
+            this.params.maxLevel, 
+            this.params.criteria
+        );
+    
+        // Backward optical flow: current -> previous
+        let backPoints = new cv.Mat();
+        let backStatus = new cv.Mat();
+        let backErr = new cv.Mat();
+        cv.calcOpticalFlowPyrLK(
+            currentGray, 
+            prevGray, 
+            nextPoints, 
+            backPoints, 
+            backStatus, 
+            backErr, 
+            this.params.winSize, 
+            this.params.maxLevel, 
+            this.params.criteria
+        );
+    
+        // Filter points by forward-backward error
+        let fbThreshold = 1.0; // This threshold can be tuned
+        let prevPtsFiltered = [];
+        let nextPtsFiltered = [];
+        let validCount = 0;
+        let nextVisualPoints = [];
+    
+        for (let i = 0; i < status.rows; i++) {
+            let forwardTracked = status.data[i] === 1;
+            let backwardTracked = backStatus.data[i] === 1;
+            if (forwardTracked && backwardTracked) {
+                let dx = prevPoints.data32F[i*2] - backPoints.data32F[i*2];
+                let dy = prevPoints.data32F[i*2+1] - backPoints.data32F[i*2+1];
+                let fbError = Math.sqrt(dx*dx + dy*dy);
+                if (fbError <= fbThreshold) {
+                    prevPtsFiltered.push(prevPoints.data32F[i*2], prevPoints.data32F[i*2+1]);
+                    nextPtsFiltered.push(nextPoints.data32F[i*2], nextPoints.data32F[i*2+1]);
+                    validCount++;
+                }
+            }
+            // Save all next points for visualization
+            nextVisualPoints.push(new cv.Point(nextPoints.data32F[i*2], nextPoints.data32F[i*2+1]));
+        }
+        result.nextFeaturePoints = nextVisualPoints;
+        result.flowStatus = new Uint8Array(status.data.slice());
+    
+        // Calculate tracking quality and only proceed if quality is sufficient
+        let trackingQuality = validCount / status.rows;
+        result.trackingQuality = trackingQuality;
+        if (trackingQuality < 0.6 || prevPtsFiltered.length < 16) {
+            // Not enough good points; do not update tracking.
+            prevGray.delete(); currentGray.delete(); prevMask.delete();
+            featurePoints.delete(); prevPoints.delete(); nextPoints.delete();
+            status.delete(); err.delete();
+            backPoints.delete(); backStatus.delete(); backErr.delete();
+            return result;
+        }
+    
+        // Compute homography based on filtered points
+        let prevPointsMat = cv.matFromArray(prevPtsFiltered.length/2, 1, cv.CV_32FC2, prevPtsFiltered);
+        let nextPointsMat = cv.matFromArray(nextPtsFiltered.length/2, 1, cv.CV_32FC2, nextPtsFiltered);
+        let homography = cv.findHomography(prevPointsMat, nextPointsMat, cv.RANSAC, this.params.ransacReprojThreshold);
+    
+        // If homography is valid, transform the original corners
+        if (homography && !homography.empty()) {
+            let cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
+            for (let i = 0; i < 4; i++) {
+                cornerPoints.data32F[i*2] = prevCorners[i].x;
+                cornerPoints.data32F[i*2+1] = prevCorners[i].y;
+            }
+            let transformedCorners = new cv.Mat();
+            cv.perspectiveTransform(cornerPoints, transformedCorners, homography);
+            // Validate and extract transformed corners
+            if (transformedCorners && transformedCorners.data32F && transformedCorners.data32F.length >= 8) {
+                let corners = [];
+                let validCorners = true;
+                for (let i = 0; i < 4; i++) {
+                    let x = transformedCorners.data32F[i * 2];
+                    let y = transformedCorners.data32F[i * 2 + 1];
+                    if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
+                        validCorners = false;
+                        break;
+                    }
+                    corners.push(new cv.Point(x, y));
+                }
+                if (validCorners && this.isValidQuadrilateral(corners)) {
+                    result.corners = corners;
+                    result.success = true;
+                }
+            }
+            cornerPoints.delete(); transformedCorners.delete();
+        }
+    
+        // Clean up all resources
+        prevGray.delete(); currentGray.delete(); prevMask.delete();
+        featurePoints.delete(); prevPoints.delete(); nextPoints.delete();
+        status.delete(); err.delete(); backPoints.delete();
+        backStatus.delete(); backErr.delete(); prevPointsMat.delete(); nextPointsMat.delete();
+        if (homography) homography.delete();
+    
+        return result;
     }
     
     // Generate additional tracking points inside the quadrilateral for better tracking
