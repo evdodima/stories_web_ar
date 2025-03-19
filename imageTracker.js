@@ -1,8 +1,58 @@
 /**
  * WebAR Image Tracking Module
- * A modular system for detecting and tracking reference images in a video stream.
+ * A modular system for detecting and tracking multiple reference images in a video stream.
  * Features best-in-class optical flow tracking for robust performance.
+ * Supports multi-target tracking up to 20 targets.
  */
+
+/**
+ * Utility class with shared helper methods
+ */
+class Utils {
+    /**
+     * Checks if a point is inside a polygon using ray casting algorithm
+     * @param {Array} corners - Array of corner points defining the polygon
+     * @param {number} x - X coordinate of the point to check
+     * @param {number} y - Y coordinate of the point to check
+     * @returns {boolean} - True if the point is inside the polygon
+     */
+    static isPointInPolygon(corners, x, y) {
+        let inside = false;
+        for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+            const xi = corners[i].x;
+            const yi = corners[i].y;
+            const xj = corners[j].x;
+            const yj = corners[j].y;
+            
+            const intersect = ((yi > y) !== (yj > y))
+                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+    
+    /**
+     * Safely delete an OpenCV resource
+     * @param {Object} resource - OpenCV resource to delete
+     */
+    static deleteResource(resource) {
+        if (resource && typeof resource.delete === 'function') {
+            try {
+                resource.delete();
+            } catch (e) {
+                console.warn('Error deleting resource:', e);
+            }
+        }
+    }
+    
+    /**
+     * Generate a unique ID
+     * @returns {string} - A unique identifier
+     */
+    static generateId() {
+        return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+    }
+}
 
 // Main application coordinator
 class ImageTracker {
@@ -12,23 +62,24 @@ class ImageTracker {
             isProcessing: false,
             isTracking: false,
             lastProcessingTime: 0,
-            drawKeypoints: false,
+            drawKeypoints: true,
             visualizeFlowPoints: true, // Visualize optical flow tracking points
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
             useOpticalFlow: true, // Enable optical flow tracking by default
             detectionInterval: 10, // Run full detection every N frames
             frameCount: 0, // Current frame counter
-            lastCorners: null, // Last detected corners for optical flow
-            lastFrame: null, // Last processed frame for optical flow
-            featurePoints: null, // Feature points used in optical flow tracking
-            flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: 500, // Maximum number of feature points to extract per frame
+            maxFeatures: 100, // Maximum number of feature points to extract per frame
+            goodMatchesThreshold: 0,
+            
+            // Multi-target tracking state
+            detectedTargets: new Map(), // Map of targetId -> tracking data
+            activeDetection: null, // Current active detection (targetId, corners, confidence)
         };
 
         // Initialize sub-modules
         this.ui = new UIManager(this);
         this.camera = new CameraManager();
-        this.referenceImage = new ReferenceImageManager();
+        this.targetsManager = new TargetsManager(this.state);
         this.detector = null;
         this.opticalFlow = null;
         this.visualizer = new Visualizer();
@@ -48,7 +99,8 @@ class ImageTracker {
         } else {
             this.ui.updateStatus('OpenCV loaded. Loading reference image...');
             this.initialize();
-            this.referenceImage.loadDefaultImage();
+            this.targetsManager.loadDefaultImage('reference.jpg');
+            this.targetsManager.loadDefaultImage('reference2.png');
         }
     }
 
@@ -57,7 +109,10 @@ class ImageTracker {
         this.ui.setupEventListeners({
             onStartTracking: () => this.startTracking(),
             onStopTracking: () => this.stopTracking(),
-            onReferenceImageLoad: (event) => this.referenceImage.loadFromFile(event)
+            onReferenceImageLoad: (event) => this.targetsManager.loadFromFile(event),
+            onTargetSelect: (targetId) => this.selectTarget(targetId),
+            onTargetAdd: () => this.ui.showAddTargetDialog(),
+            onTargetRemove: (targetId) => this.removeTarget(targetId)
         });
         
         // Initialize detector and optical flow tracker once OpenCV is ready
@@ -65,8 +120,62 @@ class ImageTracker {
         this.opticalFlow = new OpticalFlowTracker(this.state);
     }
 
+    /**
+     * Select a target for viewing/editing
+     * @param {string} targetId - ID of the target to select
+     */
+    selectTarget(targetId) {
+        if (this.targetsManager.setActiveTarget(targetId)) {
+            this.ui.updateTargetSelection(targetId);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Remove a target
+     * @param {string} targetId - ID of the target to remove
+     */
+    removeTarget(targetId) {
+        // Cannot remove last target
+        if (this.targetsManager.getAllTargets().length <= 1) {
+            this.ui.updateStatus('Cannot remove the last target.');
+            return false;
+        }
+        
+        // Remove target tracking data
+        if (this.state.detectedTargets.has(targetId)) {
+            const trackingData = this.state.detectedTargets.get(targetId);
+            if (trackingData.lastFrame) {
+                Utils.deleteResource(trackingData.lastFrame);
+            }
+            this.state.detectedTargets.delete(targetId);
+            
+            // If removed target was active detection, clear it
+            if (this.state.activeDetection && this.state.activeDetection.targetId === targetId) {
+                this.state.activeDetection = null;
+            }
+        }
+        
+        // Remove from manager
+        if (this.targetsManager.removeTarget(targetId)) {
+            // Update UI
+            this.ui.refreshTargetsList();
+            this.ui.updateStatus(`Target removed.`);
+            return true;
+        }
+        
+        return false;
+    }
+
     async startTracking() {
         if (this.state.isTracking) return;
+        
+        // Check if we have any targets to track
+        if (!this.targetsManager.hasLoadedTargets()) {
+            this.ui.updateStatus('Please load at least one reference image first.');
+            return;
+        }
         
         this.ui.updateStatus('Starting tracking...');
         
@@ -80,6 +189,9 @@ class ImageTracker {
             // Set tracking state
             this.state.isTracking = true;
             
+            // Clear any previous tracking data
+            this.resetTrackingData();
+            
             // Verify OpenCV is fully initialized
             if (this.ensureOpenCVReady()) {
                 this.processVideo();
@@ -88,6 +200,23 @@ class ImageTracker {
             this.ui.updateStatus(`Error starting tracking: ${error.message}`);
             console.error(error);
         }
+    }
+    
+    /**
+     * Reset tracking data for all targets
+     */
+    resetTrackingData() {
+        // Clear any existing tracking data
+        this.state.detectedTargets.forEach(data => {
+            if (data.lastFrame) {
+                Utils.deleteResource(data.lastFrame);
+            }
+        });
+        
+        // Reset tracking maps
+        this.state.detectedTargets = new Map();
+        this.state.activeDetection = null;
+        this.state.frameCount = 0;
     }
     
     ensureOpenCVReady() {
@@ -121,13 +250,13 @@ class ImageTracker {
         // Stop camera
         this.camera.stop();
         
-        // Clean up optical flow resources
-        if (this.state.lastFrame) {
-            this.state.lastFrame.delete();
-            this.state.lastFrame = null;
+        // Clean up all tracking resources
+        this.resetTrackingData();
+        
+        // Clean up feature detector cache
+        if (this.detector) {
+            this.detector.cleanup();
         }
-        this.state.lastCorners = null;
-        this.state.frameCount = 0;
         
         // Update UI
         this.ui.updateControlsForTracking(false);
@@ -164,102 +293,185 @@ class ImageTracker {
             // Increment frame counter
             this.state.frameCount++;
             
-            let trackingResult;
-            let shouldRunDetector = false;
+            // Main tracking result to visualize
+            let mainTrackingResult = { success: false };
             
-            // Decide whether to use feature detection or optical flow
-            if (!this.state.useOpticalFlow || 
-                !this.state.lastCorners || 
-                !this.state.lastFrame || 
-                this.state.frameCount % this.state.detectionInterval === 0) {
-                
-                shouldRunDetector = true;
-            }
+            // Track all active targets with periodic full detection
+            const shouldRunDetector = this.state.frameCount % this.state.detectionInterval === 0;
             
-            if (shouldRunDetector) {
-                // Run full feature detection periodically or when we don't have previous tracking data
-                trackingResult = this.detector.detectAndMatch(
-                    frameToProcess, 
-                    this.referenceImage.getData()
-                );
+            if (shouldRunDetector || !this.state.activeDetection) {
+                // Run full detection for all targets
+                const activeTargets = this.targetsManager.getActiveTargets();
+                let bestMatch = null;
                 
-                // Store frame and corners for optical flow tracking if detection was successful
-                if (trackingResult.success && trackingResult.corners) {
-                    // Clean up previous frame if it exists
-                    if (this.state.lastFrame) {
-                        this.state.lastFrame.delete();
-                        this.state.lastFrame = null;
-                    }
+                // Check each target for a match
+                for (const target of activeTargets) {
+                    if (!target.isProcessed) continue;
                     
-                    // Store current frame and corners for next optical flow tracking
-                    this.state.lastFrame = frameToProcess.clone();
-                    this.state.lastCorners = trackingResult.corners.slice();
-                } else if (this.state.useOpticalFlow && this.state.lastFrame && this.state.lastCorners) {
-                    // If detection failed but we have previous data, try optical flow as fallback
-                    trackingResult = this.opticalFlow.track(
-                        this.state.lastFrame,
-                        frameToProcess,
-                        this.state.lastCorners
-                    );
+                    // Get existing tracking data or create new entry
+                    let trackingData = this.getTrackingDataForTarget(target.id);
                     
-                    // Save feature points for visualization if enabled
-                    if (this.state.visualizeFlowPoints) {
-                        this.state.featurePoints = trackingResult.nextFeaturePoints;
-                        this.state.flowStatus = trackingResult.flowStatus;
-                    }
+                    // Try detection for this target
+                    const result = this.detector.detectAndMatch(frameToProcess, target.getData());
                     
-                    // Update our tracking data if optical flow was successful
-                    if (trackingResult.success) {
+                    // If detection successful, update tracking data
+                    if (result.success && result.corners) {
+                        trackingData.lastDetectionResult = result;
+                        trackingData.lastDetectionTime = this.state.frameCount;
+                        
                         // Clean up previous frame
-                        if (this.state.lastFrame) {
-                            this.state.lastFrame.delete();
-                            this.state.lastFrame = null;
+                        if (trackingData.lastFrame) {
+                            Utils.deleteResource(trackingData.lastFrame);
                         }
                         
-                        // Update with new frame and corners
-                        this.state.lastFrame = frameToProcess.clone();
-                        this.state.lastCorners = trackingResult.corners.slice();
+                        // Store frame and corners for future optical flow
+                        trackingData.lastFrame = frameToProcess.clone();
+                        trackingData.lastCorners = result.corners.slice();
+                        
+                        // Determine if this is the best match (by number of matches)
+                        const matchQuality = result.goodMatches ? result.goodMatches.size() : 0;
+                        
+                        if (!bestMatch || matchQuality > bestMatch.quality) {
+                            bestMatch = {
+                                targetId: target.id,
+                                quality: matchQuality,
+                                result: result
+                            };
+                        }
                     }
                 }
-            } else {
-                // Use optical flow for most frames (more efficient)
-                trackingResult = this.opticalFlow.track(
-                    this.state.lastFrame,
-                    frameToProcess,
-                    this.state.lastCorners
-                );
                 
-                // Save feature points for visualization if enabled
-                if (this.state.visualizeFlowPoints) {
-                    this.state.featurePoints = trackingResult.nextFeaturePoints;
-                    this.state.flowStatus = trackingResult.flowStatus;
-                }
-                
-                // Update our tracking data if optical flow was successful
-                if (trackingResult.success) {
-                    // Clean up previous frame
-                    if (this.state.lastFrame) {
-                        this.state.lastFrame.delete();
-                        this.state.lastFrame = null;
-                    }
+                // Use the best match as the active detection
+                if (bestMatch) {
+                    this.state.activeDetection = {
+                        targetId: bestMatch.targetId,
+                        corners: bestMatch.result.corners.slice(),
+                        quality: bestMatch.quality,
+                        lastUpdatedFrame: this.state.frameCount
+                    };
+                    mainTrackingResult = bestMatch.result;
                     
-                    // Update with new frame and corners
-                    this.state.lastFrame = frameToProcess.clone();
-                    this.state.lastCorners = trackingResult.corners.slice();
-                } else {
+                    // Update UI to show which target was detected
+                    const detectedTarget = this.targetsManager.getTargetById(bestMatch.targetId);
+                    if (detectedTarget) {
+                        this.ui.updateDetectionStatus(detectedTarget.name, bestMatch.quality);
+                    }
+                }
+                // Try optical flow for the active detection if available
+                else if (this.state.activeDetection && this.state.useOpticalFlow) {
+                    const activeId = this.state.activeDetection.targetId;
+                    const trackingData = this.state.detectedTargets.get(activeId);
+                    
+                    if (trackingData && trackingData.lastFrame && trackingData.lastCorners) {
+                        // Run optical flow tracking
+                        const result = this.opticalFlow.track(
+                            trackingData.lastFrame,
+                            frameToProcess,
+                            trackingData.lastCorners
+                        );
+                        
+                        // If successful, update tracking data
+                        if (result.success) {
+                            // Clean up previous frame
+                            Utils.deleteResource(trackingData.lastFrame);
+                            
+                            // Update with new frame and corners
+                            trackingData.lastFrame = frameToProcess.clone();
+                            trackingData.lastCorners = result.corners.slice();
+                            
+                            // Update active detection
+                            this.state.activeDetection.corners = result.corners.slice();
+                            this.state.activeDetection.lastUpdatedFrame = this.state.frameCount;
+                            
+                            // Use this result for visualization
+                            mainTrackingResult = result;
+                            
+                            // Store feature points for visualization
+                            if (this.state.visualizeFlowPoints) {
+                                trackingData.featurePoints = result.nextFeaturePoints;
+                                trackingData.flowStatus = result.flowStatus;
+                            }
+                        }
+                        // If optical flow failed, clear active detection
+                        else {
+                            this.state.activeDetection = null;
+                        }
+                    }
+                }
+            } 
+            // Use optical flow for tracking existing detection
+            else if (this.state.activeDetection && this.state.useOpticalFlow) {
+                const activeId = this.state.activeDetection.targetId;
+                const trackingData = this.state.detectedTargets.get(activeId);
+                
+                if (trackingData && trackingData.lastFrame && trackingData.lastCorners) {
+                    // Run optical flow tracking
+                    const result = this.opticalFlow.track(
+                        trackingData.lastFrame,
+                        frameToProcess,
+                        trackingData.lastCorners
+                    );
+                    
+                    // If successful, update tracking data
+                    if (result.success) {
+                        // Clean up previous frame
+                        Utils.deleteResource(trackingData.lastFrame);
+                        
+                        // Update with new frame and corners
+                        trackingData.lastFrame = frameToProcess.clone();
+                        trackingData.lastCorners = result.corners.slice();
+                        
+                        // Update active detection
+                        this.state.activeDetection.corners = result.corners.slice();
+                        this.state.activeDetection.lastUpdatedFrame = this.state.frameCount;
+                        
+                        // Use this result for visualization
+                        mainTrackingResult = result;
+                        
+                        // Store feature points for visualization
+                        if (this.state.visualizeFlowPoints) {
+                            trackingData.featurePoints = result.nextFeaturePoints;
+                            trackingData.flowStatus = result.flowStatus;
+                        }
+                    } 
                     // If optical flow fails, force a full detection on next frame
-                    this.state.frameCount = this.state.detectionInterval - 1;
+                    else {
+                        this.state.frameCount = this.state.detectionInterval - 1;
+                    }
+                }
+            }
+            
+            // If we have an active detection, enhance the tracking result for visualization
+            if (this.state.activeDetection) {
+                mainTrackingResult.success = true;
+                mainTrackingResult.corners = this.state.activeDetection.corners;
+                
+                // Add feature points if available
+                const trackingData = this.state.detectedTargets.get(this.state.activeDetection.targetId);
+                if (trackingData && trackingData.featurePoints) {
+                    mainTrackingResult.featurePoints = trackingData.featurePoints;
+                    mainTrackingResult.flowStatus = trackingData.flowStatus;
                 }
             }
             
             // Visualize results
+            let targetName = '';
+            if (this.state.activeDetection && this.state.activeDetection.targetId) {
+                const detectedTarget = this.targetsManager.getTargetById(this.state.activeDetection.targetId);
+                if (detectedTarget) {
+                    targetName = detectedTarget.name;
+                }
+            }
+            
             this.visualizer.renderResults(
                 frameToProcess,
-                trackingResult,
+                mainTrackingResult,
                 this.ui.canvas,
                 this.state.drawKeypoints,
-                this.state.visualizeFlowPoints ? this.state.featurePoints : null,
-                this.state.flowStatus
+                this.state.visualizeFlowPoints && mainTrackingResult.nextFeaturePoints ? 
+                    mainTrackingResult.nextFeaturePoints : null,
+                mainTrackingResult.flowStatus,
+                targetName
             );
             
             // Update tracking mode indicator
@@ -268,13 +480,46 @@ class ImageTracker {
             console.error('Error in processVideo:', error);
         } finally {
             // Clean up resources
-            if (frameToProcess && !this.state.lastFrame || (this.state.lastFrame && frameToProcess !== this.state.lastFrame)) {
-                frameToProcess.delete();
+            let shouldDeleteFrame = true;
+            
+            // Check if frame was stored in any tracking data
+            if (this.state.detectedTargets.size > 0) {
+                for (const data of this.state.detectedTargets.values()) {
+                    if (data.lastFrame === frameToProcess) {
+                        shouldDeleteFrame = false;
+                        break;
+                    }
+                }
+            }
+            
+            // Delete frame if not stored
+            if (shouldDeleteFrame && frameToProcess) {
+                Utils.deleteResource(frameToProcess);
             }
             
             // Mark processing as complete
             this.state.isProcessing = false;
         }
+    }
+    
+    /**
+     * Get or create tracking data for a target
+     * @param {string} targetId - Target ID
+     * @returns {Object} - Tracking data for the target
+     */
+    getTrackingDataForTarget(targetId) {
+        if (!this.state.detectedTargets.has(targetId)) {
+            this.state.detectedTargets.set(targetId, {
+                lastFrame: null,
+                lastCorners: null,
+                lastDetectionResult: null,
+                lastDetectionTime: 0,
+                featurePoints: null,
+                flowStatus: null
+            });
+        }
+        
+        return this.state.detectedTargets.get(targetId);
     }
 }
 
@@ -299,6 +544,12 @@ class UIManager {
         this.visualizeFlowPoints = document.getElementById('visualizeFlowPoints');
         this.maxFeatures = document.getElementById('maxFeatures');
         this.maxFeaturesValue = document.getElementById('maxFeaturesValue');
+        this.targetsContainer = document.getElementById('targetsContainer');
+        this.addTargetButton = document.getElementById('addTarget');
+        this.currentDetection = document.getElementById('currentDetection');
+        
+        // Create targets container if it doesn't exist
+        this.createTargetsContainerIfNeeded();
         
         // Initial UI state
         this.stopButton.disabled = true;
@@ -322,16 +573,71 @@ class UIManager {
             statusMessage: this.statusMessage,
             currentMode: this.currentMode
         };
+        
+        // Initialize the targets list with a small delay to ensure DOM is ready
+        setTimeout(() => this.refreshTargetsList(), 500);
+    }
+    
+    /**
+     * Create the targets container and add target button if they don't exist
+     */
+    createTargetsContainerIfNeeded() {
+        // If targets container doesn't exist, create it
+        if (!this.targetsContainer) {
+            // Create targets section
+            const controlsSection = document.querySelector('.controls');
+            
+            if (controlsSection) {
+                // Create targets container
+                const targetsSection = document.createElement('div');
+                targetsSection.className = 'targets-section';
+                targetsSection.innerHTML = `
+                    <h3>Tracking Targets</h3>
+                    <div id="targetsContainer" class="targets-container"></div>
+                    <button id="addTarget" class="add-target-button">Add New Target</button>
+                `;
+                
+                // Insert after the existing controls
+                controlsSection.parentNode.insertBefore(targetsSection, controlsSection.nextSibling);
+                
+                // Update references
+                this.targetsContainer = document.getElementById('targetsContainer');
+                this.addTargetButton = document.getElementById('addTarget');
+            }
+        }
+        
+        // If current detection element doesn't exist, create it
+        if (!this.currentDetection) {
+            const statusSection = document.querySelector('.status');
+            
+            if (statusSection) {
+                const detectionStatus = document.createElement('p');
+                detectionStatus.id = 'currentDetection';
+                detectionStatus.textContent = 'No target detected';
+                
+                statusSection.appendChild(detectionStatus);
+                
+                // Update reference
+                this.currentDetection = document.getElementById('currentDetection');
+            }
+        }
     }
     
     setupEventListeners(handlers) {
-        const { onStartTracking, onStopTracking, onReferenceImageLoad } = handlers;
+        const { 
+            onStartTracking, 
+            onStopTracking, 
+            onReferenceImageLoad,
+            onTargetSelect,
+            onTargetAdd,
+            onTargetRemove
+        } = handlers;
         
         this.startButton.addEventListener('click', () => {
-            if (this.tracker.referenceImage.isLoaded()) {
+            if (this.tracker.targetsManager.hasLoadedTargets()) {
                 onStartTracking();
             } else {
-                this.updateStatus('Please upload a reference image first.');
+                this.updateStatus('Please upload at least one reference image first.');
             }
         });
         
@@ -363,6 +669,144 @@ class UIManager {
                 this.maxFeaturesValue.textContent = value;
             });
         }
+        
+        // Set up targets UI interactions
+        if (this.addTargetButton) {
+            this.addTargetButton.addEventListener('click', onTargetAdd);
+        }
+        
+        // Initialize the targets list
+        this.refreshTargetsList();
+    }
+    
+    /**
+     * Refresh the targets list UI
+     */
+    refreshTargetsList() {
+        if (!this.targetsContainer) return;
+        
+        // Clear current list
+        this.targetsContainer.innerHTML = '';
+        
+        // Get all targets
+        const targets = this.tracker.targetsManager.getAllTargets();
+        
+        if (targets.length === 0) {
+            const emptyMessage = document.createElement('div');
+            emptyMessage.className = 'empty-targets';
+            emptyMessage.textContent = 'No targets added. Upload a reference image to get started.';
+            this.targetsContainer.appendChild(emptyMessage);
+            return;
+        }
+        
+        // Create target elements
+        targets.forEach(target => {
+            const targetElement = document.createElement('div');
+            targetElement.className = 'target-item';
+            targetElement.dataset.targetId = target.id;
+            
+            if (this.tracker.targetsManager.activeTarget === target) {
+                targetElement.classList.add('active');
+            }
+            
+            // Create thumbnail if available
+            let thumbnailHtml = '';
+            if (target.thumbnail) {
+                thumbnailHtml = `<img src="${target.thumbnail}" alt="${target.name}" class="target-thumbnail">`;
+            } else {
+                thumbnailHtml = '<div class="target-thumbnail placeholder"></div>';
+            }
+            
+            targetElement.innerHTML = `
+                ${thumbnailHtml}
+                <div class="target-info">
+                    <div class="target-name">${target.name}</div>
+                    <div class="target-features">${target.keypoints ? target.keypoints.size() : 0} features</div>
+                </div>
+                <div class="target-actions">
+                    <button class="target-remove" data-target-id="${target.id}">×</button>
+                </div>
+            `;
+            
+            // Add event listeners
+            targetElement.addEventListener('click', (e) => {
+                // Don't trigger if clicked on remove button
+                if (e.target.closest('.target-remove')) return;
+                
+                // Select this target
+                const targetId = targetElement.dataset.targetId;
+                this.tracker.selectTarget(targetId);
+            });
+            
+            const removeButton = targetElement.querySelector('.target-remove');
+            if (removeButton) {
+                removeButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const targetId = removeButton.dataset.targetId;
+                    if (confirm(`Are you sure you want to remove the target "${target.name}"?`)) {
+                        this.tracker.removeTarget(targetId);
+                    }
+                });
+            }
+            
+            this.targetsContainer.appendChild(targetElement);
+        });
+        
+        // Update button state
+        if (this.addTargetButton) {
+            this.addTargetButton.disabled = this.tracker.targetsManager.isAtMaxCapacity();
+        }
+    }
+    
+    /**
+     * Update the UI to reflect the selected target
+     * @param {string} targetId - ID of the selected target 
+     */
+    updateTargetSelection(targetId) {
+        if (!this.targetsContainer) return;
+        
+        // Remove active class from all targets
+        const targetElements = this.targetsContainer.querySelectorAll('.target-item');
+        targetElements.forEach(el => el.classList.remove('active'));
+        
+        // Add active class to selected target
+        const selectedElement = this.targetsContainer.querySelector(`.target-item[data-target-id="${targetId}"]`);
+        if (selectedElement) {
+            selectedElement.classList.add('active');
+        }
+    }
+    
+    /**
+     * Show dialog to add a new target
+     */
+    showAddTargetDialog() {
+        // Check if we're at max capacity
+        if (this.tracker.targetsManager.isAtMaxCapacity()) {
+            this.updateStatus(`Cannot add more than ${this.tracker.targetsManager.MAX_TARGETS} targets.`);
+            return;
+        }
+        
+        // Simulate a click on the file input
+        this.fileInput.click();
+    }
+    
+    /**
+     * Update status of current detection
+     * @param {string} targetName - Name of the detected target
+     * @param {number} confidence - Confidence score of the detection
+     */
+    updateDetectionStatus(targetName, confidence) {
+        if (!this.currentDetection) return;
+        
+        this.currentDetection.textContent = `Detected: ${targetName} (${confidence} matches)`;
+        this.currentDetection.style.color = '#00c853';
+        
+        // Reset color after a short time
+        setTimeout(() => {
+            if (this.currentDetection) {
+                this.currentDetection.style.color = '';
+            }
+        }, 1000);
     }
     
     updateControlsForTracking(isTracking) {
@@ -370,10 +814,27 @@ class UIManager {
         this.stopButton.disabled = !isTracking;
         this.fileInput.disabled = isTracking;
         
+        // Disable target management during tracking
+        if (this.addTargetButton) {
+            this.addTargetButton.disabled = isTracking;
+        }
+        
+        // Disable target removal during tracking
+        const removeButtons = document.querySelectorAll('.target-remove');
+        removeButtons.forEach(button => {
+            button.disabled = isTracking;
+        });
+        
         if (isTracking) {
             this.updateTrackingMode('Initializing tracking...');
+            if (this.currentDetection) {
+                this.currentDetection.textContent = 'Searching for targets...';
+            }
         } else {
             this.updateTrackingMode('Tracking stopped');
+            if (this.currentDetection) {
+                this.currentDetection.textContent = 'No target detected';
+            }
         }
     }
     
@@ -602,10 +1063,15 @@ class CameraManager {
 /**
  * Manages reference image loading and processing
  */
-class ReferenceImageManager {
-    constructor() {
+/**
+ * Represents a single target for tracking
+ */
+class ReferenceTarget {
+    constructor(id, name) {
+        this.id = id || Utils.generateId();
+        this.name = name || `Target ${this.id.substring(0, 4)}`;
         this.reset();
-        this.ui = document.getElementById('statusMessage');
+        this.isActive = true;
     }
     
     reset() {
@@ -614,6 +1080,8 @@ class ReferenceImageManager {
         this.imageGray = null;
         this.keypoints = null;
         this.descriptors = null;
+        this.thumbnail = null;
+        this.isProcessed = false;
     }
     
     isLoaded() {
@@ -622,14 +1090,146 @@ class ReferenceImageManager {
     
     getData() {
         return {
+            id: this.id,
+            name: this.name,
             image: this.image,
             imageGray: this.imageGray,
             keypoints: this.keypoints,
-            descriptors: this.descriptors
+            descriptors: this.descriptors,
+            isActive: this.isActive
         };
     }
     
-    async loadDefaultImage() {
+    cleanup() {
+        // Clean up OpenCV resources using Utils helper
+        [this.image, this.imageGray, this.keypoints, this.descriptors].forEach(
+            resource => Utils.deleteResource(resource)
+        );
+        
+        // Reset references
+        this.reset();
+    }
+}
+
+/**
+ * Manages multiple reference images for tracking
+ */
+class TargetsManager {
+    constructor(state) {
+        this.targets = [];
+        this.activeTarget = null;
+        this.state = state;
+        this.ui = document.getElementById('statusMessage');
+        this.MAX_TARGETS = 20;
+    }
+    
+    /**
+     * Get all targets
+     * @returns {Array} - Array of target objects
+     */
+    getAllTargets() {
+        return this.targets;
+    }
+    
+    /**
+     * Get only active targets
+     * @returns {Array} - Array of active target objects
+     */
+    getActiveTargets() {
+        // Return all processed targets, regardless of isActive state
+        return this.targets.filter(target => target.isProcessed);
+    }
+    
+    /**
+     * Get a target by ID
+     * @param {string} id - Target ID
+     * @returns {ReferenceTarget} - Target object or null if not found
+     */
+    getTargetById(id) {
+        return this.targets.find(target => target.id === id);
+    }
+    
+    /**
+     * Add a new target
+     * @param {string} name - Optional name for the target
+     * @returns {ReferenceTarget} - The newly created target
+     */
+    addTarget(name) {
+        if (this.targets.length >= this.MAX_TARGETS) {
+            this.updateStatus(`Cannot add more than ${this.MAX_TARGETS} targets.`);
+            return null;
+        }
+        
+        const target = new ReferenceTarget(null, name);
+        this.targets.push(target);
+        this.activeTarget = target;
+        
+        return target;
+    }
+    
+    /**
+     * Remove a target by ID
+     * @param {string} id - Target ID to remove
+     * @returns {boolean} - True if target was removed
+     */
+    removeTarget(id) {
+        const targetIndex = this.targets.findIndex(target => target.id === id);
+        
+        if (targetIndex >= 0) {
+            // Clean up target resources
+            this.targets[targetIndex].cleanup();
+            
+            // Remove from array
+            this.targets.splice(targetIndex, 1);
+            
+            // Update active target if needed
+            if (this.activeTarget && this.activeTarget.id === id) {
+                this.activeTarget = this.targets.length > 0 ? this.targets[0] : null;
+            }
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Set a target as active by ID
+     * @param {string} id - Target ID
+     * @returns {boolean} - True if target was set as active
+     */
+    setActiveTarget(id) {
+        const target = this.getTargetById(id);
+        
+        if (target) {
+            // Just update the UI reference, but don't change tracking state
+            this.activeTarget = target;
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if any targets are loaded
+     * @returns {boolean} - True if at least one target is loaded
+     */
+    hasLoadedTargets() {
+        return this.targets.some(target => target.isLoaded());
+    }
+    
+    /**
+     * Check if max targets limit is reached
+     * @returns {boolean} - True if at maximum capacity
+     */
+    isAtMaxCapacity() {
+        return this.targets.length >= this.MAX_TARGETS;
+    }
+    
+    /**
+     * Load default reference image 
+     */
+    async loadDefaultImage(src) {
         this.updateStatus('Loading default reference image...');
         
         try {
@@ -639,12 +1239,17 @@ class ReferenceImageManager {
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = () => reject(new Error('Failed to load reference.jpg'));
-                img.src = 'reference.jpg';
+                img.src = src;
             });
             
+            // Create a default target
+            const target = this.addTarget('Default');
+            if (!target) {
+                throw new Error('Could not create target');
+            }
+            
             // Process the reference image
-            await this.processImage(img, { 
-                maxFeatures: 500, 
+            await this.processImage(img, target, { 
                 briskThreshold: 50,
                 autoStart: true
             });
@@ -655,13 +1260,32 @@ class ReferenceImageManager {
         }
     }
     
-    async loadFromFile(event) {
+    /**
+     * Load a target from a file input event
+     * @param {Event} event - File input event
+     * @param {string} targetName - Optional name for the target
+     */
+    async loadFromFile(event, targetName) {
         const file = event.target.files[0];
         if (!file) return;
         
         this.updateStatus('Loading reference image...');
         
+        // Generate a name from the file name if not provided
+        if (!targetName) {
+            targetName = file.name.split('.')[0];
+        }
+        
         try {
+            // Check if we're at max capacity
+            if (this.isAtMaxCapacity()) {
+                this.updateStatus(`Cannot add more than ${this.MAX_TARGETS} targets.`);
+                return;
+            }
+            
+            // Create a new target
+            const target = this.addTarget(targetName);
+            
             // Read the file and convert to image element
             const imageUrl = URL.createObjectURL(file);
             const img = new Image();
@@ -673,14 +1297,29 @@ class ReferenceImageManager {
             });
             
             // Process the reference image
-            const success = await this.processImage(img, { 
-                maxFeatures: 500, 
+            const success = await this.processImage(img, target, { 
                 briskThreshold: 60
             });
             
             if (success) {
                 // Enable start button
                 document.getElementById('startTracking').disabled = false;
+                
+                // Update the UI to reflect the new target
+                // Find UIManager instance to refresh the targets list
+                if (window.imageTrackerInstance && window.imageTrackerInstance.ui) {
+                    window.imageTrackerInstance.ui.refreshTargetsList();
+                    if (target.id) {
+                        window.imageTrackerInstance.ui.updateTargetSelection(target.id);
+                    }
+                } else {
+                    // Try to find the targets container and refresh it manually
+                    const targetsContainer = document.getElementById('targetsContainer');
+                    if (targetsContainer) {
+                        const event = new CustomEvent('refreshTargets');
+                        document.dispatchEvent(event);
+                    }
+                }
             }
             
             // Clean up URL object
@@ -691,21 +1330,38 @@ class ReferenceImageManager {
         }
     }
     
-    async processImage(img, options = {}) {
-        const { maxFeatures = 500, briskThreshold = 50, autoStart = false } = options;
+    /**
+     * Process an image and update the target with extracted features
+     * @param {Image} img - Image element to process
+     * @param {ReferenceTarget} target - Target to update
+     * @param {Object} options - Processing options
+     * @returns {boolean} - True if processing was successful
+     */
+    async processImage(img, target, options = {}) {
+        // Use maxFeatures from state if available
+        const maxFeaturesDefault = this.state ? this.state.maxFeatures : 500;
+        const { maxFeatures = maxFeaturesDefault, briskThreshold = 50, autoStart = false } = options;
+        
+        if (!target) {
+            console.error('No target provided for processing');
+            return false;
+        }
         
         try {
             // Clean up previous resources
-            this.cleanup();
+            target.cleanup();
             
             // Convert to OpenCV format
-            this.image = cv.imread(img);
+            target.image = cv.imread(img);
+            
+            // Create a thumbnail of the image for UI display
+            this.createThumbnail(img, target);
             
             // Convert to grayscale for feature detection
-            this.imageGray = new cv.Mat();
-            cv.cvtColor(this.image, this.imageGray, cv.COLOR_RGBA2GRAY);
-            cv.GaussianBlur(this.imageGray, this.imageGray, new cv.Size(3, 3), 0);
-            cv.equalizeHist(this.imageGray, this.imageGray);
+            target.imageGray = new cv.Mat();
+            cv.cvtColor(target.image, target.imageGray, cv.COLOR_RGBA2GRAY);
+            cv.GaussianBlur(target.imageGray, target.imageGray, new cv.Size(3, 3), 0);
+            cv.equalizeHist(target.imageGray, target.imageGray);
             
             // Extract features using BRISK
             const detector = new cv.BRISK(briskThreshold, 3, 1.0);
@@ -713,8 +1369,8 @@ class ReferenceImageManager {
             const keypoints = new cv.KeyPointVector();
             const descriptors = new cv.Mat();
             
-            detector.detect(this.imageGray, keypoints);
-            detector.compute(this.imageGray, keypoints, descriptors);
+            detector.detect(target.imageGray, keypoints);
+            detector.compute(target.imageGray, keypoints, descriptors);
             
             // Process keypoints to get the strongest ones
             let keypointsArray = [];
@@ -729,22 +1385,25 @@ class ReferenceImageManager {
             }
             
             // Create filtered keypoints vector
-            this.keypoints = new cv.KeyPointVector();
+            target.keypoints = new cv.KeyPointVector();
             for (let kp of keypointsArray) {
-                this.keypoints.push_back(kp);
+                target.keypoints.push_back(kp);
             }
             
             // Compute descriptors for selected keypoints
-            this.descriptors = new cv.Mat();
-            detector.compute(this.imageGray, this.keypoints, this.descriptors);
+            target.descriptors = new cv.Mat();
+            detector.compute(target.imageGray, target.keypoints, target.descriptors);
             
             // Clean up detector
             detector.delete();
             keypoints.delete();
             descriptors.delete();
             
+            // Mark as processed
+            target.isProcessed = true;
+            
             // Update status
-            this.updateStatus(`Reference image loaded. Found ${this.keypoints.size()} features.`);
+            this.updateStatus(`Target "${target.name}" loaded. Found ${target.keypoints.size()} features.`);
             
             // Auto start tracking if requested
             if (autoStart) {
@@ -756,21 +1415,56 @@ class ReferenceImageManager {
             
             return true;
         } catch (error) {
-            this.updateStatus(`Error loading reference image: ${error.message}`);
+            this.updateStatus(`Error processing target "${target.name}": ${error.message}`);
             console.error(error);
             return false;
         }
     }
     
+    /**
+     * Create a thumbnail for UI display
+     * @param {Image} img - Source image
+     * @param {ReferenceTarget} target - Target to store thumbnail
+     */
+    createThumbnail(img, target) {
+        try {
+            // Create a small canvas for the thumbnail
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Calculate thumbnail size (max 100px)
+            const maxThumbSize = 100;
+            const aspectRatio = img.width / img.height;
+            let thumbWidth, thumbHeight;
+            
+            if (aspectRatio > 1) {
+                thumbWidth = maxThumbSize;
+                thumbHeight = maxThumbSize / aspectRatio;
+            } else {
+                thumbHeight = maxThumbSize;
+                thumbWidth = maxThumbSize * aspectRatio;
+            }
+            
+            canvas.width = thumbWidth;
+            canvas.height = thumbHeight;
+            
+            // Draw the image at the thumbnail size
+            ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
+            
+            // Store the thumbnail as data URL
+            target.thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+        } catch (error) {
+            console.warn('Error creating thumbnail:', error);
+        }
+    }
+    
+    /**
+     * Clean up all resources
+     */
     cleanup() {
-        // Clean up OpenCV resources
-        if (this.image) this.image.delete();
-        if (this.imageGray) this.imageGray.delete();
-        if (this.keypoints) this.keypoints.delete();
-        if (this.descriptors) this.descriptors.delete();
-        
-        // Reset references
-        this.reset();
+        this.targets.forEach(target => target.cleanup());
+        this.targets = [];
+        this.activeTarget = null;
     }
     
     updateStatus(message) {
@@ -787,8 +1481,32 @@ class FeatureDetector {
     constructor(state) {
         this.detector = new cv.BRISK(50, 3, 1.0);
         this.state = state;
+        this.cachedFrameKeypoints = null;
+        this.cachedFrameDescriptors = null;
+        this.lastFrameId = null;
     }
     
+    // Cleanup cached resources
+    cleanup() {
+        if (this.cachedFrameKeypoints) {
+            Utils.deleteResource(this.cachedFrameKeypoints);
+            this.cachedFrameKeypoints = null;
+        }
+        
+        if (this.cachedFrameDescriptors) {
+            Utils.deleteResource(this.cachedFrameDescriptors);
+            this.cachedFrameDescriptors = null;
+        }
+        
+        this.lastFrameId = null;
+    }
+    
+    /**
+     * Detect features in a frame and match against a reference target
+     * @param {Mat} frame - Current video frame
+     * @param {Object} referenceData - Target reference data
+     * @returns {Object} - Matching result
+     */
     detectAndMatch(frame, referenceData) {
         if (!frame || frame.empty()) {
             return { success: false, reason: 'Empty frame' };
@@ -804,7 +1522,8 @@ class FeatureDetector {
             matches: null,
             goodMatches: null,
             homography: null,
-            corners: null
+            corners: null,
+            targetId: referenceData.id // Include target ID in the result
         };
         
         // Resources to clean up
@@ -819,42 +1538,73 @@ class FeatureDetector {
         let framePointsMat = null;
         let cornerPoints = null;
         let transformedCorners = null;
+        let shouldCleanupFrameFeatures = false;
         
         try {
-            // Convert frame to grayscale
-            frameGray = new cv.Mat();
-            cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
+            // For multi-target detection in the same frame, reuse the detected features
+            // Generate a unique ID for the frame based on its data pointer
+            const currentFrameId = frame.data ? frame.data.toString() : null;
             
-            // Detect features
-            frameKeypoints = new cv.KeyPointVector();
-            frameDescriptors = new cv.Mat();
-            
-            this.detector.detect(frameGray, frameKeypoints);
-            
-            // Limit the number of feature points to prevent lagging
-            if (frameKeypoints.size() > 0) {
-                // Extract keypoints to array for sorting
-                let keypointsArray = [];
-                for (let i = 0; i < frameKeypoints.size(); i++) {
-                    keypointsArray.push(frameKeypoints.get(i));
-                }
+            if (currentFrameId && currentFrameId === this.lastFrameId && 
+                this.cachedFrameKeypoints && this.cachedFrameDescriptors) {
+                // Reuse cached frame features
+                frameKeypoints = this.cachedFrameKeypoints;
+                frameDescriptors = this.cachedFrameDescriptors;
+            } else {
+                // Convert frame to grayscale
+                frameGray = new cv.Mat();
+                cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
                 
-                // Sort by response strength and limit to max features from state
-                keypointsArray.sort((a, b) => b.response - a.response);
-                const maxFeatures = this.state ? this.state.maxFeatures : 500;
-                if (keypointsArray.length > maxFeatures) {
-                    keypointsArray = keypointsArray.slice(0, maxFeatures);
-                }
-                
-                // Replace original keypoints with limited set
-                frameKeypoints.delete();
+                // Detect features
                 frameKeypoints = new cv.KeyPointVector();
-                for (let kp of keypointsArray) {
-                    frameKeypoints.push_back(kp);
+                frameDescriptors = new cv.Mat();
+                
+                this.detector.detect(frameGray, frameKeypoints);
+                
+                // Limit the number of feature points to prevent lagging
+                if (frameKeypoints.size() > 0) {
+                    // Extract keypoints to array for sorting
+                    let keypointsArray = [];
+                    for (let i = 0; i < frameKeypoints.size(); i++) {
+                        keypointsArray.push(frameKeypoints.get(i));
+                    }
+                    
+                    // Sort by response strength and limit to max features from state
+                    keypointsArray.sort((a, b) => b.response - a.response);
+                    const maxFeatures = this.state ? this.state.maxFeatures : 500;
+                    if (keypointsArray.length > maxFeatures) {
+                        keypointsArray = keypointsArray.slice(0, maxFeatures);
+                    }
+                    
+                    // Replace original keypoints with limited set
+                    frameKeypoints.delete();
+                    frameKeypoints = new cv.KeyPointVector();
+                    for (let kp of keypointsArray) {
+                        frameKeypoints.push_back(kp);
+                    }
+                    
+                    // Compute descriptors on the limited set of keypoints
+                    this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
                 }
                 
-                // Compute descriptors on the limited set of keypoints
-                this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
+                // Cache the features for future matches with different targets
+                if (this.cachedFrameKeypoints) {
+                    Utils.deleteResource(this.cachedFrameKeypoints);
+                }
+                if (this.cachedFrameDescriptors) {
+                    Utils.deleteResource(this.cachedFrameDescriptors);
+                }
+                
+                // Clone the features for caching
+                this.cachedFrameKeypoints = new cv.KeyPointVector();
+                for (let i = 0; i < frameKeypoints.size(); i++) {
+                    this.cachedFrameKeypoints.push_back(frameKeypoints.get(i));
+                }
+                this.cachedFrameDescriptors = frameDescriptors.clone();
+                this.lastFrameId = currentFrameId;
+                
+                // Don't delete frame features at the end since we're reusing them
+                shouldCleanupFrameFeatures = false;
             }
             
             // Store detected keypoints in result
@@ -962,7 +1712,7 @@ class FeatureDetector {
                 result.goodMatches = goodMatches;
                 
                 // Only proceed with homography if we have enough good matches
-                if (goodMatches && goodMatches.size() >= 20) {
+                if (goodMatches && goodMatches.size() >= this.state.goodMatchesThreshold) {
                     // Extract point pairs from matches
                     const referencePoints = [];
                     const framePoints = [];
@@ -1075,19 +1825,31 @@ class FeatureDetector {
             return result;
         } catch (e) {
             console.error("Error in feature detection and matching:", e);
-            return { success: false, reason: e.message };
+            return { success: false, reason: e.message, targetId: referenceData.id };
         } finally {
-            // Clean up OpenCV resources
-            if (frameGray) frameGray.delete();
-            if (frameDescriptors) frameDescriptors.delete();
-            if (matcher) matcher.delete();
-            if (matches && result.matches !== matches) matches.delete();
-            if (goodMatches && result.goodMatches !== goodMatches) goodMatches.delete();
-            if (homography && result.homography !== homography) homography.delete();
-            if (refPointsMat) refPointsMat.delete();
-            if (framePointsMat) framePointsMat.delete();
-            if (cornerPoints) cornerPoints.delete();
-            if (transformedCorners) transformedCorners.delete();
+            // Clean up OpenCV resources using Utils helper
+            const resourcesToCleanup = [
+                frameGray, matcher, 
+                refPointsMat, framePointsMat, 
+                cornerPoints, transformedCorners
+            ];
+            
+            // Clean up frame features only if we're not caching them
+            if (shouldCleanupFrameFeatures) {
+                if (frameKeypoints && frameKeypoints !== this.cachedFrameKeypoints) {
+                    resourcesToCleanup.push(frameKeypoints);
+                }
+                if (frameDescriptors && frameDescriptors !== this.cachedFrameDescriptors) {
+                    resourcesToCleanup.push(frameDescriptors);
+                }
+            }
+            
+            // Clean up resources that aren't returned in the result object
+            if (matches && result.matches !== matches) resourcesToCleanup.push(matches);
+            if (goodMatches && result.goodMatches !== goodMatches) resourcesToCleanup.push(goodMatches);
+            if (homography && result.homography !== homography) resourcesToCleanup.push(homography);
+            
+            resourcesToCleanup.forEach(resource => Utils.deleteResource(resource));
         }
     }
 }
@@ -1100,19 +1862,28 @@ class OpticalFlowTracker {
     constructor(state) {
         this.state = state;
         
-        // Parameters for optical flow
+        /**
+         * Parameters for optical flow tracking
+         * @property {cv.Size} winSize - Window size for optical flow calculation (30x30 is good for performance)
+         * @property {number} maxLevel - Number of pyramid levels (3-5 is a good balance)
+         * @property {cv.TermCriteria} criteria - Termination criteria for iterations
+         * @property {number} minEigThreshold - Minimum eigenvalue threshold
+         * @property {number} featureQualityLevel - Quality level for detecting feature points (lower is more points)
+         * @property {number} featureMinDistance - Minimum distance between feature points
+         * @property {number} ransacReprojThreshold - RANSAC reprojection threshold for homography
+         */
         this.params = {
-            winSize: new cv.Size(30, 30), // Smaller window for better performance
-            maxLevel: 5, // Reduced pyramid levels for stability
+            winSize: new cv.Size(30, 30),
+            maxLevel: 5,
             criteria: new cv.TermCriteria(
                 cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 
                 10, 
                 0.03
             ),
             minEigThreshold: 0.001,
-            featureQualityLevel: 0.01, // Quality level for feature detection
-            featureMinDistance: 10, // Minimum distance between features
-            ransacReprojThreshold: 3.0 // RANSAC reprojection threshold for homography
+            featureQualityLevel: 0.01,
+            featureMinDistance: 10,
+            ransacReprojThreshold: 3.0
         };
     }
     
@@ -1281,12 +2052,15 @@ class OpticalFlowTracker {
             cornerPoints.delete(); transformedCorners.delete();
         }
     
-        // Clean up all resources
-        prevGray.delete(); currentGray.delete(); prevMask.delete();
-        featurePoints.delete(); prevPoints.delete(); nextPoints.delete();
-        status.delete(); err.delete(); backPoints.delete();
-        backStatus.delete(); backErr.delete(); prevPointsMat.delete(); nextPointsMat.delete();
-        if (homography) homography.delete();
+        // Clean up all resources using the Utils helper
+        const resources = [
+            prevGray, currentGray, prevMask, featurePoints, 
+            prevPoints, nextPoints, status, err, 
+            backPoints, backStatus, backErr, 
+            prevPointsMat, nextPointsMat, homography
+        ];
+        
+        resources.forEach(resource => Utils.deleteResource(resource));
     
         return result;
     }
@@ -1350,20 +2124,9 @@ class OpticalFlowTracker {
         return points;
     }
     
-    // Helper method to check if a point is inside a polygon using ray casting algorithm
+    // Use the shared Utils.isPointInPolygon method
     isPointInPolygon(corners, x, y) {
-        let inside = false;
-        for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
-            const xi = corners[i].x;
-            const yi = corners[i].y;
-            const xj = corners[j].x;
-            const yj = corners[j].y;
-            
-            const intersect = ((yi > y) !== (yj > y))
-                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-            if (intersect) inside = !inside;
-        }
-        return inside;
+        return Utils.isPointInPolygon(corners, x, y);
     }
     
     // Check if the tracked quadrilateral is valid (not too distorted)
@@ -1406,7 +2169,7 @@ class OpticalFlowTracker {
  * Handles visualization of tracking results
  */
 class Visualizer {
-    renderResults(frame, trackingResult, canvas, drawKeypoints, flowPoints, flowStatus) {
+    renderResults(frame, trackingResult, canvas, drawKeypoints, flowPoints, flowStatus, targetName = '') {
         // Resources to clean up
         let displayFrame = null;
         let contours = null;
@@ -1433,6 +2196,11 @@ class Visualizer {
                         
                         // Draw contour on frame
                         cv.drawContours(displayFrame, contours, 0, [0, 255, 0, 255], 3);
+                        
+                        // Draw target name if available
+                        if (targetName) {
+                            this.drawTargetName(displayFrame, trackingResult.corners, targetName);
+                        }
                     }
                 } catch (e) {
                     console.error("Error drawing contour:", e);
@@ -1457,10 +2225,64 @@ class Visualizer {
         } catch (e) {
             console.error("Error in visualization:", e);
         } finally {
-            // Clean up resources
-            if (displayFrame) displayFrame.delete();
-            if (contours) contours.delete();
-            if (contour) contour.delete();
+            // Clean up resources using the Utils helper
+            [displayFrame, contours, contour].forEach(resource => Utils.deleteResource(resource));
+        }
+    }
+    
+    /**
+     * Draw the target name above the tracked area
+     * @param {Mat} frame - Frame to draw on
+     * @param {Array} corners - Corners of the tracked region
+     * @param {string} targetName - Name of the detected target
+     */
+    drawTargetName(frame, corners, targetName) {
+        try {
+            if (!corners || corners.length !== 4 || !targetName) return;
+            
+            // Calculate the top center of the rectangle
+            const topLeft = corners[0];
+            const topRight = corners[1];
+            const centerX = Math.floor((topLeft.x + topRight.x) / 2);
+            const centerY = Math.floor(Math.min(topLeft.y, topRight.y)) - 10;
+            
+            // Ensure text is within frame bounds
+            const textPoint = new cv.Point(
+                Math.max(10, Math.min(centerX, frame.cols - 100)), 
+                Math.max(30, centerY)
+            );
+            
+            // Draw a background for the text
+            // Instead of using getTextSize which is not available, use estimated dimensions
+            const fontSize = 0.7;
+            const textThickness = 2;
+            const estimatedCharWidth = 10 * fontSize; // approximation
+            const estimatedHeight = 24 * fontSize;
+            const padding = 5;
+            
+            // Estimate text width based on character count
+            const estimatedWidth = targetName.length * estimatedCharWidth;
+            
+            cv.rectangle(
+                frame,
+                new cv.Point(textPoint.x - padding, textPoint.y - estimatedHeight - padding),
+                new cv.Point(textPoint.x + estimatedWidth + padding, textPoint.y + padding),
+                [0, 0, 0, 180],
+                -1
+            );
+            
+            // Draw the text
+            cv.putText(
+                frame,
+                targetName,
+                textPoint,
+                cv.FONT_HERSHEY_SIMPLEX,
+                fontSize,
+                [255, 255, 255, 255],
+                textThickness
+            );
+        } catch (e) {
+            console.error("Error drawing target name:", e);
         }
     }
     
@@ -1497,7 +2319,7 @@ class Visualizer {
                     // For tracked points, use green for points inside the marker region,
                     // yellow for points that might be outside the marker
                     if (cornerPoints.length === 4) {
-                        const isInside = this.isPointInPolygon(cornerPoints, point.x, point.y);
+                        const isInside = Utils.isPointInPolygon(cornerPoints, point.x, point.y);
                         color = isInside ? [0, 255, 0, 255] : [255, 255, 0, 255]; // Green if inside, yellow if outside
                     } else {
                         color = [0, 255, 0, 255]; // Default to green if we can't determine location
@@ -1565,5 +2387,13 @@ class Visualizer {
 
 // Initialize when page is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new ImageTracker();
+    // Store the ImageTracker instance globally for cross-component access
+    window.imageTrackerInstance = new ImageTracker();
+    
+    // Listen for the custom refresh targets event
+    document.addEventListener('refreshTargets', () => {
+        if (window.imageTrackerInstance && window.imageTrackerInstance.ui) {
+            window.imageTrackerInstance.ui.refreshTargetsList();
+        }
+    });
 });

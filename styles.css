@@ -104,7 +104,7 @@ button:disabled {
     align-items: center;
 }
 
-#statusMessage, #trackingMode {
+#statusMessage, #trackingMode, #currentDetection {
     font-weight: bold;
     color: white;
     background-color: rgba(0, 0, 0, 0.5);
@@ -121,4 +121,145 @@ button:disabled {
 
 #currentMode {
     font-weight: normal;
+}
+
+#currentDetection {
+    font-size: 0.9em;
+    font-weight: normal;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Targets section styles */
+.targets-section {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    max-height: 80vh;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 8px;
+    padding: 10px;
+    z-index: 30;
+    overflow-y: auto;
+    color: white;
+}
+
+.targets-section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.targets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.target-item {
+    display: flex;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.target-item:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.target-item.active {
+    background-color: rgba(66, 133, 244, 0.3);
+    border-left: 3px solid rgb(66, 133, 244);
+}
+
+.target-thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+.target-thumbnail.placeholder {
+    background-color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.target-info {
+    flex: 1;
+}
+
+.target-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.target-features {
+    font-size: 0.8em;
+    color: #ccc;
+}
+
+.target-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.target-remove {
+    background-color: rgba(255, 59, 48, 0.7);
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    margin: 0;
+}
+
+.target-remove:hover {
+    background-color: rgba(255, 59, 48, 0.9);
+}
+
+.add-target-button {
+    margin-top: 10px;
+    width: 100%;
+    background-color: rgba(48, 209, 88, 0.7);
+}
+
+.add-target-button:hover {
+    background-color: rgba(48, 209, 88, 0.9);
+}
+
+.empty-targets {
+    padding: 20px;
+    text-align: center;
+    color: #ccc;
+    font-style: italic;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .targets-section {
+        width: 100%;
+        right: 0;
+        top: auto;
+        bottom: 90px;
+        max-height: 30vh;
+        border-radius: 0;
+    }
+    
+    .controls {
+        bottom: 10px;
+    }
 }
