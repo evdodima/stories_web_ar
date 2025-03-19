@@ -3,21 +3,25 @@
 ## Commands
 - **Run locally**: `python -m http.server` or `npx serve`
 - **Open**: Navigate to `http://localhost:8000` in browser
-- **Testing**: Use browser devtools for debugging (no automated tests)
+- **Debug**: Use browser devtools console and Network tab to inspect operations
+- **Testing**: Test on both desktop and mobile browsers; no automated tests
+- **Reload**: Refresh browser after code changes (no hot reloading)
 
 ## Code Style Guidelines
-- **Formatting**: Clean, consistent indentation (2 spaces preferred)
+- **Formatting**: 2 spaces indentation, max 80-100 characters per line
 - **Naming**: camelCase for variables/methods, PascalCase for classes
-- **Error handling**: Use try/catch blocks, especially around OpenCV operations
-- **Memory management**: Always delete OpenCV resources when done using them
-- **Documentation**: JSDoc-style comments for classes and methods
-- **Architecture**: Follow the modular design pattern with distinct classes for different responsibilities
-- **Performance**: Minimize creating new OpenCV matrices; reuse when possible
-- **Cleanup**: Set resources to null after deletion to prevent double-free
-- **Optical flow**: Keep tracking points to a minimum (<30) for performance
+- **Error handling**: Use try/catch/finally blocks around OpenCV operations
+- **Memory management**: Always delete OpenCV resources with `resource.delete()`
+- **Resource cleanup**: Set resources to null after deletion to prevent double-free
+- **Documentation**: JSDoc-style comments for all classes and methods
+- **Architecture**: Modular class-based design with single responsibilities
+- **Performance**: Reuse OpenCV matrices when possible; minimize allocations
+- **Optical flow**: Limit tracking points (<30) and feature detection frequency
+- **Type safety**: Check for null/undefined and validate data before operations
+- **Event handling**: Use proper event delegation and cleanup
 
 ## Project Organization
-- OpenCV.js loaded from CDN
-- Single-page application with HTML/CSS/JS
-- Modular JavaScript structure with class-based organization
-- No build process required - plain JavaScript
+- **Structure**: OpenCV.js from CDN, single-page application with modular JS
+- **Components**: ImageTracker (main), UIManager, CameraManager, OpticalFlowTracker
+- **Features**: Image detection with BRISK, tracking with Lucas-Kanade optical flow
+- **Files**: HTML (structure), CSS (styling), JS (logic), no build process
