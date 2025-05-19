@@ -1,5 +1,290 @@
+/**
+ * WebAR Image Tracking Module
+ * A modular system for detecting and tracking reference images in a video stream.
+ * Features best-in-class optical flow tracking for robust performance.
+ */
+
+// Main application coordinator
 class ImageTracker {
     constructor() {
+        // Initialize state
+        this.state = {
+            isProcessing: false,
+            isTracking: false,
+            lastProcessingTime: 0,
+            drawKeypoints: false,
+            visualizeFlowPoints: true, // Visualize optical flow tracking points
+            maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
+            useOpticalFlow: true, // Enable optical flow tracking by default
+            detectionInterval: 10, // Run full detection every N frames
+            frameCount: 0, // Current frame counter
+            lastCorners: null, // Last detected corners for optical flow
+            lastFrame: null, // Last processed frame for optical flow
+            featurePoints: null, // Feature points used in optical flow tracking
+            flowStatus: null, // Status of optical flow tracking points
+            maxFeatures: 500, // Maximum number of feature points to extract per frame
+        };
+
+        // Initialize sub-modules
+        this.ui = new UIManager(this);
+        this.camera = new CameraManager();
+        this.referenceImage = new ReferenceImageManager();
+        this.detector = null;
+        this.opticalFlow = null;
+        this.visualizer = new Visualizer();
+        
+        // Initialize when OpenCV is ready
+        this.waitForOpenCV();
+    }
+
+    waitForOpenCV() {
+        if (typeof cv === 'undefined' || 
+            typeof cv.BFMatcher !== 'function' || 
+            typeof cv.ORB !== 'function' || 
+            typeof cv.DMatchVector !== 'function') {
+            
+            this.ui.updateStatus('Loading OpenCV...');
+            setTimeout(() => this.waitForOpenCV(), 500);
+        } else {
+            this.ui.updateStatus('OpenCV loaded. Loading reference image...');
+            this.initialize();
+            this.referenceImage.loadDefaultImage();
+        }
+    }
+
+    initialize() {
+        // Set up UI event listeners
+        this.ui.setupEventListeners({
+            onStartTracking: () => this.startTracking(),
+            onStopTracking: () => this.stopTracking(),
+            onReferenceImageLoad: (event) => this.referenceImage.loadFromFile(event)
+        });
+        
+        // Initialize detector and optical flow tracker once OpenCV is ready
+        this.detector = new FeatureDetector(this.state);
+        this.opticalFlow = new OpticalFlowTracker(this.state);
+    }
+
+    async startTracking() {
+        if (this.state.isTracking) return;
+        
+        this.ui.updateStatus('Starting tracking...');
+        
+        try {
+            // Start camera
+            await this.camera.start();
+            
+            // Update UI
+            this.ui.updateControlsForTracking(true);
+            
+            // Set tracking state
+            this.state.isTracking = true;
+            
+            // Verify OpenCV is fully initialized
+            if (this.ensureOpenCVReady()) {
+                this.processVideo();
+            }
+        } catch (error) {
+            this.ui.updateStatus(`Error starting tracking: ${error.message}`);
+            console.error(error);
+        }
+    }
+    
+    ensureOpenCVReady() {
+        if (typeof cv === 'undefined' || 
+            typeof cv.BFMatcher !== 'function' || 
+            typeof cv.ORB !== 'function' || 
+            typeof cv.DMatchVector !== 'function') {
+            
+            this.ui.updateStatus('Waiting for OpenCV to fully initialize...');
+            
+            setTimeout(() => {
+                if (typeof cv !== 'undefined' && typeof cv.BFMatcher === 'function') {
+                    this.ui.updateStatus('Starting tracking...');
+                    this.processVideo();
+                } else {
+                    this.ui.updateStatus('OpenCV not fully loaded. Please refresh the page.');
+                    this.state.isTracking = false;
+                }
+            }, 500);
+            
+            return false;
+        }
+        
+        return true;
+    }
+
+    stopTracking() {
+        // Update state
+        this.state.isTracking = false;
+        
+        // Stop camera
+        this.camera.stop();
+        
+        // Clean up optical flow resources
+        if (this.state.lastFrame) {
+            this.state.lastFrame.delete();
+            this.state.lastFrame = null;
+        }
+        this.state.lastCorners = null;
+        this.state.frameCount = 0;
+        
+        // Update UI
+        this.ui.updateControlsForTracking(false);
+        this.ui.updateStatus('Tracking stopped.');
+    }
+
+    processVideo() {
+        // Exit if not tracking
+        if (!this.state.isTracking) return;
+        
+        // Schedule next frame 
+        requestAnimationFrame(() => this.processVideo());
+        
+        // Rate limiting
+        const now = performance.now();
+        const elapsed = now - this.state.lastProcessingTime;
+        if (elapsed < 1) return;
+        this.state.lastProcessingTime = now;
+        
+        // Skip if already processing a frame
+        if (this.state.isProcessing) return;
+        
+        // Set processing flag 
+        this.state.isProcessing = true;
+        
+        // Track frames processed to detect memory leaks
+        let frameToProcess = null;
+        
+        try {
+            // Process current video frame
+            frameToProcess = this.camera.captureFrame(this.state.maxDimension);
+            if (!frameToProcess) return;
+            
+            // Increment frame counter
+            this.state.frameCount++;
+            
+            let trackingResult;
+            let shouldRunDetector = false;
+            
+            // Decide whether to use feature detection or optical flow
+            if (!this.state.useOpticalFlow || 
+                !this.state.lastCorners || 
+                !this.state.lastFrame || 
+                this.state.frameCount % this.state.detectionInterval === 0) {
+                
+                shouldRunDetector = true;
+            }
+            
+            if (shouldRunDetector) {
+                // Run full feature detection periodically or when we don't have previous tracking data
+                trackingResult = this.detector.detectAndMatch(
+                    frameToProcess, 
+                    this.referenceImage.getData()
+                );
+                
+                // Store frame and corners for optical flow tracking if detection was successful
+                if (trackingResult.success && trackingResult.corners) {
+                    // Clean up previous frame if it exists
+                    if (this.state.lastFrame) {
+                        this.state.lastFrame.delete();
+                        this.state.lastFrame = null;
+                    }
+                    
+                    // Store current frame and corners for next optical flow tracking
+                    this.state.lastFrame = frameToProcess.clone();
+                    this.state.lastCorners = trackingResult.corners.slice();
+                } else if (this.state.useOpticalFlow && this.state.lastFrame && this.state.lastCorners) {
+                    // If detection failed but we have previous data, try optical flow as fallback
+                    trackingResult = this.opticalFlow.track(
+                        this.state.lastFrame,
+                        frameToProcess,
+                        this.state.lastCorners
+                    );
+                    
+                    // Save feature points for visualization if enabled
+                    if (this.state.visualizeFlowPoints) {
+                        this.state.featurePoints = trackingResult.nextFeaturePoints;
+                        this.state.flowStatus = trackingResult.flowStatus;
+                    }
+                    
+                    // Update our tracking data if optical flow was successful
+                    if (trackingResult.success) {
+                        // Clean up previous frame
+                        if (this.state.lastFrame) {
+                            this.state.lastFrame.delete();
+                            this.state.lastFrame = null;
+                        }
+                        
+                        // Update with new frame and corners
+                        this.state.lastFrame = frameToProcess.clone();
+                        this.state.lastCorners = trackingResult.corners.slice();
+                    }
+                }
+            } else {
+                // Use optical flow for most frames (more efficient)
+                trackingResult = this.opticalFlow.track(
+                    this.state.lastFrame,
+                    frameToProcess,
+                    this.state.lastCorners
+                );
+                
+                // Save feature points for visualization if enabled
+                if (this.state.visualizeFlowPoints) {
+                    this.state.featurePoints = trackingResult.nextFeaturePoints;
+                    this.state.flowStatus = trackingResult.flowStatus;
+                }
+                
+                // Update our tracking data if optical flow was successful
+                if (trackingResult.success) {
+                    // Clean up previous frame
+                    if (this.state.lastFrame) {
+                        this.state.lastFrame.delete();
+                        this.state.lastFrame = null;
+                    }
+                    
+                    // Update with new frame and corners
+                    this.state.lastFrame = frameToProcess.clone();
+                    this.state.lastCorners = trackingResult.corners.slice();
+                } else {
+                    // If optical flow fails, force a full detection on next frame
+                    this.state.frameCount = this.state.detectionInterval - 1;
+                }
+            }
+            
+            // Visualize results
+            this.visualizer.renderResults(
+                frameToProcess,
+                trackingResult,
+                this.ui.canvas,
+                this.state.drawKeypoints,
+                this.state.visualizeFlowPoints ? this.state.featurePoints : null,
+                this.state.flowStatus
+            );
+            
+            // Update tracking mode indicator
+            this.ui.updateTrackingMode();
+        } catch (error) {
+            console.error('Error in processVideo:', error);
+        } finally {
+            // Clean up resources
+            if (frameToProcess && !this.state.lastFrame || (this.state.lastFrame && frameToProcess !== this.state.lastFrame)) {
+                frameToProcess.delete();
+            }
+            
+            // Mark processing as complete
+            this.state.isProcessing = false;
+        }
+    }
+}
+
+/**
+ * Manages the user interface elements and interactions
+ */
+class UIManager {
+    constructor(tracker) {
+        this.tracker = tracker;
+        
         // DOM elements
         this.video = document.getElementById('video');
         this.canvas = document.getElementById('output');
@@ -7,155 +292,370 @@ class ImageTracker {
         this.stopButton = document.getElementById('stopTracking');
         this.fileInput = document.getElementById('referenceImage');
         this.statusMessage = document.getElementById('statusMessage');
-
-        // OpenCV variables
-        this.detector = null;
-        this.referenceImage = null;
-        this.referenceImageGray = null;
-        this.referenceKeypoints = null;
-        this.referenceDescriptors = null;
+        this.currentMode = document.getElementById('currentMode');
+        this.useOpticalFlow = document.getElementById('useOpticalFlow');
+        this.detectionInterval = document.getElementById('detectionInterval');
+        this.intervalValue = document.getElementById('intervalValue');
+        this.visualizeFlowPoints = document.getElementById('visualizeFlowPoints');
+        this.maxFeatures = document.getElementById('maxFeatures');
+        this.maxFeaturesValue = document.getElementById('maxFeaturesValue');
         
-        // Multiscale variables
-        this.referenceImagePyramid = [];
-        this.referenceKeypointsPyramid = [];
-        this.referenceDescriptorsPyramid = [];
-        this.bestScaleIndex = -1;
-        
-        // Three.js variables
-        this.scene = null;
-        this.camera = null;
-        this.renderer = null;
-        this.cube = null;
-        
-        // State variables
-        this.isProcessing = false;
-        this.isTracking = false;
-        this.lastProcessingTime = 0;
-        
-        // Bind methods
-        this.init = this.init.bind(this);
-        this.startCamera = this.startCamera.bind(this);
-        this.stopCamera = this.stopCamera.bind(this);
-        this.processVideo = this.processVideo.bind(this);
-        this.loadReferenceImage = this.loadReferenceImage.bind(this);
-        this.initThreeJS = this.initThreeJS.bind(this);
-        this.updateThreeJS = this.updateThreeJS.bind(this);
-        this.performMultiscaleMatching = this.performMultiscaleMatching.bind(this);
-        
-        // Initialize when OpenCV is ready
-        this.waitForOpenCV();
-    }
-    
-    waitForOpenCV() {
-        // Check if OpenCV is loaded and has all required features
-        if (typeof cv === 'undefined' || 
-            typeof cv.BFMatcher !== 'function' || 
-            typeof cv.ORB !== 'function' || 
-            typeof cv.DMatchVector !== 'function') {
-            
-            this.updateStatus('Loading OpenCV...');
-            setTimeout(this.waitForOpenCV.bind(this), 500);
-        } else {
-            // OpenCV is fully loaded with all required features
-            this.updateStatus('OpenCV loaded. Please upload a reference image.');
-            this.init();
+        // Initial UI state
+        this.stopButton.disabled = true;
+        this.useOpticalFlow.checked = tracker.state.useOpticalFlow;
+        this.detectionInterval.value = tracker.state.detectionInterval;
+        this.intervalValue.textContent = tracker.state.detectionInterval;
+        this.visualizeFlowPoints.checked = tracker.state.visualizeFlowPoints;
+        if (this.maxFeatures) {
+            this.maxFeatures.value = tracker.state.maxFeatures;
+            this.maxFeaturesValue.textContent = tracker.state.maxFeatures;
         }
+        this.currentMode.textContent = 'Waiting for reference image';
+        
+        // Make elements accessible to other modules that need them
+        this.elements = {
+            video: this.video,
+            canvas: this.canvas,
+            startButton: this.startButton,
+            stopButton: this.stopButton,
+            fileInput: this.fileInput,
+            statusMessage: this.statusMessage,
+            currentMode: this.currentMode
+        };
     }
     
-    init() {
-        // Set up button listeners
+    setupEventListeners(handlers) {
+        const { onStartTracking, onStopTracking, onReferenceImageLoad } = handlers;
+        
         this.startButton.addEventListener('click', () => {
-            if (this.referenceImage) {
-                this.startTracking();
+            if (this.tracker.referenceImage.isLoaded()) {
+                onStartTracking();
             } else {
                 this.updateStatus('Please upload a reference image first.');
             }
         });
         
-        this.stopButton.addEventListener('click', () => {
-            this.stopTracking();
+        this.stopButton.addEventListener('click', onStopTracking);
+        this.fileInput.addEventListener('change', onReferenceImageLoad);
+        
+        // Set up optical flow UI interactions
+        this.useOpticalFlow.addEventListener('change', () => {
+            this.tracker.state.useOpticalFlow = this.useOpticalFlow.checked;
+            this.updateTrackingMode();
         });
         
-        this.fileInput.addEventListener('change', this.loadReferenceImage);
+        this.detectionInterval.addEventListener('input', () => {
+            const value = parseInt(this.detectionInterval.value);
+            this.tracker.state.detectionInterval = value;
+            this.intervalValue.textContent = value;
+        });
         
-        // Disable stop button initially
-        this.stopButton.disabled = true;
+        // Set up visualization options
+        this.visualizeFlowPoints.addEventListener('change', () => {
+            this.tracker.state.visualizeFlowPoints = this.visualizeFlowPoints.checked;
+        });
         
-        // Initialize Three.js
-        this.initThreeJS();
-    }
-    
-    async startCamera() {
-        try {
-            const constraints = {
-                video: {
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    facingMode: 'environment'
-                },
-                audio: false
-            };
-            
-            // Request camera access
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.video.srcObject = stream;
-            this.video.play();
-            
-            // Wait for video to be ready with dimensions
-            return new Promise((resolve) => {
-                const checkVideo = () => {
-                    if (this.video.readyState >= 2 && // HAVE_CURRENT_DATA or better
-                        this.video.videoWidth > 0 && 
-                        this.video.videoHeight > 0) {
-                        
-                        // Set canvas dimensions to match video
-                        this.canvas.width = this.video.videoWidth;
-                        this.canvas.height = this.video.videoHeight;
-                        
-                        // Update Three.js renderer size
-                        if (this.renderer) {
-                            this.renderer.setSize(
-                                Math.min(640, this.video.videoWidth),
-                                Math.min(480, this.video.videoHeight)
-                            );
-                        }
-                        
-                        // We don't need VideoCapture with our new approach
-                        resolve();
-                    } else {
-                        // Check again in a short while
-                        setTimeout(checkVideo, 100);
-                    }
-                };
-                
-                // Start checking if video is ready
-                checkVideo();
-                
-                // Also set up the loadeddata event as a backup
-                this.video.addEventListener('loadeddata', () => {
-                    // Double check dimensions are available
-                    if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
-                        this.canvas.width = this.video.videoWidth;
-                        this.canvas.height = this.video.videoHeight;
-                        resolve();
-                    }
-                });
+        // Set up max features slider
+        if (this.maxFeatures) {
+            this.maxFeatures.addEventListener('input', () => {
+                const value = parseInt(this.maxFeatures.value);
+                this.tracker.state.maxFeatures = value;
+                this.maxFeaturesValue.textContent = value;
             });
-        } catch (error) {
-            this.updateStatus(`Error accessing camera: ${error.message}`);
-            throw error;
         }
     }
     
-    stopCamera() {
+    updateControlsForTracking(isTracking) {
+        this.startButton.disabled = isTracking;
+        this.stopButton.disabled = !isTracking;
+        this.fileInput.disabled = isTracking;
+        
+        if (isTracking) {
+            this.updateTrackingMode('Initializing tracking...');
+        } else {
+            this.updateTrackingMode('Tracking stopped');
+        }
+    }
+    
+    updateStatus(message) {
+        this.statusMessage.textContent = message;
+    }
+    
+    updateTrackingMode(forcedMessage = null) {
+        if (forcedMessage) {
+            this.currentMode.textContent = forcedMessage;
+            return;
+        }
+        
+        if (!this.tracker.state.isTracking) {
+            this.currentMode.textContent = 'Tracking stopped';
+            return;
+        }
+        
+        // Show current tracking mode
+        if (this.tracker.state.useOpticalFlow) {
+            if (this.tracker.state.frameCount % this.tracker.state.detectionInterval === 0) {
+                this.currentMode.textContent = 'Feature detection (periodic refresh)';
+            } else {
+                this.currentMode.textContent = `Optical flow (${this.tracker.state.detectionInterval - (this.tracker.state.frameCount % this.tracker.state.detectionInterval)} frames until refresh)`;
+            }
+        } else {
+            this.currentMode.textContent = 'Feature detection only (optical flow disabled)';
+        }
+    }
+}
+
+/**
+ * Manages camera access and video capture
+ */
+class CameraManager {
+    constructor() {
+        this.video = document.getElementById('video');
+        this.canvas = document.getElementById('output');
+        this.stream = null;
+    }
+    
+    async start() {
+        try {
+            // Try to use rear camera first with preferred settings
+            const constraints = this.getCameraConstraints();
+            
+            try {
+                // Try with exact environment constraint first
+                this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                this.video.srcObject = this.stream;
+            } catch (err) {
+                console.warn("Couldn't get exact environment camera, falling back to default:", err);
+                // Fallback to standard environment preference
+                const fallbackConstraints = this.getFallbackConstraints();
+                this.stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                this.video.srcObject = this.stream;
+            }
+            
+            // Apply fixed settings to prevent auto adjustments
+            this.optimizeVideoTrack();
+            
+            // Start video playback
+            this.video.play();
+            
+            // Wait for video to be ready
+            return this.waitForVideoReady();
+        } catch (error) {
+            throw new Error(`Camera access error: ${error.message}`);
+        }
+    }
+    
+    getCameraConstraints() {
+        return {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: { exact: 'environment' }, // Force rear camera
+                // Disable automatic switching and optimization
+                advanced: [
+                    { zoom: 1 }, // Start with no zoom
+                    { focusMode: "continuous" }, // Continuous auto-focus
+                    { exposureMode: "continuous" }, // Continuous auto-exposure
+                    { whiteBalanceMode: "continuous" } // Continuous auto white balance
+                ]
+            },
+            audio: false
+        };
+    }
+    
+    getFallbackConstraints() {
+        return {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'environment'
+            },
+            audio: false
+        };
+    }
+    
+    optimizeVideoTrack() {
+        const videoTrack = this.video.srcObject?.getVideoTracks()[0];
+        if (!videoTrack) return;
+        
+        try {
+            const capabilities = videoTrack.getCapabilities();
+            console.log("Camera capabilities:", capabilities);
+            
+            // Only apply constraints for capabilities that exist
+            const trackConstraints = {};
+            
+            // Disable auto zoom if supported
+            if (capabilities.zoom) {
+                trackConstraints.zoom = 1;
+            }
+            
+            // Set focus mode if supported
+            if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
+                trackConstraints.focusMode = "continuous";
+            }
+            
+            // Apply the constraints
+            if (Object.keys(trackConstraints).length > 0) {
+                videoTrack.applyConstraints(trackConstraints).catch(err => {
+                    console.warn("Couldn't apply advanced camera constraints:", err);
+                });
+            }
+        } catch (err) {
+            console.warn("Error accessing camera capabilities:", err);
+        }
+    }
+    
+    async waitForVideoReady() {
+        return new Promise((resolve) => {
+            const checkVideo = () => {
+                if (this.video.readyState >= 2 && // HAVE_CURRENT_DATA or better
+                    this.video.videoWidth > 0 && 
+                    this.video.videoHeight > 0) {
+                    
+                    // Set canvas dimensions to match video
+                    this.canvas.width = this.video.videoWidth;
+                    this.canvas.height = this.video.videoHeight;
+                    
+                    resolve();
+                } else {
+                    // Check again in a short while
+                    setTimeout(checkVideo, 100);
+                }
+            };
+            
+            // Start checking if video is ready
+            checkVideo();
+            
+            // Also set up the loadeddata event as a backup
+            this.video.addEventListener('loadeddata', () => {
+                // Double check dimensions are available
+                if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+                    this.canvas.width = this.video.videoWidth;
+                    this.canvas.height = this.video.videoHeight;
+                    resolve();
+                }
+            });
+        });
+    }
+    
+    stop() {
         if (this.video.srcObject) {
             const tracks = this.video.srcObject.getTracks();
             tracks.forEach(track => track.stop());
             this.video.srcObject = null;
+            this.stream = null;
         }
     }
     
-    async loadReferenceImage(event) {
+    captureFrame(maxDimension) {
+        try {
+            // Verify video is ready
+            if (!this.video || 
+                !this.video.videoWidth || 
+                !this.video.videoHeight || 
+                this.video.videoWidth <= 0 || 
+                this.video.videoHeight <= 0) {
+                return null;
+            }
+            
+            // Create a canvas to capture the video frame
+            const captureCanvas = document.createElement('canvas');
+            const captureContext = captureCanvas.getContext('2d');
+            
+            // Set dimensions to match video
+            captureCanvas.width = this.video.videoWidth;
+            captureCanvas.height = this.video.videoHeight;
+            
+            // Draw the current video frame to the canvas
+            captureContext.drawImage(this.video, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Read the image data from the canvas into an OpenCV matrix
+            let frame = cv.imread(captureCanvas);
+            
+            // Resize if larger than maximum dimension
+            if (maxDimension && (frame.cols > maxDimension || frame.rows > maxDimension)) {
+                let scaleFactor = Math.min(maxDimension / frame.cols, maxDimension / frame.rows);
+                let newSize = new cv.Size(
+                    Math.round(frame.cols * scaleFactor),
+                    Math.round(frame.rows * scaleFactor)
+                );
+                let resizedFrame = new cv.Mat();
+                cv.resize(frame, resizedFrame, newSize, 0, 0, cv.INTER_AREA);
+                
+                // Update canvas dimensions to match the new frame size
+                this.canvas.width = newSize.width;
+                this.canvas.height = newSize.height;
+                
+                frame.delete();
+                frame = resizedFrame;
+            }
+            
+            return frame;
+        } catch (error) {
+            console.error("Error capturing video frame:", error);
+            return null;
+        }
+    }
+}
+
+/**
+ * Manages reference image loading and processing
+ */
+class ReferenceImageManager {
+    constructor() {
+        this.reset();
+        this.ui = document.getElementById('statusMessage');
+    }
+    
+    reset() {
+        // OpenCV resources
+        this.image = null;
+        this.imageGray = null;
+        this.keypoints = null;
+        this.descriptors = null;
+    }
+    
+    isLoaded() {
+        return this.image !== null;
+    }
+    
+    getData() {
+        return {
+            image: this.image,
+            imageGray: this.imageGray,
+            keypoints: this.keypoints,
+            descriptors: this.descriptors
+        };
+    }
+    
+    async loadDefaultImage() {
+        this.updateStatus('Loading default reference image...');
+        
+        try {
+            const img = new Image();
+            
+            // Wait for image to load
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load reference.jpg'));
+                img.src = 'reference.jpg';
+            });
+            
+            // Process the reference image
+            await this.processImage(img, { 
+                maxFeatures: 500, 
+                briskThreshold: 50,
+                autoStart: true
+            });
+            
+        } catch (error) {
+            this.updateStatus(`Error loading reference image: ${error.message}`);
+            console.error(error);
+        }
+    }
+    
+    async loadFromFile(event) {
         const file = event.target.files[0];
         if (!file) return;
         
@@ -172,32 +672,16 @@ class ImageTracker {
                 img.src = imageUrl;
             });
             
-            // Convert to OpenCV format
-            this.referenceImage = cv.imread(img);
+            // Process the reference image
+            const success = await this.processImage(img, { 
+                maxFeatures: 500, 
+                briskThreshold: 60
+            });
             
-            // Convert to grayscale for feature detection
-            this.referenceImageGray = new cv.Mat();
-            cv.cvtColor(this.referenceImage, this.referenceImageGray, cv.COLOR_RGBA2GRAY);
-            
-            // Initialize detector first with higher feature count for better matching
-            this.detector = new cv.ORB(1000);
-            
-            // Create multiscale pyramid of reference images
-            this.createMultiscaleReferencePyramid();
-            
-            const referenceKeypoints = new cv.KeyPointVector();
-            this.referenceDescriptors = new cv.Mat();
-            
-            this.detector.detect(this.referenceImageGray, referenceKeypoints);
-            this.detector.compute(this.referenceImageGray, referenceKeypoints, this.referenceDescriptors);
-            
-            this.referenceKeypoints = referenceKeypoints;
-            
-            // Update status
-            this.updateStatus(`Reference image loaded. Found ${referenceKeypoints.size()} features.`);
-            
-            // Enable start button
-            this.startButton.disabled = false;
+            if (success) {
+                // Enable start button
+                document.getElementById('startTracking').disabled = false;
+            }
             
             // Clean up URL object
             URL.revokeObjectURL(imageUrl);
@@ -207,690 +691,210 @@ class ImageTracker {
         }
     }
     
-    createMultiscaleReferencePyramid() {
-        // Create a pyramid of reference images at different scales
-        // This helps with detecting the image when it appears small in the frame
-        this.referenceImagePyramid = [];
-        this.referenceKeypointsPyramid = [];
-        this.referenceDescriptorsPyramid = [];
-        
-        // Store original reference image and its dimensions
-        const originalWidth = this.referenceImage.cols;
-        const originalHeight = this.referenceImage.rows;
-        
-        // Define scale factors for the pyramid (from smaller to larger)
-        const scaleFactors = [0.25, 0.5, 0.75, 1.0];
-        
-        for (let i = 0; i < scaleFactors.length; i++) {
-            const scaleFactor = scaleFactors[i];
-            
-            try {
-                // Create scaled reference image
-                const scaledRefImage = new cv.Mat();
-                const newWidth = Math.round(originalWidth * scaleFactor);
-                const newHeight = Math.round(originalHeight * scaleFactor);
-                
-                // Skip if scaled image would be too small
-                if (newWidth < 20 || newHeight < 20) {
-                    continue;
-                }
-                
-                // Resize the reference image
-                const dsize = new cv.Size(newWidth, newHeight);
-                cv.resize(this.referenceImageGray, scaledRefImage, dsize, 0, 0, cv.INTER_AREA);
-                
-                // Extract features from the scaled reference image
-                const scaledKeypoints = new cv.KeyPointVector();
-                const scaledDescriptors = new cv.Mat();
-                
-                // Use ORB detector on this scale
-                this.detector.detect(scaledRefImage, scaledKeypoints);
-                this.detector.compute(scaledRefImage, scaledKeypoints, scaledDescriptors);
-                
-                // Only keep scales that have enough features
-                if (scaledKeypoints.size() > 10) {
-                    // Store the scaled reference image and its features
-                    this.referenceImagePyramid.push(scaledRefImage);
-                    this.referenceKeypointsPyramid.push(scaledKeypoints);
-                    this.referenceDescriptorsPyramid.push(scaledDescriptors);
-                } else {
-                    // Clean up unused resources
-                    scaledRefImage.delete();
-                    scaledKeypoints.delete();
-                    scaledDescriptors.delete();
-                }
-            } catch (e) {
-                console.error(`Error creating scale ${scaleFactor}:`, e);
-            }
-        }
-        
-        console.log(`Created multiscale pyramid with ${this.referenceImagePyramid.length} levels`);
-    }
-    
-    async startTracking() {
-        if (this.isTracking) return;
-        
-        this.updateStatus('Starting tracking...');
+    async processImage(img, options = {}) {
+        const { maxFeatures = 500, briskThreshold = 50, autoStart = false } = options;
         
         try {
-            // Start camera if not already started
-            await this.startCamera();
+            // Clean up previous resources
+            this.cleanup();
             
-            // Update UI
-            this.startButton.disabled = true;
-            this.stopButton.disabled = false;
-            this.fileInput.disabled = true;
+            // Convert to OpenCV format
+            this.image = cv.imread(img);
             
-            // Set tracking state
-            this.isTracking = true;
+            // Convert to grayscale for feature detection
+            this.imageGray = new cv.Mat();
+            cv.cvtColor(this.image, this.imageGray, cv.COLOR_RGBA2GRAY);
+            cv.GaussianBlur(this.imageGray, this.imageGray, new cv.Size(3, 3), 0);
+            cv.equalizeHist(this.imageGray, this.imageGray);
             
-            // Ensure OpenCV is fully loaded with all features before starting processing
-            if (typeof cv === 'undefined' || typeof cv.BFMatcher !== 'function' || 
-                typeof cv.ORB !== 'function' || typeof cv.DMatchVector !== 'function') {
-                
-                this.updateStatus('Waiting for OpenCV to fully initialize...');
-                
-                // Check again in 500ms
-                setTimeout(() => {
-                    if (typeof cv !== 'undefined' && typeof cv.BFMatcher === 'function') {
-                        this.updateStatus('Starting tracking...');
-                        this.processVideo();
-                    } else {
-                        this.updateStatus('OpenCV not fully loaded. Please refresh the page.');
-                        this.isTracking = false;
-                    }
-                }, 500);
-            } else {
-                // Start processing frames immediately if OpenCV is ready
-                this.processVideo();
+            // Extract features using BRISK
+            const detector = new cv.BRISK(briskThreshold, 3, 1.0);
+            
+            const keypoints = new cv.KeyPointVector();
+            const descriptors = new cv.Mat();
+            
+            detector.detect(this.imageGray, keypoints);
+            detector.compute(this.imageGray, keypoints, descriptors);
+            
+            // Process keypoints to get the strongest ones
+            let keypointsArray = [];
+            for (let i = 0; i < keypoints.size(); i++) {
+                keypointsArray.push(keypoints.get(i));
             }
-        } catch (error) {
-            this.updateStatus(`Error starting tracking: ${error.message}`);
-            console.error(error);
-        }
-    }
-    
-    stopTracking() {
-        // Update state
-        this.isTracking = false;
-        
-        // Stop camera
-        this.stopCamera();
-        
-        // Update UI
-        this.startButton.disabled = false;
-        this.stopButton.disabled = true;
-        this.fileInput.disabled = false;
-        
-        this.updateStatus('Tracking stopped.');
-        
-        // Clean up pyramid resources when tracking stops
-        this.cleanupMultiscalePyramid();
-    }
-    
-    cleanupMultiscalePyramid() {
-        // Clean up multiscale pyramid resources
-        if (this.referenceImagePyramid && this.referenceImagePyramid.length > 0) {
-            for (let i = 0; i < this.referenceImagePyramid.length; i++) {
-                try {
-                    if (this.referenceImagePyramid[i]) {
-                        this.referenceImagePyramid[i].delete();
-                    }
-                    if (this.referenceKeypointsPyramid[i]) {
-                        this.referenceKeypointsPyramid[i].delete();
-                    }
-                    if (this.referenceDescriptorsPyramid[i]) {
-                        this.referenceDescriptorsPyramid[i].delete();
-                    }
-                } catch (e) {
-                    console.error("Error cleaning up pyramid level:", e);
+            
+            // Sort by strength and limit to max features
+            keypointsArray.sort((a, b) => b.response - a.response);
+            if (keypointsArray.length > maxFeatures) {
+                keypointsArray = keypointsArray.slice(0, maxFeatures);
+            }
+            
+            // Create filtered keypoints vector
+            this.keypoints = new cv.KeyPointVector();
+            for (let kp of keypointsArray) {
+                this.keypoints.push_back(kp);
+            }
+            
+            // Compute descriptors for selected keypoints
+            this.descriptors = new cv.Mat();
+            detector.compute(this.imageGray, this.keypoints, this.descriptors);
+            
+            // Clean up detector
+            detector.delete();
+            keypoints.delete();
+            descriptors.delete();
+            
+            // Update status
+            this.updateStatus(`Reference image loaded. Found ${this.keypoints.size()} features.`);
+            
+            // Auto start tracking if requested
+            if (autoStart) {
+                const tracker = document.querySelector('#startTracking');
+                if (tracker) {
+                    setTimeout(() => tracker.click(), 500);
                 }
             }
             
-            // Clear arrays
-            this.referenceImagePyramid = [];
-            this.referenceKeypointsPyramid = [];
-            this.referenceDescriptorsPyramid = [];
+            return true;
+        } catch (error) {
+            this.updateStatus(`Error loading reference image: ${error.message}`);
+            console.error(error);
+            return false;
         }
     }
     
-    processVideo() {
-        // If not tracking, exit immediately
-        if (!this.isTracking) return;
+    cleanup() {
+        // Clean up OpenCV resources
+        if (this.image) this.image.delete();
+        if (this.imageGray) this.imageGray.delete();
+        if (this.keypoints) this.keypoints.delete();
+        if (this.descriptors) this.descriptors.delete();
         
-        // Schedule next frame with requestAnimationFrame before doing anything else
-        // This ensures the callback is registered even if something fails
-        requestAnimationFrame(this.processVideo);
-        
-        // Limit processing rate to ~30fps to avoid overwhelming the browser
-        const now = performance.now();
-        const elapsed = now - this.lastProcessingTime;
-        
-        if (elapsed < 30) {
-            return; // Skip this frame to maintain frame rate cap
+        // Reset references
+        this.reset();
+    }
+    
+    updateStatus(message) {
+        if (this.ui) {
+            this.ui.textContent = message;
+        }
+    }
+}
+
+/**
+ * Handles feature detection and matching
+ */
+class FeatureDetector {
+    constructor(state) {
+        this.detector = new cv.BRISK(50, 3, 1.0);
+        this.state = state;
+    }
+    
+    detectAndMatch(frame, referenceData) {
+        if (!frame || frame.empty()) {
+            return { success: false, reason: 'Empty frame' };
         }
         
-        this.lastProcessingTime = now;
-        
-        // Skip if already processing a frame
-        if (this.isProcessing) {
-            return;
+        if (!referenceData || !referenceData.keypoints || !referenceData.descriptors) {
+            return { success: false, reason: 'Reference data not available' };
         }
         
-        // Set processing flag to prevent concurrent processing
-        this.isProcessing = true;
+        const result = {
+            success: false,
+            keypoints: null,
+            matches: null,
+            goodMatches: null,
+            homography: null,
+            corners: null
+        };
         
-        // We'll store OpenCV resources here for proper cleanup
-        let frame = null;
+        // Resources to clean up
         let frameGray = null;
         let frameKeypoints = null;
         let frameDescriptors = null;
+        let matcher = null;
+        let matches = null;
+        let goodMatches = null;
+        let homography = null;
+        let refPointsMat = null;
+        let framePointsMat = null;
+        let cornerPoints = null;
+        let transformedCorners = null;
         
         try {
-            // Make sure video and canvas elements exist
-            if (!this.video || !this.canvas) {
-                console.error("Video or canvas element not initialized");
-                return;
-            }
-            
-            // Make sure video dimensions are valid
-            if (this.video.videoWidth <= 0 || this.video.videoHeight <= 0) {
-                console.error("Invalid video dimensions");
-                return;
-            }
-            
-            // Wait for video readiness before capturing
-            if (!this.video.videoWidth || !this.video.videoHeight || 
-                this.video.videoWidth <= 0 || this.video.videoHeight <= 0) {
-                console.warn("Video dimensions not ready yet");
-                return;
-            }
-            
-            try {
-                // Create a canvas to capture the video frame
-                const captureCanvas = document.createElement('canvas');
-                const captureContext = captureCanvas.getContext('2d');
-                
-                // Set dimensions to match video
-                captureCanvas.width = this.video.videoWidth;
-                captureCanvas.height = this.video.videoHeight;
-                
-                // Draw the current video frame to the canvas
-                captureContext.drawImage(this.video, 0, 0, captureCanvas.width, captureCanvas.height);
-                
-                // Read the image data from the canvas into an OpenCV matrix
-                frame = cv.imread(captureCanvas);
-            } catch (e) {
-                console.error("Error capturing video frame:", e);
-                return;
-            }
-            
-            // Skip processing if frame is empty
-            if (frame.empty()) {
-                console.warn("Empty frame captured");
-                return;
-            }
-            
-            // Try grayscale conversion with error handling
+            // Convert frame to grayscale
             frameGray = new cv.Mat();
-            try {
-                cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
-            } catch (e) {
-                console.error("Error converting to grayscale:", e);
-                return;
-            }
+            cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
             
-            // Detect features with error handling
+            // Detect features
             frameKeypoints = new cv.KeyPointVector();
             frameDescriptors = new cv.Mat();
             
-            try {
-                // Detect keypoints
-                this.detector.detect(frameGray, frameKeypoints);
-                
-                // Only compute descriptors if keypoints were found
-                if (frameKeypoints.size() > 0) {
-                    this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
+            this.detector.detect(frameGray, frameKeypoints);
+            
+            // Limit the number of feature points to prevent lagging
+            if (frameKeypoints.size() > 0) {
+                // Extract keypoints to array for sorting
+                let keypointsArray = [];
+                for (let i = 0; i < frameKeypoints.size(); i++) {
+                    keypointsArray.push(frameKeypoints.get(i));
                 }
-            } catch (e) {
-                console.error("Error detecting features:", e);
-                return;
+                
+                // Sort by response strength and limit to max features from state
+                keypointsArray.sort((a, b) => b.response - a.response);
+                const maxFeatures = this.state ? this.state.maxFeatures : 500;
+                if (keypointsArray.length > maxFeatures) {
+                    keypointsArray = keypointsArray.slice(0, maxFeatures);
+                }
+                
+                // Replace original keypoints with limited set
+                frameKeypoints.delete();
+                frameKeypoints = new cv.KeyPointVector();
+                for (let kp of keypointsArray) {
+                    frameKeypoints.push_back(kp);
+                }
+                
+                // Compute descriptors on the limited set of keypoints
+                this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
             }
             
-            // Additional OpenCV resources we'll need to clean up
-            let matcher = null;
-            let matches = null;
-            let goodMatches = null;
-            let homography = null;
-            let refPointsMat = null;
-            let framePointsMat = null;
-            let cornerPoints = null;
-            let transformedCorners = null;
-            let contours = null;
-            let contour = null;
+            // Store detected keypoints in result
+            result.keypoints = frameKeypoints;
             
-            try {
-                // Only proceed if we have enough features to match
-                if (frameKeypoints.size() > 10 && 
-                    this.referenceKeypoints && this.referenceKeypoints.size() > 10 && 
-                    frameDescriptors && !frameDescriptors.empty() && 
-                    this.referenceDescriptors && !this.referenceDescriptors.empty() &&
-                    frameDescriptors.rows > 0 && this.referenceDescriptors.rows > 0 &&
-                    frameDescriptors.cols === this.referenceDescriptors.cols) {
-                    
-                    // Check if BFMatcher is available
-                    if (typeof cv.BFMatcher !== 'function') {
-                        console.error('BFMatcher not available in OpenCV');
-                        this.cube.visible = false;
-                        this.renderer.render(this.scene, this.camera);
-                        return;
-                    }
-                    
-                    // Perform multiscale matching
-                    this.performMultiscaleMatching(frameDescriptors, frameKeypoints, matches, goodMatches);
-                    
-                    // If we didn't get enough good matches from multiscale matching,
-                    // fall back to regular matching with the original reference image
-                    if (!goodMatches || goodMatches.size() < 10) {
-                        // Match features using KNN on original scale
-                        matcher = new cv.BFMatcher(cv.NORM_HAMMING);
-                        let knnMatches = new cv.DMatchVectorVector();
-                        
-                        // Try to match descriptors with k=2 for Lowe's ratio test
-                        const k = 2;
-                        try {
-                            matcher.knnMatch(this.referenceDescriptors, frameDescriptors, knnMatches, k);
-                            
-                            // Using Lowe's ratio test from KNN matches
-                            matches = new cv.DMatchVector(); // For visualization
-                            goodMatches = new cv.DMatchVector();
-                            
-                            // Apply Lowe's ratio test
-                            const ratioThreshold = 0.75;
-                            
-                            for (let i = 0; i < knnMatches.size(); i++) {
-                                try {
-                                    const matchPair = knnMatches.get(i);
-                                    
-                                    // First, add the best match to regular matches for visualization
-                                    if (matchPair.size() >= 1) {
-                                        const firstMatch = matchPair.get(0);
-                                        if (firstMatch) {
-                                            matches.push_back(firstMatch);
-                                        }
-                                        
-                                        // Apply ratio test if we have two matches
-                                        if (matchPair.size() >= 2) {
-                                            const secondMatch = matchPair.get(1);
-                                            
-                                            if (firstMatch && secondMatch && 
-                                                typeof firstMatch.distance === 'number' && 
-                                                typeof secondMatch.distance === 'number' &&
-                                                !isNaN(firstMatch.distance) && !isNaN(secondMatch.distance) &&
-                                                isFinite(firstMatch.distance) && isFinite(secondMatch.distance)) {
-                                                
-                                                // Apply Lowe's ratio test
-                                                if (firstMatch.distance < ratioThreshold * secondMatch.distance) {
-                                                    goodMatches.push_back(firstMatch);
-                                                }
-                                            }
-                                        }
-                                    }
-                                } catch (e) {
-                                    // Skip problematic matches
-                                }
-                            }
-                            
-                            // Clean up KNN matches
-                            knnMatches.delete();
-                        } catch (e) {
-                            console.error("Error in KNN matching:", e);
-                            // Fallback to regular matching if KNN fails
-                            if (!matches) matches = new cv.DMatchVector();
-                            if (!goodMatches) goodMatches = new cv.DMatchVector();
-                            
-                            try {
-                                matcher.match(this.referenceDescriptors, frameDescriptors, matches);
-                                
-                                // Create goodMatches based on distance threshold
-                                if (matches.size() > 0) {
-                                    const distances = [];
-                                    for (let i = 0; i < matches.size(); i++) {
-                                        try {
-                                            const match = matches.get(i);
-                                            if (match && typeof match.distance === 'number' && 
-                                                !isNaN(match.distance) && isFinite(match.distance)) {
-                                                distances.push(match.distance);
-                                            }
-                                        } catch (e) {}
-                                    }
-                                    
-                                    if (distances.length > 0) {
-                                        distances.sort((a, b) => a - b);
-                                        const threshold = Math.min(100, 3 * distances[0]);
-                                        
-                                        for (let i = 0; i < matches.size(); i++) {
-                                            try {
-                                                const match = matches.get(i);
-                                                if (match && typeof match.distance === 'number' && 
-                                                    match.distance <= threshold) {
-                                                    goodMatches.push_back(match);
-                                                }
-                                            } catch (e) {}
-                                        }
-                                    }
-                                }
-                            } catch (e2) {
-                                console.error("Error in fallback matching:", e2);
-                            }
-                        }
-                    }
-                    
-                    // Only proceed with homography if we have enough good matches
-                    if (goodMatches && goodMatches.size() >= 10) {
-                        // Extract point pairs from matches
-                        const referencePoints = [];
-                        const framePoints = [];
-                        
-                        for (let i = 0; i < goodMatches.size(); i++) {
-                            try {
-                                const match = goodMatches.get(i);
-                                
-                                // Validate match indices
-                                if (!match || typeof match.queryIdx !== 'number' || 
-                                    typeof match.trainIdx !== 'number') {
-                                    continue;
-                                }
-                                
-                                // Ensure indices are in valid range
-                                if (match.queryIdx < 0 || match.queryIdx >= this.referenceKeypoints.size() ||
-                                    match.trainIdx < 0 || match.trainIdx >= frameKeypoints.size()) {
-                                    continue;
-                                }
-                                
-                                // Get keypoints
-                                const refKeypoint = this.referenceKeypoints.get(match.queryIdx);
-                                const frameKeypoint = frameKeypoints.get(match.trainIdx);
-                                
-                                // Validate keypoints and coordinates
-                                if (!refKeypoint || !frameKeypoint || 
-                                    !refKeypoint.pt || !frameKeypoint.pt) {
-                                    continue;
-                                }
-                                
-                                // Validate coordinate values
-                                if (isNaN(refKeypoint.pt.x) || isNaN(refKeypoint.pt.y) ||
-                                    isNaN(frameKeypoint.pt.x) || isNaN(frameKeypoint.pt.y) ||
-                                    !isFinite(refKeypoint.pt.x) || !isFinite(refKeypoint.pt.y) ||
-                                    !isFinite(frameKeypoint.pt.x) || !isFinite(frameKeypoint.pt.y)) {
-                                    continue;
-                                }
-                                
-                                // Add valid point pair
-                                referencePoints.push(refKeypoint.pt.x, refKeypoint.pt.y);
-                                framePoints.push(frameKeypoint.pt.x, frameKeypoint.pt.y);
-                            } catch (e) {
-                                // Skip problematic matches
-                            }
-                        }
-                        
-                        // Only continue if we have enough valid points for homography
-                        if (referencePoints.length >= 16 && framePoints.length >= 16) {
-                            // Create point matrices for homography calculation
-                            refPointsMat = cv.matFromArray(referencePoints.length / 2, 1, cv.CV_32FC2, referencePoints);
-                            framePointsMat = cv.matFromArray(framePoints.length / 2, 1, cv.CV_32FC2, framePoints);
-                            
-                            // Calculate homography matrix
-                            homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC);
-                            
-                            // Only proceed if we got a valid homography
-                            if (homography && !homography.empty()) {
-                                // Set up corners of reference image for transformation
-                                cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
-                                
-                                // Make sure we can safely access the cornerData
-                                if (cornerPoints.data32F && cornerPoints.data32F.length >= 8) {
-                                    const cornerData = cornerPoints.data32F;
-                                    
-                                    // Set reference image corners safely
-                                    cornerData[0] = 0;
-                                    cornerData[1] = 0;
-                                    cornerData[2] = this.referenceImage.cols;
-                                    cornerData[3] = 0;
-                                    cornerData[4] = this.referenceImage.cols;
-                                    cornerData[5] = this.referenceImage.rows;
-                                    cornerData[6] = 0;
-                                    cornerData[7] = this.referenceImage.rows;
-                                    
-                                    // Transform corners using homography
-                                    transformedCorners = new cv.Mat();
-                                    cv.perspectiveTransform(cornerPoints, transformedCorners, homography);
-                                    
-                                    // Make sure transformed corners data is accessible
-                                    if (transformedCorners && transformedCorners.data32F && 
-                                        transformedCorners.data32F.length >= 8) {
-                                        
-                                        // Validate transformed corner coordinates
-                                        let validContour = true;
-                                        const contourPoints = [];
-                                        
-                                        for (let i = 0; i < 4; i++) {
-                                            const x = transformedCorners.data32F[i * 2];
-                                            const y = transformedCorners.data32F[i * 2 + 1];
-                                            
-                                            if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
-                                                validContour = false;
-                                                break;
-                                            }
-                                            
-                                            contourPoints.push(new cv.Point(x, y));
-                                        }
-                                        
-                                        // Draw contour and update 3D model if coordinates are valid
-                                        if (validContour) {
-                                            contours = new cv.MatVector();
-                                            contour = new cv.Mat();
-                                            
-                                            // Create contour for visualization
-                                            contour.create(4, 1, cv.CV_32SC2);
-                                            
-                                            // Safely set contour data
-                                            try {
-                                                const flatPoints = contourPoints.flatMap(p => [p.x, p.y]);
-                                                if (contour.data32S && contour.data32S.length >= flatPoints.length) {
-                                                    contour.data32S.set(flatPoints);
-                                                    contours.push_back(contour);
-                                                    
-                                                    // Draw contour on frame
-                                                    cv.drawContours(frame, contours, 0, [0, 255, 0, 255], 3);
-                                                    
-                                                    // We no longer update 3D model
-                                                    // Just drawing the green rectangle is enough
-                                                }
-                                            } catch (e) {
-                                                console.error("Error drawing contour:", e);
-                                            }
-                                        } else {
-                                            console.log("Invalid contour points detected");
-                                        }
-                                    } else {
-                                        console.log("Invalid transformed corners");
-                                    }
-                                } else {
-                                    console.log("Invalid corner points");
-                                }
-                            } else {
-                                console.log("Invalid homography matrix");
-                            }
-                        } else {
-                            console.log("Not enough valid point pairs");
-                        }
-                    } else {
-                        console.log("Not enough good matches");
-                    }
-                } else {
-                    console.log("Basic requirements for matching not met");
-                }
+            // Only proceed with matching if we have enough features
+            if (frameKeypoints.size() > 10 && 
+                referenceData.keypoints.size() > 10 && 
+                frameDescriptors && !frameDescriptors.empty() && 
+                referenceData.descriptors && !referenceData.descriptors.empty() &&
+                frameDescriptors.rows > 0 && referenceData.descriptors.rows > 0 &&
+                frameDescriptors.cols === referenceData.descriptors.cols) {
                 
-                // Visualize keypoints based on status
-                try {
-                    // Create copies of the frame for each type of keypoint visualization
-                    let allKeypointsFrame = frame.clone();
-                    
-                    // Draw keypoints manually for each category
-                    
-                    // All keypoints in blue (smaller)
-                    for (let i = 0; i < frameKeypoints.size(); i++) {
-                        try {
-                            const kp = frameKeypoints.get(i);
-                            if (kp && kp.pt) {
-                                cv.circle(allKeypointsFrame, kp.pt, 1, [255, 0, 0, 255], -1);
-                            }
-                        } catch (e) {}
-                    }
-                    
-                    // If we have matches, draw matched keypoints in yellow (medium)
-                    if (matches && matches.size() > 0) {
-                        for (let i = 0; i < matches.size(); i++) {
-                            try {
-                                const match = matches.get(i);
-                                if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
-                                    const kp = frameKeypoints.get(match.trainIdx);
-                                    if (kp && kp.pt) {
-                                        cv.circle(allKeypointsFrame, kp.pt, 2, [255, 255, 0, 255], -1);
-                                    }
-                                }
-                            } catch (e) {}
-                        }
-                    }
-                    
-                    // If we have good matches, draw them in green (larger)
-                    if (goodMatches && goodMatches.size() > 0) {
-                        for (let i = 0; i < goodMatches.size(); i++) {
-                            try {
-                                const match = goodMatches.get(i);
-                                if (match && match.trainIdx >= 0 && match.trainIdx < frameKeypoints.size()) {
-                                    const kp = frameKeypoints.get(match.trainIdx);
-                                    if (kp && kp.pt) {
-                                        cv.circle(allKeypointsFrame, kp.pt, 2, [0, 255, 0, 255], -1);
-                                    }
-                                }
-                            } catch (e) {}
-                        }
-                    }
-                    
-                    // Display processed frame on canvas
-                    cv.imshow(this.canvas, allKeypointsFrame);
-                    
-                    // Clean up the cloned frame
-                    allKeypointsFrame.delete();
-                } catch (e) {
-                    console.error("Error displaying frame:", e);
-                }
-            } catch (e) {
-                // Handle any unexpected errors in the main processing
-                console.error("Error in main processing loop:", e);
-            } finally {
-                // Always clean up ALL OpenCV resources to prevent memory leaks
-                try {
-                    if (frame) frame.delete();
-                    if (frameGray) frameGray.delete();
-                    if (frameKeypoints) frameKeypoints.delete();
-                    if (frameDescriptors) frameDescriptors.delete();
-                    if (matcher) matcher.delete();
-                    if (matches) matches.delete();
-                    if (goodMatches) goodMatches.delete();
-                    if (homography) homography.delete();
-                    if (refPointsMat) refPointsMat.delete();
-                    if (framePointsMat) framePointsMat.delete();
-                    if (cornerPoints) cornerPoints.delete();
-                    if (transformedCorners) transformedCorners.delete();
-                    if (contours) contours.delete();
-                    if (contour) contour.delete();
-                } catch (e) {
-                    console.error("Error cleaning up resources:", e);
-                }
-                
-                // Reset processing flag to allow next frame
-                this.isProcessing = false;
-            }
-        } catch (error) {
-            // Handle errors in the outer try block
-            console.error('Error in processVideo:', error);
-            this.isProcessing = false;
-        }
-    }
-    
-    initThreeJS() {
-        // Since we're not using Three.js anymore, just create empty scene
-        // to avoid errors in other parts of the code that reference the scene
-        this.scene = {};
-        this.camera = {};
-        this.cube = { visible: false };
-        this.renderer = {
-            render: () => {},
-            setSize: () => {}
-        };
-    }
-    
-    updateThreeJS(corners) {
-        // This method is now a no-op since we don't need 3D rendering
-        // We're only keeping the green rectangle outline drawn with OpenCV
-        return;
-    }
-    
-    performMultiscaleMatching(frameDescriptors, frameKeypoints, matches, goodMatches) {
-        // Initialize or clear match and good match vectors if they don't exist
-        if (!matches) matches = new cv.DMatchVector();
-        else matches.delete();
-        matches = new cv.DMatchVector();
-        
-        if (!goodMatches) goodMatches = new cv.DMatchVector();
-        else goodMatches.delete();
-        goodMatches = new cv.DMatchVector();
-        
-        // Skip if we don't have a pyramid
-        if (!this.referenceImagePyramid || this.referenceImagePyramid.length === 0) {
-            console.log("No reference pyramid available for multiscale matching");
-            return;
-        }
-        
-        // For each scale in the pyramid, try to match and keep the best matches
-        let bestMatchCount = 0;
-        this.bestScaleIndex = -1;
-        const ratioThreshold = 0.75;
-        
-        for (let i = 0; i < this.referenceImagePyramid.length; i++) {
-            try {
-                // Match with the current scale
-                const scaleKeypoints = this.referenceKeypointsPyramid[i];
-                const scaleDescriptors = this.referenceDescriptorsPyramid[i];
-                
-                if (!scaleKeypoints || !scaleDescriptors || scaleKeypoints.size() < 10 || scaleDescriptors.empty()) {
-                    continue;
-                }
-                
-                // Create a matcher for this scale
-                const scaleMatcher = new cv.BFMatcher(cv.NORM_HAMMING);
-                let scaleKnnMatches = new cv.DMatchVectorVector();
+                // Match features using KNN
+                matcher = new cv.BFMatcher(cv.NORM_HAMMING);
+                let knnMatches = new cv.DMatchVectorVector();
                 
                 try {
                     // Try KNN matching with k=2 for Lowe's ratio test
-                    scaleMatcher.knnMatch(scaleDescriptors, frameDescriptors, scaleKnnMatches, 2);
+                    matcher.knnMatch(referenceData.descriptors, frameDescriptors, knnMatches, 2);
                     
-                    // Create temporary match vectors for this scale
-                    const scaleMatches = new cv.DMatchVector();
-                    const scaleGoodMatches = new cv.DMatchVector();
+                    // Using Lowe's ratio test to filter matches
+                    matches = new cv.DMatchVector(); // For visualization
+                    goodMatches = new cv.DMatchVector(); // For homography
                     
-                    // Apply ratio test to get good matches for this scale
-                    for (let j = 0; j < scaleKnnMatches.size(); j++) {
-                        const matchPair = scaleKnnMatches.get(j);
-                        
-                        if (matchPair.size() >= 1) {
-                            const firstMatch = matchPair.get(0);
-                            if (firstMatch) {
-                                scaleMatches.push_back(firstMatch);
+                    // Apply Lowe's ratio test
+                    const ratioThreshold = 0.7;
+                    
+                    for (let i = 0; i < knnMatches.size(); i++) {
+                        try {
+                            const matchPair = knnMatches.get(i);
+                            
+                            // First, add the best match to regular matches for visualization
+                            if (matchPair.size() >= 1) {
+                                const firstMatch = matchPair.get(0);
+                                if (firstMatch) {
+                                    matches.push_back(firstMatch);
+                                }
                                 
+                                // Apply ratio test if we have two matches
                                 if (matchPair.size() >= 2) {
                                     const secondMatch = matchPair.get(1);
                                     
@@ -902,63 +906,660 @@ class ImageTracker {
                                         
                                         // Apply Lowe's ratio test
                                         if (firstMatch.distance < ratioThreshold * secondMatch.distance) {
-                                            scaleGoodMatches.push_back(firstMatch);
+                                            goodMatches.push_back(firstMatch);
                                         }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            // Skip problematic matches
+                        }
+                    }
+                    
+                    // Clean up KNN matches
+                    knnMatches.delete();
+                    
+                } catch (e) {
+                    console.error("Error in KNN matching:", e);
+                    
+                    // Fallback to regular matching if KNN fails
+                    matches = new cv.DMatchVector();
+                    matcher.match(referenceData.descriptors, frameDescriptors, matches);
+                    
+                    // Create a fallback goodMatches based on distance threshold
+                    goodMatches = new cv.DMatchVector();
+                    if (matches.size() > 0) {
+                        const distances = [];
+                        for (let i = 0; i < matches.size(); i++) {
+                            try {
+                                const match = matches.get(i);
+                                if (match && typeof match.distance === 'number' && 
+                                    !isNaN(match.distance) && isFinite(match.distance)) {
+                                    distances.push(match.distance);
+                                }
+                            } catch (e) {}
+                        }
+                        
+                        if (distances.length > 0) {
+                            distances.sort((a, b) => a - b);
+                            const threshold = Math.min(100, 3 * distances[0]);
+                            
+                            for (let i = 0; i < matches.size(); i++) {
+                                try {
+                                    const match = matches.get(i);
+                                    if (match && typeof match.distance === 'number' && 
+                                        match.distance <= threshold) {
+                                        goodMatches.push_back(match);
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                    }
+                }
+                
+                // Store matches in result
+                result.matches = matches;
+                result.goodMatches = goodMatches;
+                
+                // Only proceed with homography if we have enough good matches
+                if (goodMatches && goodMatches.size() >= 20) {
+                    // Extract point pairs from matches
+                    const referencePoints = [];
+                    const framePoints = [];
+                    
+                    for (let i = 0; i < goodMatches.size(); i++) {
+                        try {
+                            const match = goodMatches.get(i);
+                            
+                            // Validate match indices
+                            if (!match || typeof match.queryIdx !== 'number' || 
+                                typeof match.trainIdx !== 'number') {
+                                continue;
+                            }
+                            
+                            // Ensure indices are in valid range
+                            if (match.queryIdx < 0 || match.queryIdx >= referenceData.keypoints.size() ||
+                                match.trainIdx < 0 || match.trainIdx >= frameKeypoints.size()) {
+                                continue;
+                            }
+                            
+                            // Get keypoints
+                            const refKeypoint = referenceData.keypoints.get(match.queryIdx);
+                            const frameKeypoint = frameKeypoints.get(match.trainIdx);
+                            
+                            // Validate keypoints and coordinates
+                            if (!refKeypoint || !frameKeypoint || 
+                                !refKeypoint.pt || !frameKeypoint.pt) {
+                                continue;
+                            }
+                            
+                            // Validate coordinate values
+                            if (isNaN(refKeypoint.pt.x) || isNaN(refKeypoint.pt.y) ||
+                                isNaN(frameKeypoint.pt.x) || isNaN(frameKeypoint.pt.y) ||
+                                !isFinite(refKeypoint.pt.x) || !isFinite(refKeypoint.pt.y) ||
+                                !isFinite(frameKeypoint.pt.x) || !isFinite(frameKeypoint.pt.y)) {
+                                continue;
+                            }
+                            
+                            // Add valid point pair
+                            referencePoints.push(refKeypoint.pt.x, refKeypoint.pt.y);
+                            framePoints.push(frameKeypoint.pt.x, frameKeypoint.pt.y);
+                        } catch (e) {
+                            // Skip problematic matches
+                        }
+                    }
+                    
+                    // Only continue if we have enough valid points for homography
+                    if (referencePoints.length >= 16 && framePoints.length >= 16) {
+                        // Create point matrices for homography calculation
+                        refPointsMat = cv.matFromArray(referencePoints.length / 2, 1, cv.CV_32FC2, referencePoints);
+                        framePointsMat = cv.matFromArray(framePoints.length / 2, 1, cv.CV_32FC2, framePoints);
+                        
+                        // Calculate homography matrix
+                        homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC, 5.0);
+                        result.homography = homography;
+                        
+                        // Only proceed if we got a valid homography
+                        if (homography && !homography.empty()) {
+                            // Set up corners of reference image for transformation
+                            cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
+                            
+                            // Make sure we can safely access the cornerData
+                            if (cornerPoints.data32F && cornerPoints.data32F.length >= 8) {
+                                const cornerData = cornerPoints.data32F;
+                                
+                                // Set reference image corners safely
+                                cornerData[0] = 0;
+                                cornerData[1] = 0;
+                                cornerData[2] = referenceData.image.cols;
+                                cornerData[3] = 0;
+                                cornerData[4] = referenceData.image.cols;
+                                cornerData[5] = referenceData.image.rows;
+                                cornerData[6] = 0;
+                                cornerData[7] = referenceData.image.rows;
+                                
+                                // Transform corners using homography
+                                transformedCorners = new cv.Mat();
+                                cv.perspectiveTransform(cornerPoints, transformedCorners, homography);
+                                
+                                // Store corners in result
+                                if (transformedCorners && transformedCorners.data32F && 
+                                    transformedCorners.data32F.length >= 8) {
+                                    
+                                    const corners = [];
+                                    let validCorners = true;
+                                    
+                                    for (let i = 0; i < 4; i++) {
+                                        const x = transformedCorners.data32F[i * 2];
+                                        const y = transformedCorners.data32F[i * 2 + 1];
+                                        
+                                        if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
+                                            validCorners = false;
+                                            break;
+                                        }
+                                        
+                                        corners.push(new cv.Point(x, y));
+                                    }
+                                    
+                                    if (validCorners) {
+                                        result.corners = corners;
+                                        result.success = true;
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
+            
+            return result;
+        } catch (e) {
+            console.error("Error in feature detection and matching:", e);
+            return { success: false, reason: e.message };
+        } finally {
+            // Clean up OpenCV resources
+            if (frameGray) frameGray.delete();
+            if (frameDescriptors) frameDescriptors.delete();
+            if (matcher) matcher.delete();
+            if (matches && result.matches !== matches) matches.delete();
+            if (goodMatches && result.goodMatches !== goodMatches) goodMatches.delete();
+            if (homography && result.homography !== homography) homography.delete();
+            if (refPointsMat) refPointsMat.delete();
+            if (framePointsMat) framePointsMat.delete();
+            if (cornerPoints) cornerPoints.delete();
+            if (transformedCorners) transformedCorners.delete();
+        }
+    }
+}
+
+/**
+ * Handles optical flow tracking between frames
+ * Implements Lucas-Kanade sparse optical flow for efficient tracking
+ */
+class OpticalFlowTracker {
+    constructor(state) {
+        this.state = state;
+        
+        // Parameters for optical flow
+        this.params = {
+            winSize: new cv.Size(30, 30), // Smaller window for better performance
+            maxLevel: 5, // Reduced pyramid levels for stability
+            criteria: new cv.TermCriteria(
+                cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 
+                10, 
+                0.03
+            ),
+            minEigThreshold: 0.001,
+            featureQualityLevel: 0.01, // Quality level for feature detection
+            featureMinDistance: 10, // Minimum distance between features
+            ransacReprojThreshold: 3.0 // RANSAC reprojection threshold for homography
+        };
+    }
+    
+    track(prevFrame, currentFrame, prevCorners) {
+        const result = {
+            success: false,
+            corners: null,
+            flowStatus: null,
+            trackingQuality: 0,
+            featurePoints: null,
+            prevFeaturePoints: null,
+            nextFeaturePoints: null
+        };
+    
+        if (!prevFrame || !currentFrame || !prevCorners || prevCorners.length !== 4) {
+            return result;
+        }
+    
+        let prevGray = new cv.Mat();
+        let currentGray = new cv.Mat();
+        cv.cvtColor(prevFrame, prevGray, cv.COLOR_RGBA2GRAY);
+        cv.cvtColor(currentFrame, currentGray, cv.COLOR_RGBA2GRAY);
+    
+        // Create a mask for feature detection inside the quadrilateral
+        let prevMask = new cv.Mat.zeros(prevGray.rows, prevGray.cols, cv.CV_8UC1);
+        let roiCorners = new cv.MatVector();
+        let roi = new cv.Mat(4, 1, cv.CV_32SC2);
+        for (let i = 0; i < 4; i++) {
+            roi.data32S[i * 2] = Math.round(prevCorners[i].x);
+            roi.data32S[i * 2 + 1] = Math.round(prevCorners[i].y);
+        }
+        roiCorners.push_back(roi);
+        cv.fillPoly(prevMask, roiCorners, new cv.Scalar(255));
+        roi.delete(); roiCorners.delete();
+    
+        // Detect good features inside the quadrilateral
+        let featurePoints = new cv.Mat();
+        cv.goodFeaturesToTrack(
+            prevGray,
+            featurePoints,
+            this.state ? this.state.maxFeatures : 100,
+            this.params.featureQualityLevel,
+            this.params.featureMinDistance,
+            prevMask
+        );
+    
+        if (!featurePoints || featurePoints.rows < 8) {
+            // Not enough points – return empty result
+            prevGray.delete(); currentGray.delete(); prevMask.delete();
+            featurePoints.delete();
+            return result;
+        }
+    
+        // Convert feature points to an array and store for visualization
+        let pointsToTrack = [];
+        for (let i = 0; i < featurePoints.rows; i++) {
+            pointsToTrack.push(featurePoints.data32F[i * 2], featurePoints.data32F[i * 2 + 1]);
+        }
+        result.prevFeaturePoints = this.pointsArrayToPoints(pointsToTrack);
+    
+        // Create matrices for tracking
+        let prevPoints = cv.matFromArray(featurePoints.rows, 1, cv.CV_32FC2, pointsToTrack);
+        let nextPoints = new cv.Mat();
+        let status = new cv.Mat();
+        let err = new cv.Mat();
+    
+        // Forward optical flow: previous -> current
+        cv.calcOpticalFlowPyrLK(
+            prevGray, 
+            currentGray, 
+            prevPoints, 
+            nextPoints, 
+            status, 
+            err, 
+            this.params.winSize, 
+            this.params.maxLevel, 
+            this.params.criteria
+        );
+    
+        // Backward optical flow: current -> previous
+        let backPoints = new cv.Mat();
+        let backStatus = new cv.Mat();
+        let backErr = new cv.Mat();
+        cv.calcOpticalFlowPyrLK(
+            currentGray, 
+            prevGray, 
+            nextPoints, 
+            backPoints, 
+            backStatus, 
+            backErr, 
+            this.params.winSize, 
+            this.params.maxLevel, 
+            this.params.criteria
+        );
+    
+        // Filter points by forward-backward error
+        let fbThreshold = 1.0; // This threshold can be tuned
+        let prevPtsFiltered = [];
+        let nextPtsFiltered = [];
+        let validCount = 0;
+        let nextVisualPoints = [];
+    
+        for (let i = 0; i < status.rows; i++) {
+            let forwardTracked = status.data[i] === 1;
+            let backwardTracked = backStatus.data[i] === 1;
+            if (forwardTracked && backwardTracked) {
+                let dx = prevPoints.data32F[i*2] - backPoints.data32F[i*2];
+                let dy = prevPoints.data32F[i*2+1] - backPoints.data32F[i*2+1];
+                let fbError = Math.sqrt(dx*dx + dy*dy);
+                if (fbError <= fbThreshold) {
+                    prevPtsFiltered.push(prevPoints.data32F[i*2], prevPoints.data32F[i*2+1]);
+                    nextPtsFiltered.push(nextPoints.data32F[i*2], nextPoints.data32F[i*2+1]);
+                    validCount++;
+                }
+            }
+            // Save all next points for visualization
+            nextVisualPoints.push(new cv.Point(nextPoints.data32F[i*2], nextPoints.data32F[i*2+1]));
+        }
+        result.nextFeaturePoints = nextVisualPoints;
+        result.flowStatus = new Uint8Array(status.data.slice());
+    
+        // Calculate tracking quality and only proceed if quality is sufficient
+        let trackingQuality = validCount / status.rows;
+        result.trackingQuality = trackingQuality;
+        if (trackingQuality < 0.6 || prevPtsFiltered.length < 16) {
+            // Not enough good points; do not update tracking.
+            prevGray.delete(); currentGray.delete(); prevMask.delete();
+            featurePoints.delete(); prevPoints.delete(); nextPoints.delete();
+            status.delete(); err.delete();
+            backPoints.delete(); backStatus.delete(); backErr.delete();
+            return result;
+        }
+    
+        // Compute homography based on filtered points
+        let prevPointsMat = cv.matFromArray(prevPtsFiltered.length/2, 1, cv.CV_32FC2, prevPtsFiltered);
+        let nextPointsMat = cv.matFromArray(nextPtsFiltered.length/2, 1, cv.CV_32FC2, nextPtsFiltered);
+        let homography = cv.findHomography(prevPointsMat, nextPointsMat, cv.RANSAC, this.params.ransacReprojThreshold);
+    
+        // If homography is valid, transform the original corners
+        if (homography && !homography.empty()) {
+            let cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
+            for (let i = 0; i < 4; i++) {
+                cornerPoints.data32F[i*2] = prevCorners[i].x;
+                cornerPoints.data32F[i*2+1] = prevCorners[i].y;
+            }
+            let transformedCorners = new cv.Mat();
+            cv.perspectiveTransform(cornerPoints, transformedCorners, homography);
+            // Validate and extract transformed corners
+            if (transformedCorners && transformedCorners.data32F && transformedCorners.data32F.length >= 8) {
+                let corners = [];
+                let validCorners = true;
+                for (let i = 0; i < 4; i++) {
+                    let x = transformedCorners.data32F[i * 2];
+                    let y = transformedCorners.data32F[i * 2 + 1];
+                    if (isNaN(x) || isNaN(y) || !isFinite(x) || !isFinite(y)) {
+                        validCorners = false;
+                        break;
+                    }
+                    corners.push(new cv.Point(x, y));
+                }
+                if (validCorners && this.isValidQuadrilateral(corners)) {
+                    result.corners = corners;
+                    result.success = true;
+                }
+            }
+            cornerPoints.delete(); transformedCorners.delete();
+        }
+    
+        // Clean up all resources
+        prevGray.delete(); currentGray.delete(); prevMask.delete();
+        featurePoints.delete(); prevPoints.delete(); nextPoints.delete();
+        status.delete(); err.delete(); backPoints.delete();
+        backStatus.delete(); backErr.delete(); prevPointsMat.delete(); nextPointsMat.delete();
+        if (homography) homography.delete();
+    
+        return result;
+    }
+    
+    // Generate additional tracking points inside the quadrilateral for better tracking
+    generatePointsInsideQuad(corners, pointCount) {
+        const points = [];
+        if (!corners || corners.length !== 4) return points;
+        
+        try {
+            // Get bounds of the quadrilateral
+            const xs = corners.map(c => c.x);
+            const ys = corners.map(c => c.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            
+            // Instead of random points, generate a grid of points
+            // This is more deterministic and avoids random number generation issues
+            const stepX = (maxX - minX) / (Math.sqrt(pointCount) + 1);
+            const stepY = (maxY - minY) / (Math.sqrt(pointCount) + 1);
+            
+            // Generate a grid of points inside the bounding box
+            for (let i = 1; i <= Math.sqrt(pointCount); i++) {
+                for (let j = 1; j <= Math.sqrt(pointCount); j++) {
+                    const x = minX + i * stepX;
+                    const y = minY + j * stepY;
                     
-                    // Check if this scale has better matches than previous scales
-                    if (scaleGoodMatches.size() > bestMatchCount) {
-                        bestMatchCount = scaleGoodMatches.size();
-                        this.bestScaleIndex = i;
-                        
-                        // Replace the output matches with the matches from this scale
-                        // First, clear any existing matches
-                        matches.delete();
-                        goodMatches.delete();
-                        
-                        // Create new match vectors
-                        matches = new cv.DMatchVector();
-                        goodMatches = new cv.DMatchVector();
-                        
-                        // Copy matches from this scale
-                        for (let j = 0; j < scaleMatches.size(); j++) {
-                            matches.push_back(scaleMatches.get(j));
-                        }
-                        
-                        for (let j = 0; j < scaleGoodMatches.size(); j++) {
-                            goodMatches.push_back(scaleGoodMatches.get(j));
-                        }
+                    // Simple check if point is inside the quadrilateral by using barycentric coordinates
+                    // This is a simplified approach that works for most convex quadrilaterals
+                    if (this.isPointInPolygon(corners, x, y)) {
+                        points.push(x, y);
                     }
                     
-                    // Clean up resources for this scale
-                    scaleKnnMatches.delete();
-                    scaleMatches.delete();
-                    scaleGoodMatches.delete();
-                    scaleMatcher.delete();
-                } catch (e) {
-                    console.error(`Error matching at scale ${i}:`, e);
-                    if (scaleKnnMatches) scaleKnnMatches.delete();
-                    if (scaleMatcher) scaleMatcher.delete();
+                    // Limit to requested point count
+                    if (points.length >= pointCount * 2) {
+                        return points;
+                    }
                 }
-            } catch (e) {
-                console.error(`Error processing scale ${i}:`, e);
             }
-        }
-        
-        // Log the results of multiscale matching
-        if (this.bestScaleIndex >= 0) {
-            console.log(`Best match at scale index ${this.bestScaleIndex} with ${bestMatchCount} good matches`);
-        } else {
-            console.log("No good matches found in any scale");
+            
+            return points;
+        } catch (error) {
+            console.error("Error generating tracking points:", error);
+            return []; // Return empty array if there's an error
         }
     }
     
-    updateStatus(message) {
-        this.statusMessage.textContent = message;
+    // Generate cv.Point objects from flat point array
+    pointsArrayToPoints(pointsArray) {
+        const points = [];
+        if (!pointsArray || pointsArray.length < 2) return points;
+        
+        for (let i = 0; i < pointsArray.length; i += 2) {
+            if (i + 1 < pointsArray.length) {
+                points.push(new cv.Point(pointsArray[i], pointsArray[i + 1]));
+            }
+        }
+        
+        return points;
+    }
+    
+    // Helper method to check if a point is inside a polygon using ray casting algorithm
+    isPointInPolygon(corners, x, y) {
+        let inside = false;
+        for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+            const xi = corners[i].x;
+            const yi = corners[i].y;
+            const xj = corners[j].x;
+            const yj = corners[j].y;
+            
+            const intersect = ((yi > y) !== (yj > y))
+                && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+    
+    // Check if the tracked quadrilateral is valid (not too distorted)
+    isValidQuadrilateral(corners) {
+        if (corners.length !== 4) return false;
+        
+        // Calculate edge lengths
+        const edges = [];
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            const dx = corners[next].x - corners[i].x;
+            const dy = corners[next].y - corners[i].y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            edges.push(length);
+        }
+        
+        // Calculate perimeter and area
+        const perimeter = edges.reduce((sum, length) => sum + length, 0);
+        
+        // Use shoelace formula to calculate area
+        let area = 0;
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            area += corners[i].x * corners[next].y - corners[next].x * corners[i].y;
+        }
+        area = Math.abs(area) / 2;
+        
+        // Check if area is reasonable (not too small)
+        if (area < 100) return false;
+        
+        // Check compactness (circle has value 1, lower values are less compact)
+        const compactness = (4 * Math.PI * area) / (perimeter * perimeter);
+        
+        // Reject extremely distorted quadrilaterals
+        return compactness > 0.1;
+    }
+}
+
+/**
+ * Handles visualization of tracking results
+ */
+class Visualizer {
+    renderResults(frame, trackingResult, canvas, drawKeypoints, flowPoints, flowStatus) {
+        // Resources to clean up
+        let displayFrame = null;
+        let contours = null;
+        let contour = null;
+        
+        try {
+            // Create a clone of the frame for drawing
+            displayFrame = frame.clone();
+            
+            // If tracking was successful, draw the contour
+            if (trackingResult.success && trackingResult.corners) {
+                contours = new cv.MatVector();
+                contour = new cv.Mat();
+                
+                // Create contour for visualization
+                contour.create(4, 1, cv.CV_32SC2);
+                
+                // Safely set contour data
+                try {
+                    const flatPoints = trackingResult.corners.flatMap(p => [p.x, p.y]);
+                    if (contour.data32S && contour.data32S.length >= flatPoints.length) {
+                        contour.data32S.set(flatPoints);
+                        contours.push_back(contour);
+                        
+                        // Draw contour on frame
+                        cv.drawContours(displayFrame, contours, 0, [0, 255, 0, 255], 3);
+                    }
+                } catch (e) {
+                    console.error("Error drawing contour:", e);
+                }
+            }
+            
+            // Draw keypoints if available and enabled
+            if (drawKeypoints && trackingResult.keypoints) {
+                this.drawKeypoints(displayFrame, trackingResult);
+            }
+            
+            // Draw optical flow tracking points if available
+            if (flowPoints && flowPoints.length > 0) {
+                // Pass the tracking corners to the drawFlowPoints method for better visualization
+                const corners = trackingResult.success && trackingResult.corners ? 
+                    trackingResult.corners : null;
+                this.drawFlowPoints(displayFrame, flowPoints, flowStatus, corners);
+            }
+            
+            // Display the processed frame
+            cv.imshow(canvas, displayFrame);
+        } catch (e) {
+            console.error("Error in visualization:", e);
+        } finally {
+            // Clean up resources
+            if (displayFrame) displayFrame.delete();
+            if (contours) contours.delete();
+            if (contour) contour.delete();
+        }
+    }
+    
+    drawFlowPoints(frame, points, flowStatus, corners) {
+        try {
+            if (!points || points.length === 0) return;
+            
+            // Use the provided corners if available, otherwise use a fallback
+            let cornerPoints = corners || [];
+            
+            // If no corners were provided, create a fallback
+            if (!cornerPoints || cornerPoints.length !== 4) {
+                // Create a simplistic approximation of the marker boundaries
+                if (frame.cols > 0 && frame.rows > 0) {
+                    const padding = 0;
+                    cornerPoints = [
+                        new cv.Point(padding, padding),
+                        new cv.Point(frame.cols - padding, padding),
+                        new cv.Point(frame.cols - padding, frame.rows - padding),
+                        new cv.Point(padding, frame.rows - padding)
+                    ];
+                }
+            }
+            
+            for (let i = 0; i < points.length; i++) {
+                const point = points[i];
+                if (!point) continue;
+                
+                // Determine color based on tracking status and location
+                let color;
+                const isTracked = flowStatus && flowStatus.length > i && flowStatus[i] === 1;
+                
+                if (isTracked) {
+                    // For tracked points, use green for points inside the marker region,
+                    // yellow for points that might be outside the marker
+                    if (cornerPoints.length === 4) {
+                        const isInside = this.isPointInPolygon(cornerPoints, point.x, point.y);
+                        color = isInside ? [0, 255, 0, 255] : [255, 255, 0, 255]; // Green if inside, yellow if outside
+                    } else {
+                        color = [0, 255, 0, 255]; // Default to green if we can't determine location
+                    }
+                } else {
+                    color = [255, 0, 0, 255]; // Red for lost points
+                }
+                
+                // Draw the point
+                cv.circle(frame, point, 3, color, -1);
+            }
+        } catch (e) {
+            console.error("Error drawing flow points:", e);
+        }
+    }
+    
+    drawKeypoints(frame, trackingResult) {
+        try {
+            const { keypoints, matches, goodMatches } = trackingResult;
+            
+            // Draw all keypoints in blue (smaller)
+            for (let i = 0; i < keypoints.size(); i++) {
+                try {
+                    const kp = keypoints.get(i);
+                    if (kp && kp.pt) {
+                        cv.circle(frame, kp.pt, 1, [255, 0, 0, 255], -1);
+                    }
+                } catch (e) {}
+            }
+            
+            // If we have matches, draw matched keypoints in yellow (medium)
+            if (matches && matches.size() > 0) {
+                for (let i = 0; i < matches.size(); i++) {
+                    try {
+                        const match = matches.get(i);
+                        if (match && match.trainIdx >= 0 && match.trainIdx < keypoints.size()) {
+                            const kp = keypoints.get(match.trainIdx);
+                            if (kp && kp.pt) {
+                                cv.circle(frame, kp.pt, 2, [255, 255, 0, 255], -1);
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+            
+            // If we have good matches, draw them in green (larger)
+            if (goodMatches && goodMatches.size() > 0) {
+                for (let i = 0; i < goodMatches.size(); i++) {
+                    try {
+                        const match = goodMatches.get(i);
+                        if (match && match.trainIdx >= 0 && match.trainIdx < keypoints.size()) {
+                            const kp = keypoints.get(match.trainIdx);
+                            if (kp && kp.pt) {
+                                cv.circle(frame, kp.pt, 2, [0, 255, 0, 255], -1);
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {
+            console.error("Error drawing keypoints:", e);
+        }
     }
 }
 
