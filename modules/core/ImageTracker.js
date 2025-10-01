@@ -219,6 +219,16 @@ class ImageTracker {
                         // Update with new frame and corners
                         this.state.lastFrame = frameToProcess.clone();
                         this.state.lastCorners = trackingResult.corners.slice();
+                    } else {
+                        // Optical flow failed - clear tracking data to prevent tracking with stale points
+                        if (this.state.lastFrame) {
+                            this.state.lastFrame.delete();
+                            this.state.lastFrame = null;
+                        }
+                        this.state.lastCorners = null;
+                        // Clear visualization data to remove stale points from display
+                        this.state.featurePoints = null;
+                        this.state.flowStatus = null;
                     }
                 }
             } else {
@@ -247,7 +257,16 @@ class ImageTracker {
                     this.state.lastFrame = frameToProcess.clone();
                     this.state.lastCorners = trackingResult.corners.slice();
                 } else {
-                    // If optical flow fails, force a full detection on next frame
+                    // Optical flow failed - clear tracking data to prevent tracking with stale points
+                    if (this.state.lastFrame) {
+                        this.state.lastFrame.delete();
+                        this.state.lastFrame = null;
+                    }
+                    this.state.lastCorners = null;
+                    // Clear visualization data to remove stale points from display
+                    this.state.featurePoints = null;
+                    this.state.flowStatus = null;
+                    // Force a full detection on next frame
                     this.state.frameCount = this.state.detectionInterval - 1;
                 }
             }
