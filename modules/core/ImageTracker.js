@@ -12,6 +12,8 @@ class ImageTracker {
             isProcessing: false,
             isTracking: false,
             lastProcessingTime: 0,
+            lastFrameTimestamp: 0,
+            fps: 0,
             drawKeypoints: false,
             visualizeFlowPoints: false, // Visualize optical flow tracking points
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
@@ -146,6 +148,17 @@ class ImageTracker {
         const elapsed = now - this.state.lastProcessingTime;
         if (elapsed < 1) return;
         this.state.lastProcessingTime = now;
+
+        if (this.state.lastFrameTimestamp) {
+            const delta = now - this.state.lastFrameTimestamp;
+            if (delta > 0) {
+                const currentFps = 1000 / delta;
+                // apply exponential moving average for smoother display
+                this.state.fps = this.state.fps ? (this.state.fps * 0.75 + currentFps * 0.25) : currentFps;
+                this.ui.updateFPS(this.state.fps);
+            }
+        }
+        this.state.lastFrameTimestamp = now;
 
         // Skip if already processing a frame
         if (this.state.isProcessing) return;

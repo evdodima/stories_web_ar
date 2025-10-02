@@ -10,47 +10,104 @@
     <script src="imageTracker.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <div class="camera-container">
-            <video id="video" autoplay playsinline></video>
-            <canvas id="output"></canvas>
-        </div>
-        <div class="controls">
-            <input type="file" id="referenceImage" accept="image/*">
-            <button id="startTracking">Start Tracking</button>
-            <button id="stopTracking">Stop Tracking</button>
-            <div class="tracking-options">
-                <label>
+    <div class="app-shell">
+        <aside class="control-panel">
+            <header class="panel-header">
+                <h1 class="panel-title">Stories Album AR</h1>
+                <p class="panel-subtitle">Real-time image tracking playground</p>
+            </header>
+
+            <section class="panel-section" data-panel="reference">
+                <div class="section-heading">
+                    <h2>Reference image</h2>
+                    <p>Upload a target to track in the camera feed.</p>
+                </div>
+                <label class="file-picker" for="referenceImage">
+                    <input type="file" id="referenceImage" accept="image/*" multiple>
+                    <span class="file-picker__icon">⬆︎</span>
+                    <span class="file-picker__label">Choose image</span>
+                    <span class="file-picker__hint">JPG or PNG</span>
+                </label>
+            </section>
+
+            <section class="panel-section" data-panel="tracking">
+                <div class="section-heading">
+                    <h2>Tracking session</h2>
+                    <p>Control when detection starts and stops.</p>
+                </div>
+                <div class="button-row">
+                    <button id="startTracking" class="btn btn-primary">Start tracking</button>
+                    <button id="stopTracking" class="btn btn-ghost">Stop</button>
+                </div>
+                <div class="session-badges">
+                    <span class="badge-label">Optical flow</span>
+                    <span id="opticalFlowBadge" class="badge badge-muted">Armed</span>
+                </div>
+            </section>
+
+            <section class="panel-section" data-panel="options">
+                <div class="section-heading">
+                    <h2>Fine tuning</h2>
+                    <p>Adjust the tracker to balance performance and stability.</p>
+                </div>
+                <label class="toggle-row">
                     <input type="checkbox" id="useOpticalFlow" checked>
-                    Use Optical Flow Tracking
+                    <span class="toggle-label">Use optical flow between detections</span>
                 </label>
-                <label title="Lower values = smoother tracking but slower to adapt">
-                    Detection Interval:
-                    <input type="range" id="detectionInterval" min="1" max="60" value="1">
-                    <span id="intervalValue">1</span>
-                </label>
-                <label>
+                <label class="toggle-row">
                     <input type="checkbox" id="visualizeFlowPoints">
-                    Show Tracking Points
+                    <span class="toggle-label">Show tracking feature points</span>
                 </label>
-                <label title="Lower values = faster performance but potentially less accuracy">
-                    Max Features:
+
+                <div class="slider-group" data-slider="detection">
+                    <div class="slider-header">
+                        <span>Detection interval</span>
+                        <span id="intervalValue" class="slider-value">10</span>
+                    </div>
+                    <input type="range" id="detectionInterval" min="1" max="60" value="10">
+                    <p class="slider-hint">Lower values refresh more often but use more CPU.</p>
+                </div>
+
+                <div class="slider-group" data-slider="features">
+                    <div class="slider-header">
+                        <span>Max feature points</span>
+                        <span id="maxFeaturesValue" class="slider-value">500</span>
+                    </div>
                     <input type="range" id="maxFeatures" min="20" max="1000" value="500">
-                    <span id="maxFeaturesValue">500</span>
-                </label>
+                    <p class="slider-hint">Fewer points improve speed; more points aid stability.</p>
+                </div>
+            </section>
+
+            <section class="panel-section" data-panel="status">
+                <div class="status-card">
+                    <span class="status-label">Status</span>
+                    <p id="statusMessage" class="status-text">Loading...</p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Tracking mode</span>
+                    <p class="status-text"><span id="currentMode">Initializing...</span></p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Frame rate</span>
+                    <p class="status-text"><span id="fpsValue">0 fps</span></p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Targets</span>
+                    <div id="targetStatusList" class="status-text"></div>
+                </div>
+            </section>
+
+            <footer class="panel-footer">
+                <p class="footer-note">Feature colors: <span class="dot dot-blue"></span> all keypoints · <span class="dot dot-yellow"></span> matches · <span class="dot dot-green"></span> inliers</p>
+            </footer>
+        </aside>
+
+        <main class="viewport">
+            <div class="viewport-inner">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="output"></canvas>
             </div>
-        </div>
-        <div class="status">
-            <p id="statusMessage">Loading...</p>
-            <p id="trackingMode">Tracking mode: <span id="currentMode">Initializing...</span></p>
-        </div>
-        <div class="info">
-            <p>Features visualization: 
-                <span style="color:blue">●</span> all keypoints | 
-                <span style="color:yellow">●</span> matches | 
-                <span style="color:green">●</span> good matches
-            </p>
-        </div>
+        </main>
     </div>
 </body>
 </html>
