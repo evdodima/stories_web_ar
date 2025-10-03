@@ -20,23 +20,33 @@ class ImageTracker {
             useOpticalFlow: true, // Enable optical flow tracking by default
             detectionInterval: 10, // Run full detection every N frames
             frameCount: 0, // Current frame counter
-            lastCorners: null, // Last detected corners for optical flow
+            lastCorners: null, // Last detected corners for optical flow (legacy single target)
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
             maxFeatures: 500, // Maximum number of feature points to extract per frame
+            trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
         };
+
+        // Initialize profiler
+        this.profiler = new PerformanceProfiler();
 
         // Initialize sub-modules
         this.ui = new UIManager(this);
         this.camera = new CameraManager();
-        this.referenceImage = new ReferenceImageManager();
+        this.referenceManager = new ReferenceImageManager();
         this.detector = null;
         this.opticalFlow = null;
         this.visualizer = new Visualizer();
 
         // Initialize when OpenCV is ready
         this.waitForOpenCV();
+
+        // Listen to reference manager changes to update UI
+        this.referenceManager.onChange(() => {
+            const targets = this.referenceManager.getTargetSummaries();
+            this.ui.updateTargetStatus(targets);
+        });
     }
 
     waitForOpenCV() {
@@ -50,7 +60,7 @@ class ImageTracker {
         } else {
             this.ui.updateStatus('OpenCV loaded. Loading reference image...');
             this.initialize();
-            this.referenceImage.loadDefaultImage();
+            this.referenceManager.loadDefaultImage();
         }
     }
 
@@ -59,11 +69,11 @@ class ImageTracker {
         this.ui.setupEventListeners({
             onStartTracking: () => this.startTracking(),
             onStopTracking: () => this.stopTracking(),
-            onReferenceImageLoad: (event) => this.referenceImage.loadFromFile(event)
+            onReferenceImageLoad: (event) => this.referenceManager.loadFromFile(event)
         });
 
         // Initialize detector and optical flow tracker once OpenCV is ready
-        this.detector = new FeatureDetector(this.state);
+        this.detector = new FeatureDetector(this.state, this.profiler);
         this.opticalFlow = new OpticalFlowTracker(this.state);
     }
 
@@ -123,13 +133,24 @@ class ImageTracker {
         // Stop camera
         this.camera.stop();
 
-        // Clean up optical flow resources
+        // Clean up optical flow resources (legacy)
         if (this.state.lastFrame) {
             this.state.lastFrame.delete();
             this.state.lastFrame = null;
         }
         this.state.lastCorners = null;
         this.state.frameCount = 0;
+
+        // Clean up tracked targets
+        for (const [targetId, tracked] of this.state.trackedTargets) {
+            if (tracked.lastFrame) {
+                tracked.lastFrame.delete();
+            }
+            this.referenceManager.updateTargetRuntime(targetId, {
+                status: 'idle'
+            });
+        }
+        this.state.trackedTargets.clear();
 
         // Update UI
         this.ui.updateControlsForTracking(false);
@@ -170,132 +191,147 @@ class ImageTracker {
         let frameToProcess = null;
 
         try {
+            this.profiler.startTimer('frame_total');
+
             // Process current video frame
+            this.profiler.startTimer('capture_frame');
             frameToProcess = this.camera.captureFrame(this.state.maxDimension);
+            this.profiler.endTimer('capture_frame');
             if (!frameToProcess) return;
 
             // Increment frame counter
             this.state.frameCount++;
 
-            let trackingResult;
-            let shouldRunDetector = false;
+            const targets = this.referenceManager.getTargets();
+            let trackingResults = [];
+            let shouldRunDetector = this.state.frameCount % this.state.detectionInterval === 0 ||
+                                   !this.state.useOpticalFlow;
 
-            // Decide whether to use feature detection or optical flow
-            if (!this.state.useOpticalFlow ||
-                !this.state.lastCorners ||
-                !this.state.lastFrame ||
-                this.state.frameCount % this.state.detectionInterval === 0) {
+            if (targets.length === 0) {
+                trackingResults = [];
+            } else if (shouldRunDetector) {
+                // Run full feature detection for all targets
+                this.profiler.startTimer('detection_total');
+                trackingResults = this.detector.detectMultipleTargets(frameToProcess, targets);
+                this.profiler.endTimer('detection_total');
 
-                shouldRunDetector = true;
-            }
-
-            if (shouldRunDetector) {
-                // Run full feature detection periodically or when we don't have previous tracking data
-                trackingResult = this.detector.detectAndMatch(
-                    frameToProcess,
-                    this.referenceImage.getData()
-                );
-
-                // Store frame and corners for optical flow tracking if detection was successful
-                if (trackingResult.success && trackingResult.corners) {
-                    // Clean up previous frame if it exists
-                    if (this.state.lastFrame) {
-                        this.state.lastFrame.delete();
-                        this.state.lastFrame = null;
-                    }
-
-                    // Store current frame and corners for next optical flow tracking
-                    this.state.lastFrame = frameToProcess.clone();
-                    this.state.lastCorners = trackingResult.corners.slice();
-                } else if (this.state.useOpticalFlow && this.state.lastFrame && this.state.lastCorners) {
-                    // If detection failed but we have previous data, try optical flow as fallback
-                    trackingResult = this.opticalFlow.track(
-                        this.state.lastFrame,
-                        frameToProcess,
-                        this.state.lastCorners
-                    );
-
-                    // Save feature points for visualization if enabled
-                    if (this.state.visualizeFlowPoints) {
-                        this.state.featurePoints = trackingResult.nextFeaturePoints;
-                        this.state.flowStatus = trackingResult.flowStatus;
-                    }
-
-                    // Update our tracking data if optical flow was successful
-                    if (trackingResult.success) {
-                        // Clean up previous frame
-                        if (this.state.lastFrame) {
-                            this.state.lastFrame.delete();
-                            this.state.lastFrame = null;
+                // Update tracked targets with detection results
+                for (const result of trackingResults) {
+                    if (result.success && result.corners) {
+                        // Clean up old frame if exists
+                        const existing = this.state.trackedTargets.get(result.targetId);
+                        if (existing && existing.lastFrame) {
+                            existing.lastFrame.delete();
                         }
 
-                        // Update with new frame and corners
-                        this.state.lastFrame = frameToProcess.clone();
-                        this.state.lastCorners = trackingResult.corners.slice();
+                        // Store new tracking data
+                        this.state.trackedTargets.set(result.targetId, {
+                            corners: result.corners.slice(),
+                            lastFrame: frameToProcess.clone()
+                        });
+
+                        // Update target runtime status
+                        this.referenceManager.updateTargetRuntime(result.targetId, {
+                            status: 'tracked',
+                            lastSeen: Date.now(),
+                            score: result.score
+                        });
+                    } else if (this.state.useOpticalFlow && this.state.trackedTargets.has(result.targetId)) {
+                        // Detection failed but we have tracking data - try optical flow
+                        this.profiler.startTimer('optical_flow_fallback');
+                        const tracked = this.state.trackedTargets.get(result.targetId);
+                        const flowResult = this.opticalFlow.track(
+                            tracked.lastFrame,
+                            frameToProcess,
+                            tracked.corners
+                        );
+                        this.profiler.endTimer('optical_flow_fallback');
+
+                        if (flowResult.success) {
+                            // Update with optical flow result
+                            tracked.lastFrame.delete();
+                            tracked.lastFrame = frameToProcess.clone();
+                            tracked.corners = flowResult.corners.slice();
+
+                            trackingResults[trackingResults.indexOf(result)] = {
+                                ...result,
+                                ...flowResult,
+                                success: true
+                            };
+
+                            this.referenceManager.updateTargetRuntime(result.targetId, {
+                                status: 'tracked',
+                                lastSeen: Date.now()
+                            });
+                        } else {
+                            // Optical flow failed
+                            this.state.trackedTargets.delete(result.targetId);
+                            this.referenceManager.updateTargetRuntime(result.targetId, {
+                                status: 'lost'
+                            });
+                        }
                     } else {
-                        // Optical flow failed - clear tracking data to prevent tracking with stale points
-                        if (this.state.lastFrame) {
-                            this.state.lastFrame.delete();
-                            this.state.lastFrame = null;
-                        }
-                        this.state.lastCorners = null;
-                        // Clear visualization data to remove stale points from display
-                        this.state.featurePoints = null;
-                        this.state.flowStatus = null;
+                        // No detection and no tracking data
+                        this.referenceManager.updateTargetRuntime(result.targetId, {
+                            status: 'lost'
+                        });
                     }
                 }
             } else {
-                // Use optical flow for most frames (more efficient)
-                trackingResult = this.opticalFlow.track(
-                    this.state.lastFrame,
-                    frameToProcess,
-                    this.state.lastCorners
-                );
+                // Use optical flow for all tracked targets
+                this.profiler.startTimer('optical_flow_tracking');
+                for (const [targetId, tracked] of this.state.trackedTargets) {
+                    const flowResult = this.opticalFlow.track(
+                        tracked.lastFrame,
+                        frameToProcess,
+                        tracked.corners
+                    );
 
-                // Save feature points for visualization if enabled
-                if (this.state.visualizeFlowPoints) {
-                    this.state.featurePoints = trackingResult.nextFeaturePoints;
-                    this.state.flowStatus = trackingResult.flowStatus;
-                }
+                    if (flowResult.success) {
+                        // Update tracking data
+                        tracked.lastFrame.delete();
+                        tracked.lastFrame = frameToProcess.clone();
+                        tracked.corners = flowResult.corners.slice();
 
-                // Update our tracking data if optical flow was successful
-                if (trackingResult.success) {
-                    // Clean up previous frame
-                    if (this.state.lastFrame) {
-                        this.state.lastFrame.delete();
-                        this.state.lastFrame = null;
+                        const target = this.referenceManager.getTarget(targetId);
+                        trackingResults.push({
+                            targetId,
+                            targetLabel: target?.label || targetId,
+                            ...flowResult,
+                            success: true
+                        });
+
+                        this.referenceManager.updateTargetRuntime(targetId, {
+                            status: 'tracked',
+                            lastSeen: Date.now()
+                        });
+                    } else {
+                        // Optical flow failed - remove from tracking
+                        this.state.trackedTargets.delete(targetId);
+                        this.referenceManager.updateTargetRuntime(targetId, {
+                            status: 'lost'
+                        });
                     }
-
-                    // Update with new frame and corners
-                    this.state.lastFrame = frameToProcess.clone();
-                    this.state.lastCorners = trackingResult.corners.slice();
-                } else {
-                    // Optical flow failed - clear tracking data to prevent tracking with stale points
-                    if (this.state.lastFrame) {
-                        this.state.lastFrame.delete();
-                        this.state.lastFrame = null;
-                    }
-                    this.state.lastCorners = null;
-                    // Clear visualization data to remove stale points from display
-                    this.state.featurePoints = null;
-                    this.state.flowStatus = null;
-                    // Force a full detection on next frame
-                    this.state.frameCount = this.state.detectionInterval - 1;
                 }
+                this.profiler.endTimer('optical_flow_tracking');
             }
 
-            // Visualize results
-            this.visualizer.renderResults(
+            // Visualize results for all targets
+            this.profiler.startTimer('visualization');
+            this.visualizer.renderMultipleResults(
                 frameToProcess,
-                trackingResult,
+                trackingResults,
                 this.ui.canvas,
                 this.state.drawKeypoints,
                 this.state.visualizeFlowPoints ? this.state.featurePoints : null,
                 this.state.flowStatus
             );
+            this.profiler.endTimer('visualization');
 
             // Update tracking mode indicator
             this.ui.updateTrackingMode();
+
+            this.profiler.endTimer('frame_total');
         } catch (error) {
             console.error('Error in processVideo:', error);
         } finally {

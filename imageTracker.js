@@ -7,6 +7,7 @@
 // Load all module scripts in order
 (function() {
     const scripts = [
+        './modules/utils/PerformanceProfiler.js',
         './modules/ui/UIManager.js',
         './modules/camera/CameraManager.js',
         './modules/reference/ReferenceImageManager.js',
@@ -31,7 +32,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = scripts[index];
+        script.src = scripts[index] + '?v=' + Date.now();
         script.onload = () => {
             loadedCount++;
             console.log(`Loaded ${scripts[index]} (${loadedCount}/${totalScripts})`);

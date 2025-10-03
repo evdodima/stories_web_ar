@@ -19,14 +19,14 @@
 
             <section class="panel-section" data-panel="reference">
                 <div class="section-heading">
-                    <h2>Reference image</h2>
-                    <p>Upload a target to track in the camera feed.</p>
+                    <h2>Target images</h2>
+                    <p>Track multiple images simultaneously.</p>
                 </div>
                 <label class="file-picker" for="referenceImage">
                     <input type="file" id="referenceImage" accept="image/*" multiple>
                     <span class="file-picker__icon">⬆︎</span>
-                    <span class="file-picker__label">Choose image</span>
-                    <span class="file-picker__hint">JPG or PNG</span>
+                    <span class="file-picker__label">Add more targets</span>
+                    <span class="file-picker__hint">Select one or multiple images</span>
                 </label>
             </section>
 
@@ -95,6 +95,21 @@
                     <span class="status-label">Targets</span>
                     <div id="targetStatusList" class="status-text"></div>
                 </div>
+            </section>
+
+            <section class="panel-section" data-panel="profiling">
+                <div class="section-heading">
+                    <h2>Performance profiling</h2>
+                    <p>Analyze algorithm bottlenecks.</p>
+                </div>
+                <div class="button-row">
+                    <button id="profileButton" class="btn btn-ghost">Show profile</button>
+                    <button id="profileResetButton" class="btn btn-ghost">Reset</button>
+                </div>
+                <pre id="profileOutput" style="display: none; font-size: 11px;
+                    background: #1a1a1a; padding: 12px; border-radius: 4px;
+                    color: #e0e0e0; overflow-x: auto; max-height: 400px;
+                    overflow-y: auto; margin-top: 8px;"></pre>
             </section>
 
             <footer class="panel-footer">

@@ -38,6 +38,10 @@ class UIManager {
         this.maxFeaturesValue = byId('maxFeaturesValue');
         this.opticalFlowBadge = byId('opticalFlowBadge');
         this.fpsValue = byId('fpsValue');
+        this.targetStatusList = byId('targetStatusList');
+        this.profileButton = byId('profileButton');
+        this.profileResetButton = byId('profileResetButton');
+        this.profileOutput = byId('profileOutput');
 
         this.filePicker = document.querySelector('.file-picker');
         this.filePickerLabel = document.querySelector('.file-picker__label');
@@ -73,7 +77,7 @@ class UIManager {
         const { onStartTracking, onStopTracking, onReferenceImageLoad } = handlers;
 
         this.startButton.addEventListener('click', () => {
-            if (this.tracker.referenceImage?.isLoaded()) {
+            if (this.tracker.referenceManager?.hasTargets()) {
                 onStartTracking();
             } else {
                 this.updateStatus('Upload a reference image before starting.');
@@ -89,6 +93,11 @@ class UIManager {
         this.fileInput.addEventListener('change', (event) => {
             this.reflectReferenceSelection(event);
             onReferenceImageLoad(event);
+            // Reset input so user can upload more files
+            setTimeout(() => {
+                event.target.value = '';
+                this.resetFilePickerLabel();
+            }, 1000);
         });
 
         this.useOpticalFlowToggle.addEventListener('change', () => {
@@ -113,6 +122,29 @@ class UIManager {
             this.tracker.state.maxFeatures = value;
             this.updateMaxFeaturesValue(value);
         });
+
+        if (this.profileButton && this.tracker.profiler) {
+            this.profileButton.addEventListener('click', () => {
+                this.showProfileReport();
+            });
+        }
+
+        if (this.profileResetButton && this.tracker.profiler) {
+            this.profileResetButton.addEventListener('click', () => {
+                this.tracker.profiler.reset();
+                this.profileOutput.textContent = 'Metrics reset. Start tracking to collect new data.';
+                console.log('Profiler metrics reset');
+            });
+        }
+    }
+
+    showProfileReport() {
+        if (!this.tracker.profiler || !this.profileOutput) return;
+
+        const report = this.tracker.profiler.getReport();
+        this.profileOutput.textContent = report;
+        this.profileOutput.style.display = 'block';
+        console.log(report);
     }
 
     updateControlsForTracking(isTracking) {
@@ -227,18 +259,71 @@ class UIManager {
     reflectReferenceSelection(event) {
         if (!this.filePicker || !this.filePickerLabel) return;
 
-        const file = event.target.files && event.target.files[0];
-        if (file) {
-            this.filePickerLabel.textContent = file.name;
-            if (this.filePickerHint) {
-                this.filePickerHint.textContent = `${Math.round(file.size / 1024)} KB`;
-            }
-        } else {
-            this.filePickerLabel.textContent = 'Choose image';
-            if (this.filePickerHint) {
-                this.filePickerHint.textContent = 'JPG or PNG';
+        const files = event.target.files;
+        if (files && files.length > 0) {
+            if (files.length === 1) {
+                this.filePickerLabel.textContent = `Adding: ${files[0].name}`;
+                if (this.filePickerHint) {
+                    this.filePickerHint.textContent = `${Math.round(files[0].size / 1024)} KB`;
+                }
+            } else {
+                this.filePickerLabel.textContent = `Adding ${files.length} images...`;
+                const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+                if (this.filePickerHint) {
+                    this.filePickerHint.textContent = `${Math.round(totalSize / 1024)} KB total`;
+                }
             }
         }
+    }
+
+    resetFilePickerLabel() {
+        if (!this.filePickerLabel) return;
+
+        this.filePickerLabel.textContent = 'Add more targets';
+        if (this.filePickerHint) {
+            this.filePickerHint.textContent = 'Select one or multiple images';
+        }
+    }
+
+    updateTargetStatus(targets = []) {
+        if (!this.targetStatusList) return;
+
+        if (targets.length === 0) {
+            this.targetStatusList.innerHTML = '<span class="target-status-empty">No targets loaded</span>';
+            return;
+        }
+
+        const targetItems = targets.map(target => {
+            const status = target.runtime?.status || 'idle';
+            const statusClass = status === 'tracked' ? 'badge-positive' :
+                               status === 'lost' ? 'badge-warning' : 'badge-muted';
+
+            const thumbnail = target.thumbnailUrl
+                ? `<img src="${target.thumbnailUrl}" class="target-thumbnail" alt="${target.label}">`
+                : '';
+
+            return `
+                <div class="target-status-item">
+                    ${thumbnail}
+                    <div class="target-info">
+                        <span class="target-name">${target.label}</span>
+                        <span class="target-features">${target.featureCount} features</span>
+                    </div>
+                    <span class="badge ${statusClass}">${status}</span>
+                    <button class="target-remove-btn" data-target-id="${target.id}" title="Remove target">×</button>
+                </div>
+            `;
+        }).join('');
+
+        this.targetStatusList.innerHTML = targetItems;
+
+        // Add event listeners for remove buttons
+        this.targetStatusList.querySelectorAll('.target-remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const targetId = e.target.dataset.targetId;
+                this.tracker.referenceManager.removeTarget(targetId);
+            });
+        });
     }
 }
 
