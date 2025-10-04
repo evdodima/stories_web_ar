@@ -106,10 +106,8 @@ class CameraManager {
                     this.video.videoWidth > 0 &&
                     this.video.videoHeight > 0) {
 
-                    // Set canvas dimensions to match video
-                    this.canvas.width = this.video.videoWidth;
-                    this.canvas.height = this.video.videoHeight;
-
+                    // Canvas size will be set dynamically based on processing resolution
+                    // This is handled in the first frame capture
                     resolve();
                 } else {
                     // Check again in a short while
@@ -124,8 +122,6 @@ class CameraManager {
             this.video.addEventListener('loadeddata', () => {
                 // Double check dimensions are available
                 if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
-                    this.canvas.width = this.video.videoWidth;
-                    this.canvas.height = this.video.videoHeight;
                     resolve();
                 }
             });
@@ -178,6 +174,12 @@ class CameraManager {
 
                 frame.delete();
                 frame = resizedFrame;
+            }
+
+            // Set canvas to match processing resolution for perfect alignment
+            if (this.canvas.width !== frame.cols || this.canvas.height !== frame.rows) {
+                this.canvas.width = frame.cols;
+                this.canvas.height = frame.rows;
             }
 
             return frame;

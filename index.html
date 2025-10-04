@@ -37,7 +37,7 @@
             </button>
 
             <!-- Target info overlay -->
-            <div id="targetInfo" class="target-info"></div>
+            <div id="targetInfo" class="ar-overlay-info"></div>
         </main>
 
         <!-- Slide-out control panel -->
@@ -91,18 +91,18 @@
                 <div class="slider-group" data-slider="detection">
                     <div class="slider-header">
                         <span>Detection interval</span>
-                        <span id="intervalValue" class="slider-value">10</span>
+                        <span id="intervalValue" class="slider-value">15</span>
                     </div>
-                    <input type="range" id="detectionInterval" min="1" max="60" value="10">
+                    <input type="range" id="detectionInterval" min="1" max="60" value="15">
                     <p class="slider-hint">Lower values refresh more often but use more CPU.</p>
                 </div>
 
                 <div class="slider-group" data-slider="features">
                     <div class="slider-header">
                         <span>Max feature points</span>
-                        <span id="maxFeaturesValue" class="slider-value">500</span>
+                        <span id="maxFeaturesValue" class="slider-value">800</span>
                     </div>
-                    <input type="range" id="maxFeatures" min="20" max="1000" value="500">
+                    <input type="range" id="maxFeatures" min="20" max="1000" value="800">
                     <p class="slider-hint">Fewer points improve speed; more points aid stability.</p>
                 </div>
             </section>

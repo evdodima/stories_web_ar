@@ -17,14 +17,14 @@ class ImageTracker {
             drawKeypoints: false,
             visualizeFlowPoints: false, // Visualize optical flow tracking points
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
-            useOpticalFlow: false, // Disable optical flow to focus on detection performance
-            detectionInterval: 1, // Run full detection every frame (no optical flow)
+            useOpticalFlow: true, // Enable optical flow for smooth tracking
+            detectionInterval: 15, // Run full detection every 15 frames
             frameCount: 0, // Current frame counter
             lastCorners: null, // Last detected corners for optical flow (legacy single target)
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: 500, // Maximum number of feature points to extract per frame
+            maxFeatures: 800, // Maximum number of feature points to extract per frame
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
         };
 
@@ -164,6 +164,7 @@ class ImageTracker {
             if (tracked.lastFrame) {
                 tracked.lastFrame.delete();
             }
+            this.opticalFlow.resetTrackingState(targetId);
             this.referenceManager.updateTargetRuntime(targetId, {
                 status: 'idle'
             });
@@ -248,6 +249,15 @@ class ImageTracker {
                             lastFrame: frameToProcess.clone()
                         });
 
+                        // Reset optical flow tracking state on new detection
+                        // This initializes Kalman filters and geometric state
+                        const trackState = this.opticalFlow.getTrackingState(result.targetId);
+                        trackState.framesSinceDetection = 0;
+                        trackState.consecutivePoorFrames = 0;
+                        trackState.prevScale = this.opticalFlow.calculateScale(result.corners);
+                        trackState.prevRotation = this.opticalFlow.calculateRotation(result.corners);
+                        trackState.prevAspectRatio = this.opticalFlow.calculateAspectRatio(result.corners);
+
                         // Update target runtime status
                         this.referenceManager.updateTargetRuntime(result.targetId, {
                             status: 'tracked',
@@ -261,7 +271,8 @@ class ImageTracker {
                         const flowResult = this.opticalFlow.track(
                             tracked.lastFrame,
                             frameToProcess,
-                            tracked.corners
+                            tracked.corners,
+                            result.targetId
                         );
                         this.profiler.endTimer('optical_flow_fallback');
 
@@ -281,9 +292,19 @@ class ImageTracker {
                                 status: 'tracked',
                                 lastSeen: Date.now()
                             });
+
+                            // Check if we should trigger re-detection for quality
+                            if (flowResult.shouldRedetect) {
+                                // Will trigger full detection on next interval
+                                this.state.frameCount = this.state.detectionInterval - 1;
+                            }
                         } else {
-                            // Optical flow failed
-                            this.state.trackedTargets.delete(result.targetId);
+                            // Optical flow failed - force re-detection immediately
+                            if (flowResult.shouldRedetect) {
+                                this.state.trackedTargets.delete(result.targetId);
+                                this.opticalFlow.resetTrackingState(result.targetId);
+                                this.state.frameCount = this.state.detectionInterval - 1;
+                            }
                             this.referenceManager.updateTargetRuntime(result.targetId, {
                                 status: 'lost'
                             });
@@ -302,7 +323,8 @@ class ImageTracker {
                     const flowResult = this.opticalFlow.track(
                         tracked.lastFrame,
                         frameToProcess,
-                        tracked.corners
+                        tracked.corners,
+                        targetId
                     );
 
                     if (flowResult.success) {
@@ -323,9 +345,20 @@ class ImageTracker {
                             status: 'tracked',
                             lastSeen: Date.now()
                         });
+
+                        // Check if we should trigger re-detection for quality
+                        if (flowResult.shouldRedetect) {
+                            // Will trigger full detection on next interval
+                            this.state.frameCount = this.state.detectionInterval - 1;
+                        }
                     } else {
-                        // Optical flow failed - remove from tracking
-                        this.state.trackedTargets.delete(targetId);
+                        // Optical flow failed
+                        if (flowResult.shouldRedetect) {
+                            // Force re-detection immediately
+                            this.state.trackedTargets.delete(targetId);
+                            this.opticalFlow.resetTrackingState(targetId);
+                            this.state.frameCount = this.state.detectionInterval - 1;
+                        }
                         this.referenceManager.updateTargetRuntime(targetId, {
                             status: 'lost'
                         });
