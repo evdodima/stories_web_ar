@@ -14,7 +14,6 @@ class UIManager {
             canvas: this.canvas,
             startButton: this.startButton,
             stopButton: this.stopButton,
-            fileInput: this.fileInput,
             statusMessage: this.statusMessage,
             currentMode: this.currentMode
         };
@@ -27,7 +26,6 @@ class UIManager {
         this.canvas = byId('output');
         this.startButton = byId('startTracking');
         this.stopButton = byId('stopTracking');
-        this.fileInput = byId('referenceImage');
         this.statusMessage = byId('statusMessage');
         this.currentMode = byId('currentMode');
         this.useOpticalFlowToggle = byId('useOpticalFlow');
@@ -39,13 +37,10 @@ class UIManager {
         this.opticalFlowBadge = byId('opticalFlowBadge');
         this.fpsValue = byId('fpsValue');
         this.targetStatusList = byId('targetStatusList');
+        this.databaseInfo = byId('databaseInfo');
         this.profileButton = byId('profileButton');
         this.profileResetButton = byId('profileResetButton');
         this.profileOutput = byId('profileOutput');
-
-        this.filePicker = document.querySelector('.file-picker');
-        this.filePickerLabel = document.querySelector('.file-picker__label');
-        this.filePickerHint = document.querySelector('.file-picker__hint');
     }
 
     initializeInterfaceState() {
@@ -53,7 +48,6 @@ class UIManager {
 
         this.stopButton.disabled = true;
         this.startButton.disabled = false;
-        this.fileInput.disabled = false;
 
         this.useOpticalFlowToggle.checked = state.useOpticalFlow;
         this.visualizeFlowPointsToggle.checked = state.visualizeFlowPoints;
@@ -74,30 +68,19 @@ class UIManager {
     }
 
     setupEventListeners(handlers) {
-        const { onStartTracking, onStopTracking, onReferenceImageLoad } = handlers;
+        const { onStartTracking, onStopTracking } = handlers;
 
         this.startButton.addEventListener('click', () => {
             if (this.tracker.referenceManager?.hasTargets()) {
                 onStartTracking();
             } else {
-                this.updateStatus('Upload a reference image before starting.');
-                this.highlightReferencePicker();
+                this.updateStatus('ERROR: Database not loaded. Check console.');
             }
         });
 
         this.stopButton.addEventListener('click', () => {
             onStopTracking();
             this.updateOpticalFlowBadge();
-        });
-
-        this.fileInput.addEventListener('change', (event) => {
-            this.reflectReferenceSelection(event);
-            onReferenceImageLoad(event);
-            // Reset input so user can upload more files
-            setTimeout(() => {
-                event.target.value = '';
-                this.resetFilePickerLabel();
-            }, 1000);
         });
 
         this.useOpticalFlowToggle.addEventListener('change', () => {
@@ -150,11 +133,6 @@ class UIManager {
     updateControlsForTracking(isTracking) {
         this.startButton.disabled = isTracking;
         this.stopButton.disabled = !isTracking;
-        this.fileInput.disabled = isTracking;
-
-        if (this.filePicker) {
-            this.filePicker.classList.toggle('is-disabled', isTracking);
-        }
 
         if (isTracking) {
             this.updateTrackingMode('Initialising tracking...');
@@ -285,8 +263,35 @@ class UIManager {
         }
     }
 
+    updateDatabaseInfo(info) {
+        if (!this.databaseInfo) return;
+
+        if (!info || !info.loaded) {
+            this.databaseInfo.textContent = 'Individual images';
+            return;
+        }
+
+        const text = `Loaded: ${info.targets} targets, ${info.vocabSize} words`;
+        this.databaseInfo.textContent = text;
+    }
+
     updateTargetStatus(targets = []) {
         if (!this.targetStatusList) return;
+
+        // Update database info if using database
+        if (this.tracker.referenceManager.usingDatabase) {
+            const loader = this.tracker.referenceManager.databaseLoader;
+            if (loader && loader.isReady()) {
+                const metadata = loader.getMetadata();
+                this.updateDatabaseInfo({
+                    loaded: true,
+                    targets: metadata.num_targets,
+                    vocabSize: metadata.vocabulary_size
+                });
+            }
+        } else {
+            this.updateDatabaseInfo({ loaded: false });
+        }
 
         if (targets.length === 0) {
             this.targetStatusList.innerHTML = '<span class="target-status-empty">No targets loaded</span>';
@@ -302,12 +307,14 @@ class UIManager {
                 ? `<img src="${target.thumbnailUrl}" class="target-thumbnail" alt="${target.label}">`
                 : '';
 
+            const featureCount = target.featureCount || target.numFeatures || 0;
+
             return `
                 <div class="target-status-item">
                     ${thumbnail}
                     <div class="target-info">
-                        <span class="target-name">${target.label}</span>
-                        <span class="target-features">${target.featureCount} features</span>
+                        <span class="target-name">${target.label || target.id}</span>
+                        <span class="target-features">${featureCount} features</span>
                     </div>
                     <span class="badge ${statusClass}">${status}</span>
                     <button class="target-remove-btn" data-target-id="${target.id}" title="Remove target">×</button>

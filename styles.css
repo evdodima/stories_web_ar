@@ -498,3 +498,86 @@ body {
         padding: 12px;
     }
 }
+
+/* Target status list */
+.target-status-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 8px;
+    transition: background 0.2s;
+}
+
+.target-status-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.target-status-item:last-child {
+    margin-bottom: 0;
+}
+
+.target-thumbnail {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.target-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.target-name {
+    font-size: 0.85rem;
+    color: var(--color-text);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.target-features {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+}
+
+.target-remove-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(255, 107, 107, 0.15);
+    color: var(--color-danger);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.target-remove-btn:hover {
+    background: var(--color-danger);
+    color: white;
+    transform: scale(1.1);
+}
+
+.target-status-empty {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}

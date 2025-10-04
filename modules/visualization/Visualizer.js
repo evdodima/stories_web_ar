@@ -2,6 +2,79 @@
  * Handles visualization of tracking results
  */
 class Visualizer {
+    renderMultipleResults(frame, trackingResults, canvas, drawKeypoints, flowPoints, flowStatus) {
+        let displayFrame = null;
+
+        try {
+            displayFrame = frame.clone();
+
+            // Define colors for different targets
+            const colors = [
+                [0, 255, 0, 255],    // Green
+                [255, 0, 255, 255],  // Magenta
+                [0, 255, 255, 255],  // Cyan
+                [255, 255, 0, 255],  // Yellow
+                [255, 128, 0, 255],  // Orange
+            ];
+
+            // Draw each tracked target
+            for (let i = 0; i < trackingResults.length; i++) {
+                const result = trackingResults[i];
+                if (!result.success || !result.corners) continue;
+
+                const color = colors[i % colors.length];
+
+                // Draw contour
+                let contours = null;
+                let contour = null;
+                try {
+                    contours = new cv.MatVector();
+                    contour = new cv.Mat();
+                    contour.create(4, 1, cv.CV_32SC2);
+
+                    const flatPoints = result.corners.flatMap(p => [p.x, p.y]);
+                    if (contour.data32S && contour.data32S.length >= flatPoints.length) {
+                        contour.data32S.set(flatPoints);
+                        contours.push_back(contour);
+                        cv.drawContours(displayFrame, contours, 0, color, 3);
+
+                        // Draw label
+                        if (result.targetLabel) {
+                            const textPoint = result.corners[0];
+                            const labelY = Math.max(textPoint.y - 10, 20);
+                            cv.putText(
+                                displayFrame,
+                                result.targetLabel,
+                                new cv.Point(textPoint.x, labelY),
+                                cv.FONT_HERSHEY_SIMPLEX,
+                                0.6,
+                                color,
+                                2
+                            );
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error drawing contour for target:", e);
+                } finally {
+                    if (contours) contours.delete();
+                    if (contour) contour.delete();
+                }
+
+                // Draw keypoints if enabled
+                if (drawKeypoints && result.keypoints) {
+                    this.drawKeypointsForTarget(displayFrame, result, color);
+                }
+            }
+
+            // Display the processed frame
+            cv.imshow(canvas, displayFrame);
+        } catch (e) {
+            console.error("Error in multi-target visualization:", e);
+        } finally {
+            if (displayFrame) displayFrame.delete();
+        }
+    }
+
     renderResults(frame, trackingResult, canvas, drawKeypoints, flowPoints, flowStatus) {
         // Resources to clean up
         let displayFrame = null;
@@ -107,6 +180,32 @@ class Visualizer {
             }
         } catch (e) {
             console.error("Error drawing flow points:", e);
+        }
+    }
+
+    drawKeypointsForTarget(frame, trackingResult, targetColor) {
+        try {
+            const { matchKeypoints, goodMatchKeypoints } = trackingResult;
+
+            // Draw matched keypoints with semi-transparent target color
+            if (matchKeypoints && matchKeypoints.length > 0) {
+                for (const point of matchKeypoints) {
+                    if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+                        cv.circle(frame, point, 2, [targetColor[0], targetColor[1], targetColor[2], 128], -1);
+                    }
+                }
+            }
+
+            // Draw good matches with full target color
+            if (goodMatchKeypoints && goodMatchKeypoints.length > 0) {
+                for (const point of goodMatchKeypoints) {
+                    if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+                        cv.circle(frame, point, 2, targetColor, -1);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error drawing keypoints for target:", e);
         }
     }
 

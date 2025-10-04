@@ -65,11 +65,10 @@ class ImageTracker {
     }
 
     initialize() {
-        // Set up UI event listeners
+        // Set up UI event listeners (database-only mode)
         this.ui.setupEventListeners({
             onStartTracking: () => this.startTracking(),
-            onStopTracking: () => this.stopTracking(),
-            onReferenceImageLoad: (event) => this.referenceManager.loadFromFile(event)
+            onStopTracking: () => this.stopTracking()
         });
 
         // Initialize detector and optical flow tracker once OpenCV is ready

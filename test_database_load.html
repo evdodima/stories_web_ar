@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Database Loader Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js"></script>
+</head>
+<body>
+    <h1>Database Loader Test</h1>
+    <div id="status">Loading...</div>
+    <pre id="output"></pre>
+
+    <script src="modules/database/DatabaseLoader.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+
+        async function test() {
+            try {
+                status.textContent = 'Loading database...';
+                const loader = new DatabaseLoader();
+                await loader.loadDatabase('target_database.json');
+
+                const targets = loader.getTargets();
+                const metadata = loader.getMetadata();
+
+                output.textContent = `Database loaded successfully!\n\n`;
+                output.textContent += `Metadata:\n`;
+                output.textContent += JSON.stringify(metadata, null, 2);
+                output.textContent += `\n\nTargets:\n`;
+                targets.forEach(t => {
+                    output.textContent += `  - ${t.id}: ${t.num_features} features\n`;
+                    if (t.quality_metrics) {
+                        output.textContent += `    Quality: ${t.quality_metrics.recommended ? '✓ Good' : '⚠ Weak'}\n`;
+                    }
+                });
+
+                // Test conversion
+                status.textContent = 'Testing OpenCV conversion...';
+                const runtime = loader.convertToRuntimeFormat(targets[0]);
+                output.textContent += `\n\nRuntime format test:\n`;
+                output.textContent += `  - Keypoints: ${runtime.referenceData.keypoints.size()}\n`;
+                output.textContent += `  - Descriptors: ${runtime.referenceData.descriptors.rows}x${runtime.referenceData.descriptors.cols}\n`;
+                output.textContent += `  - BoW words: ${Object.keys(runtime.bow).length}\n`;
+
+                status.textContent = '✓ All tests passed!';
+                status.style.color = 'green';
+            } catch (error) {
+                status.textContent = '✗ Error: ' + error.message;
+                status.style.color = 'red';
+                output.textContent = error.stack;
+            }
+        }
+
+        // Wait for OpenCV
+        function waitForOpenCV() {
+            if (typeof cv !== 'undefined' && typeof cv.Mat === 'function') {
+                test();
+            } else {
+                setTimeout(waitForOpenCV, 100);
+            }
+        }
+        waitForOpenCV();
+    </script>
+</body>
+</html>
