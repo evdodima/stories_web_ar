@@ -22,7 +22,8 @@ class Visualizer {
                 const result = trackingResults[i];
                 if (!result.success || !result.corners) continue;
 
-                const color = colors[i % colors.length];
+                // Get consistent color based on target ID hash
+                const color = this.getColorForTarget(result.targetId, colors);
 
                 // Draw contour
                 let contours = null;
@@ -271,6 +272,22 @@ class Visualizer {
             if (intersect) inside = !inside;
         }
         return inside;
+    }
+
+    // Get consistent color for a target based on its ID
+    getColorForTarget(targetId, colors) {
+        if (!targetId) return colors[0];
+
+        // Simple hash function for string
+        let hash = 0;
+        for (let i = 0; i < targetId.length; i++) {
+            hash = ((hash << 5) - hash) + targetId.charCodeAt(i);
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+
+        // Use absolute value and modulo to get consistent color index
+        const colorIndex = Math.abs(hash) % colors.length;
+        return colors[colorIndex];
     }
 }
 
