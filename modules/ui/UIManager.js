@@ -41,6 +41,13 @@ class UIManager {
         this.profileButton = byId('profileButton');
         this.profileResetButton = byId('profileResetButton');
         this.profileOutput = byId('profileOutput');
+
+        // New fullscreen UI elements
+        this.loadingScreen = byId('loadingScreen');
+        this.menuToggle = byId('menuToggle');
+        this.controlPanel = byId('controlPanel');
+        this.closePanel = byId('closePanel');
+        this.targetInfo = byId('targetInfo');
     }
 
     initializeInterfaceState() {
@@ -118,6 +125,42 @@ class UIManager {
                 this.profileOutput.textContent = 'Metrics reset. Start tracking to collect new data.';
                 console.log('Profiler metrics reset');
             });
+        }
+
+        // New fullscreen UI event listeners
+        if (this.menuToggle) {
+            this.menuToggle.addEventListener('click', () => {
+                this.controlPanel.classList.add('open');
+            });
+        }
+
+        if (this.closePanel) {
+            this.closePanel.addEventListener('click', () => {
+                this.controlPanel.classList.remove('open');
+            });
+        }
+    }
+
+    hideLoadingScreen() {
+        if (this.loadingScreen) {
+            this.loadingScreen.classList.add('hidden');
+            // Remove from DOM after transition
+            setTimeout(() => {
+                this.loadingScreen.style.display = 'none';
+            }, 500);
+        }
+    }
+
+    showTargetInfo(label) {
+        if (this.targetInfo) {
+            this.targetInfo.textContent = `Tracking: ${label}`;
+            this.targetInfo.classList.add('visible');
+        }
+    }
+
+    hideTargetInfo() {
+        if (this.targetInfo) {
+            this.targetInfo.classList.remove('visible');
         }
     }
 

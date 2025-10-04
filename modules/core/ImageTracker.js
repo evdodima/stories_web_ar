@@ -67,6 +67,15 @@ class ImageTracker {
                 if (this.detector && vocabularyQuery) {
                     this.detector.setVocabularyQuery(vocabularyQuery);
                 }
+
+                // Hide loading screen and autostart tracking
+                this.ui.hideLoadingScreen();
+                this.ui.updateStatus('Ready! Point camera at target images.');
+
+                // Autostart tracking after a brief delay
+                setTimeout(() => {
+                    this.startTracking();
+                }, 500);
             });
         }
     }

@@ -10,11 +10,42 @@
     <script src="imageTracker.js" defer></script>
 </head>
 <body>
+    <!-- Loading screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2>Stories Album AR</h2>
+            <p>Loading tracking system...</p>
+        </div>
+    </div>
+
     <div class="app-shell">
-        <aside class="control-panel">
+        <!-- Fullscreen camera viewport -->
+        <main class="viewport viewport-fullscreen">
+            <div class="viewport-inner">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="output"></canvas>
+            </div>
+
+            <!-- Floating menu button -->
+            <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+
+            <!-- Target info overlay -->
+            <div id="targetInfo" class="target-info"></div>
+        </main>
+
+        <!-- Slide-out control panel -->
+        <aside class="control-panel" id="controlPanel">
             <header class="panel-header">
                 <h1 class="panel-title">Stories Album AR</h1>
-                <p class="panel-subtitle">Real-time image tracking playground</p>
+                <p class="panel-subtitle">Real-time image tracking</p>
+                <button id="closePanel" class="close-panel" aria-label="Close panel">×</button>
             </header>
 
             <section class="panel-section" data-panel="reference">
@@ -118,13 +149,6 @@
                 <p class="footer-note">Feature colors: <span class="dot dot-blue"></span> all keypoints · <span class="dot dot-yellow"></span> matches · <span class="dot dot-green"></span> inliers</p>
             </footer>
         </aside>
-
-        <main class="viewport">
-            <div class="viewport-inner">
-                <video id="video" autoplay playsinline></video>
-                <canvas id="output"></canvas>
-            </div>
-        </main>
     </div>
 </body>
 </html>
