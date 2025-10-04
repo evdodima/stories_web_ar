@@ -176,10 +176,6 @@ class CameraManager {
                 let resizedFrame = new cv.Mat();
                 cv.resize(frame, resizedFrame, newSize, 0, 0, cv.INTER_AREA);
 
-                // Update canvas dimensions to match the new frame size
-                this.canvas.width = newSize.width;
-                this.canvas.height = newSize.height;
-
                 frame.delete();
                 frame = resizedFrame;
             }
