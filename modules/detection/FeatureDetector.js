@@ -2,10 +2,24 @@
  * Handles feature detection and matching
  */
 class FeatureDetector {
-    constructor(state, profiler) {
+    constructor(state, profiler, vocabularyQuery = null) {
         this.detector = new cv.BRISK(50, 3, 1.0);
         this.state = state;
         this.profiler = profiler;
+        this.vocabularyQuery = vocabularyQuery; // Vocabulary tree query for candidate selection
+        this.maxCandidates = 3; // Maximum number of candidates to verify
+        this.useVocabularyTree = true; // Enable/disable vocabulary tree optimization
+
+        // Reuse matcher across all targets to avoid recreation overhead
+        this.matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
+    }
+
+    /**
+     * Set vocabulary query (called after database loads)
+     */
+    setVocabularyQuery(vocabularyQuery) {
+        this.vocabularyQuery = vocabularyQuery;
+        console.log('Vocabulary query set in FeatureDetector:', !!vocabularyQuery);
     }
 
     detectMultipleTargets(frame, targets) {
@@ -31,9 +45,28 @@ class FeatureDetector {
             }));
         }
 
-        // Match frame features against each target
+        // VOCABULARY TREE OPTIMIZATION: Select candidates using BoW similarity
+        let targetsToMatch = targets;
+
+        if (this.useVocabularyTree && this.vocabularyQuery && targets.length >= this.maxCandidates) {
+            this.profiler?.startTimer('vocabulary_candidate_selection');
+            const candidates = this.vocabularyQuery.queryCandidates(
+                frameFeatures.descriptors,
+                targets,
+                this.maxCandidates
+            );
+            this.profiler?.endTimer('vocabulary_candidate_selection');
+
+            // Extract just the target objects and filter by minimum score
+            targetsToMatch = candidates
+                .filter(c => c.score > 0.05) // Minimum similarity threshold
+                .map(c => c.target);
+
+        }
+
+        // Match frame features against selected targets only
         const results = [];
-        for (const target of targets) {
+        for (const target of targetsToMatch) {
             this.profiler?.startTimer(`detection_target_${target.id}`);
             const result = this.matchTarget(frameFeatures, target.referenceData);
             this.profiler?.endTimer(`detection_target_${target.id}`);
@@ -42,6 +75,19 @@ class FeatureDetector {
                 targetLabel: target.label,
                 ...result
             });
+        }
+
+        // Add "not checked" results for targets that were filtered out
+        const checkedIds = new Set(targetsToMatch.map(t => t.id));
+        for (const target of targets) {
+            if (!checkedIds.has(target.id)) {
+                results.push({
+                    targetId: target.id,
+                    targetLabel: target.label,
+                    success: false,
+                    reason: 'Filtered by vocabulary tree'
+                });
+            }
         }
 
         // Clean up frame features
@@ -156,9 +202,8 @@ class FeatureDetector {
                 return result;
             }
 
-            this.profiler?.startTimer('detect_create_matcher');
-            matcher = new cv.BFMatcher(cv.NORM_HAMMING);
-            this.profiler?.endTimer('detect_create_matcher');
+            // Reuse the shared matcher instead of creating a new one
+            matcher = this.matcher;
 
             let knnMatches = new cv.DMatchVectorVector();
 
@@ -326,7 +371,7 @@ class FeatureDetector {
             console.error('Error matching target:', error);
             return { success: false, reason: error.message };
         } finally {
-            if (matcher) matcher.delete();
+            // Don't delete matcher - it's shared across all targets
             if (matches) matches.delete();
             if (goodMatches) goodMatches.delete();
             if (homography) homography.delete();

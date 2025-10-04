@@ -9,6 +9,7 @@
     const scripts = [
         './modules/utils/PerformanceProfiler.js',
         './modules/database/DatabaseLoader.js',
+        './modules/database/VocabularyTreeQuery.js',
         './modules/ui/UIManager.js',
         './modules/camera/CameraManager.js',
         './modules/reference/ReferenceImageManager.js',

@@ -2,12 +2,13 @@
  * Database Loader for Vocabulary Tree Target Database
  *
  * Loads pre-built target database with vocabulary tree, features, and metadata.
- * For now, loads targets from database (vocabulary tree query implementation later).
  */
 class DatabaseLoader {
   constructor() {
     this.database = null;
     this.isLoaded = false;
+    this.vocabularyQuery = null; // VocabularyTreeQuery instance
+    this.idf = null; // IDF weights
   }
 
   /**
@@ -31,6 +32,9 @@ class DatabaseLoader {
       console.log(`  - Targets: ${this.database.metadata.num_targets}`);
       console.log(`  - Vocabulary size: ${this.database.metadata.vocabulary_size}`);
       console.log(`  - Descriptor type: ${this.database.metadata.descriptor_type}`);
+
+      // Initialize vocabulary tree query
+      this.initializeVocabularyQuery();
 
       return this.database;
     } catch (error) {
@@ -193,6 +197,39 @@ class DatabaseLoader {
    */
   isReady() {
     return this.isLoaded;
+  }
+
+  /**
+   * Initialize vocabulary tree query system
+   */
+  initializeVocabularyQuery() {
+    if (!this.database?.vocabulary?.words || !this.database?.vocabulary?.idf_weights) {
+      console.warn('Vocabulary or IDF not found in database, skipping query initialization');
+      return;
+    }
+
+    try {
+      // Convert vocabulary words (arrays) to the format needed
+      const vocabulary = this.database.vocabulary.words;
+      const idf = this.database.vocabulary.idf_weights;
+
+      // Create vocabulary query
+      this.vocabularyQuery = new VocabularyTreeQuery(vocabulary, idf);
+      this.idf = idf;
+
+      console.log('Vocabulary tree query initialized');
+    } catch (error) {
+      console.error('Error initializing vocabulary query:', error);
+      this.vocabularyQuery = null;
+    }
+  }
+
+  /**
+   * Get vocabulary query instance
+   * @returns {VocabularyTreeQuery|null}
+   */
+  getVocabularyQuery() {
+    return this.vocabularyQuery;
   }
 }
 

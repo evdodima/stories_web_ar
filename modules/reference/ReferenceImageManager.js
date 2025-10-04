@@ -107,9 +107,14 @@ class ReferenceImageManager {
         }
     }
 
-    async loadDefaultImage() {
-        // Database-only mode: always load from database
+    async loadDatabase() {
+        // Database-only mode: load targets from pre-built database
         return await this.loadFromDatabase();
+    }
+
+    // Deprecated: kept for backwards compatibility
+    async loadDefaultImage() {
+        return await this.loadDatabase();
     }
 
 

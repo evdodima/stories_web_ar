@@ -17,8 +17,8 @@ class ImageTracker {
             drawKeypoints: false,
             visualizeFlowPoints: false, // Visualize optical flow tracking points
             maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
-            useOpticalFlow: true, // Enable optical flow tracking by default
-            detectionInterval: 10, // Run full detection every N frames
+            useOpticalFlow: false, // Disable optical flow to focus on detection performance
+            detectionInterval: 1, // Run full detection every frame (no optical flow)
             frameCount: 0, // Current frame counter
             lastCorners: null, // Last detected corners for optical flow (legacy single target)
             lastFrame: null, // Last processed frame for optical flow
@@ -58,9 +58,16 @@ class ImageTracker {
             this.ui.updateStatus('Loading OpenCV...');
             setTimeout(() => this.waitForOpenCV(), 500);
         } else {
-            this.ui.updateStatus('OpenCV loaded. Loading reference image...');
+            this.ui.updateStatus('OpenCV loaded. Loading database...');
             this.initialize();
-            this.referenceManager.loadDefaultImage();
+
+            // Load database and update detector with vocabulary query when done
+            this.referenceManager.loadDatabase().then(() => {
+                const vocabularyQuery = this.referenceManager.databaseLoader?.getVocabularyQuery();
+                if (this.detector && vocabularyQuery) {
+                    this.detector.setVocabularyQuery(vocabularyQuery);
+                }
+            });
         }
     }
 
@@ -71,8 +78,11 @@ class ImageTracker {
             onStopTracking: () => this.stopTracking()
         });
 
-        // Initialize detector and optical flow tracker once OpenCV is ready
-        this.detector = new FeatureDetector(this.state, this.profiler);
+        // Get vocabulary query from database loader
+        const vocabularyQuery = this.referenceManager.databaseLoader?.getVocabularyQuery();
+
+        // Initialize detector with vocabulary tree and optical flow tracker
+        this.detector = new FeatureDetector(this.state, this.profiler, vocabularyQuery);
         this.opticalFlow = new OpticalFlowTracker(this.state);
     }
 
