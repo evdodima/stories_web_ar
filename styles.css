@@ -133,8 +133,8 @@ body {
     transform: scale(0.95);
 }
 
-/* Target info overlay */
-.target-info {
+/* AR overlay info (tracked target notification) */
+.ar-overlay-info {
     position: fixed;
     bottom: 20px;
     left: 50%;
@@ -149,11 +149,14 @@ body {
     font-size: 14px;
     max-width: 90%;
     text-align: center;
-    display: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.target-info.visible {
-    display: block;
+.ar-overlay-info.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Slide-out control panel */

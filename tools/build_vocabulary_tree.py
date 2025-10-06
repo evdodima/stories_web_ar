@@ -34,7 +34,7 @@ from sklearn.cluster import MiniBatchKMeans
 class VocabularyTreeBuilder:
     """Builds a vocabulary tree for fast image retrieval with binary descriptors"""
 
-    def __init__(self, k: int = 10, levels: int = 3):
+    def __init__(self, k: int = 10, levels: int = 2):
         """
         Args:
             k: Branching factor (children per node)
@@ -54,6 +54,9 @@ class VocabularyTreeBuilder:
         self.vocabulary = None
         self.idf_weights = None
         self.targets = []
+
+        # Feature reduction settings for performance
+        self.max_features_per_target = 500  # Optimal balance of speed/accuracy
 
     def extract_features(self, image_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict]:
         """
@@ -84,6 +87,9 @@ class VocabularyTreeBuilder:
 
         # Compute image metadata
         metadata = self._compute_image_metadata(img, gray, keypoints, kps)
+
+        # Apply smart feature reduction for performance
+        keypoints, descs, kps = self._select_best_features(keypoints, descs, kps, gray.shape)
 
         return keypoints, descs, img, metadata
 
@@ -174,6 +180,73 @@ class VocabularyTreeBuilder:
             'spatial_layout': spatial_layout,
             'scale_hints': scale_hints
         }
+
+    def _select_best_features(self, keypoints: np.ndarray, descriptors: np.ndarray,
+                             kps: List, image_shape: Tuple) -> Tuple[np.ndarray, np.ndarray, List]:
+        """
+        Select best N features using spatial distribution + response strength
+
+        Strategy:
+        1. Sort by response (strength)
+        2. Apply spatial non-maximum suppression
+        3. Take top N after distribution balancing
+
+        This ensures:
+        - Features are strong/distinctive
+        - Well-distributed across image
+        - Optimal for matching performance
+        """
+        if len(keypoints) <= self.max_features_per_target:
+            return keypoints, descriptors, kps
+
+        h, w = image_shape
+
+        # Sort by response (strongest first)
+        responses = np.array([kp.response for kp in kps])
+        sorted_indices = np.argsort(-responses)  # Descending
+
+        # Spatial grid for distribution (4x4)
+        grid_size = 4
+        cell_h, cell_w = h / grid_size, w / grid_size
+        features_per_cell = self.max_features_per_target // (grid_size * grid_size)
+
+        selected_indices = []
+        cell_counts = np.zeros((grid_size, grid_size), dtype=int)
+
+        # First pass: distribute features across cells
+        for idx in sorted_indices:
+            kp = kps[idx]
+            x, y = kp.pt
+
+            # Determine grid cell
+            cell_x = min(int(x / cell_w), grid_size - 1)
+            cell_y = min(int(y / cell_h), grid_size - 1)
+
+            # Add if cell not full
+            if cell_counts[cell_y, cell_x] < features_per_cell:
+                selected_indices.append(idx)
+                cell_counts[cell_y, cell_x] += 1
+
+                if len(selected_indices) >= self.max_features_per_target:
+                    break
+
+        # Second pass: fill remaining slots with strongest features
+        if len(selected_indices) < self.max_features_per_target:
+            for idx in sorted_indices:
+                if idx not in selected_indices:
+                    selected_indices.append(idx)
+                    if len(selected_indices) >= self.max_features_per_target:
+                        break
+
+        # Convert back to arrays
+        selected_indices = np.array(selected_indices)
+        selected_keypoints = keypoints[selected_indices]
+        selected_descriptors = descriptors[selected_indices]
+        selected_kps = [kps[i] for i in selected_indices]
+
+        print(f"    Reduced features: {len(keypoints)} -> {len(selected_keypoints)}")
+
+        return selected_keypoints, selected_descriptors, selected_kps
 
     def build_vocabulary(self, all_descriptors: np.ndarray):
         """
