@@ -168,11 +168,13 @@ class OpticalFlowTracker {
         roi.delete(); roiCorners.delete();
 
         // Detect good features inside the quadrilateral
+        // Use much fewer features for optical flow (speed over accuracy)
+        const maxFlowFeatures = 100; // Fixed low number for fast tracking
         let featurePoints = new cv.Mat();
         cv.goodFeaturesToTrack(
             prevGray,
             featurePoints,
-            this.state ? this.state.maxFeatures : 100,
+            maxFlowFeatures,
             this.params.featureQualityLevel,
             this.params.featureMinDistance,
             prevMask

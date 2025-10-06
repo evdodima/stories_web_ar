@@ -13,27 +13,16 @@ class CameraManager {
             // Try to use rear camera first with preferred settings
             const constraints = this.getCameraConstraints();
 
-            try {
-                // Try with exact environment constraint first
-                this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-                this.video.srcObject = this.stream;
-            } catch (err) {
-                console.warn("Couldn't get exact environment camera, falling back to default:", err);
-                // Fallback to standard environment preference
-                const fallbackConstraints = this.getFallbackConstraints();
-                this.stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-                this.video.srcObject = this.stream;
-            }
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.video.srcObject = this.stream;
 
-            // Apply fixed settings to prevent auto adjustments
-            this.optimizeVideoTrack();
-
-            // Start video playback
-            this.video.play();
+            // Start video playback (critical for mobile)
+            await this.video.play();
 
             // Wait for video to be ready
             return this.waitForVideoReady();
         } catch (error) {
+            console.error('Camera start error:', error);
             throw new Error(`Camera access error: ${error.message}`);
         }
     }
@@ -43,61 +32,12 @@ class CameraManager {
             video: {
                 width: { ideal: 1280 },
                 height: { ideal: 960 },
-                facingMode: { exact: 'environment' }, // Force rear camera
-                // Disable automatic switching and optimization
-                advanced: [
-                    { zoom: 1 }, // Start with no zoom
-                    { focusMode: "continuous" }, // Continuous auto-focus
-                    { exposureMode: "continuous" }, // Continuous auto-exposure
-                    { whiteBalanceMode: "continuous" } // Continuous auto white balance
-                ]
+                facingMode: 'environment' // Prefer rear camera
             },
             audio: false
         };
     }
 
-    getFallbackConstraints() {
-        return {
-            video: {
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                facingMode: 'environment'
-            },
-            audio: false
-        };
-    }
-
-    optimizeVideoTrack() {
-        const videoTrack = this.video.srcObject?.getVideoTracks()[0];
-        if (!videoTrack) return;
-
-        try {
-            const capabilities = videoTrack.getCapabilities();
-            console.log("Camera capabilities:", capabilities);
-
-            // Only apply constraints for capabilities that exist
-            const trackConstraints = {};
-
-            // Disable auto zoom if supported
-            if (capabilities.zoom) {
-                trackConstraints.zoom = 1;
-            }
-
-            // Set focus mode if supported
-            if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
-                trackConstraints.focusMode = "continuous";
-            }
-
-            // Apply the constraints
-            if (Object.keys(trackConstraints).length > 0) {
-                videoTrack.applyConstraints(trackConstraints).catch(err => {
-                    console.warn("Couldn't apply advanced camera constraints:", err);
-                });
-            }
-        } catch (err) {
-            console.warn("Error accessing camera capabilities:", err);
-        }
-    }
 
     async waitForVideoReady() {
         return new Promise((resolve) => {

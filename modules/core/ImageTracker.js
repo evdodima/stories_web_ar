@@ -183,10 +183,11 @@ class ImageTracker {
         // Schedule next frame
         requestAnimationFrame(() => this.processVideo());
 
-        // Rate limiting
+        // Rate limiting: process at max 20 FPS (50ms between frames)
         const now = performance.now();
         const elapsed = now - this.state.lastProcessingTime;
-        if (elapsed < 1) return;
+        const minFrameTime = 50; // 50ms = 20 FPS
+        if (elapsed < minFrameTime) return;
         this.state.lastProcessingTime = now;
 
         if (this.state.lastFrameTimestamp) {
@@ -226,12 +227,23 @@ class ImageTracker {
             let shouldRunDetector = this.state.frameCount % this.state.detectionInterval === 0 ||
                                    !this.state.useOpticalFlow;
 
+            // Limit to 2 simultaneous tracked targets for performance
+            const maxTrackedTargets = 2;
+            const currentlyTrackedCount = this.state.trackedTargets.size;
+
             if (targets.length === 0) {
                 trackingResults = [];
             } else if (shouldRunDetector) {
-                // Run full feature detection for all targets
+                // If already tracking max targets, only try to detect those
+                let targetsToDetect = targets;
+                if (currentlyTrackedCount >= maxTrackedTargets) {
+                    const trackedIds = Array.from(this.state.trackedTargets.keys());
+                    targetsToDetect = targets.filter(t => trackedIds.includes(t.id));
+                }
+
+                // Run full feature detection for targets
                 this.profiler.startTimer('detection_total');
-                trackingResults = this.detector.detectMultipleTargets(frameToProcess, targets);
+                trackingResults = this.detector.detectMultipleTargets(frameToProcess, targetsToDetect);
                 this.profiler.endTimer('detection_total');
 
                 // Update tracked targets with detection results

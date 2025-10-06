@@ -39,6 +39,7 @@ class UIManager {
         this.targetStatusList = byId('targetStatusList');
         this.databaseInfo = byId('databaseInfo');
         this.profileButton = byId('profileButton');
+        this.profileCopyButton = byId('profileCopyButton');
         this.profileResetButton = byId('profileResetButton');
         this.profileOutput = byId('profileOutput');
 
@@ -116,6 +117,31 @@ class UIManager {
         if (this.profileButton && this.tracker.profiler) {
             this.profileButton.addEventListener('click', () => {
                 this.showProfileReport();
+            });
+        }
+
+        if (this.profileCopyButton && this.tracker.profiler) {
+            this.profileCopyButton.addEventListener('click', async () => {
+                try {
+                    const report = this.tracker.profiler.getReport();
+                    await navigator.clipboard.writeText(report);
+
+                    // Visual feedback
+                    const originalText = this.profileCopyButton.textContent;
+                    this.profileCopyButton.textContent = 'Copied!';
+                    this.profileCopyButton.style.color = '#4ade80';
+
+                    setTimeout(() => {
+                        this.profileCopyButton.textContent = originalText;
+                        this.profileCopyButton.style.color = '';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy profile stats:', err);
+                    this.profileCopyButton.textContent = 'Copy failed';
+                    setTimeout(() => {
+                        this.profileCopyButton.textContent = 'Copy stats';
+                    }, 2000);
+                }
             });
         }
 
