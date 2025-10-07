@@ -15,6 +15,11 @@ class ARRenderer {
     this.camera = null;
     this.renderer = null;
 
+    // Background camera feed
+    this.backgroundPlane = null;
+    this.backgroundTexture = null;
+    this.lastCameraFrame = null; // Store last camera frame for sync
+
     // Target objects: targetId -> {videoPlane, trackingLine}
     this.targetObjects = new Map();
 
@@ -60,22 +65,46 @@ class ARRenderer {
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({
       canvas: canvas,
-      alpha: true,
+      alpha: false, // No transparency - we render camera background
       antialias: true
     });
-    this.renderer.setClearColor(0x000000, 0); // Transparent
+    this.renderer.setClearColor(0x000000, 1); // Black background
+
+    // Create background plane for camera feed
+    this.createBackgroundPlane();
 
     console.log('[ARRenderer] Three.js initialized successfully');
   }
 
   /**
+   * Create background plane for camera feed
+   */
+  createBackgroundPlane() {
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const material = new THREE.MeshBasicMaterial({
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    });
+
+    this.backgroundPlane = new THREE.Mesh(geometry, material);
+    this.backgroundPlane.position.z = -1; // Behind everything else
+
+    this.scene.add(this.backgroundPlane);
+  }
+
+  /**
    * Update renderer size to match camera feed
    */
-  updateSize() {
-    if (!this.cameraVideo || !this.renderer) return;
+  updateSize(width, height) {
+    if (!this.renderer) return;
 
-    const width = this.cameraVideo.videoWidth || 640;
-    const height = this.cameraVideo.videoHeight || 480;
+    // Use provided dimensions or fall back to video element
+    if (!width || !height) {
+      if (!this.cameraVideo) return;
+      width = this.cameraVideo.videoWidth || 640;
+      height = this.cameraVideo.videoHeight || 480;
+    }
 
     if (width === this.cameraWidth && height === this.cameraHeight) return;
 
@@ -91,6 +120,12 @@ class ARRenderer {
     this.camera.top = 0;
     this.camera.bottom = height;
     this.camera.updateProjectionMatrix();
+
+    // Update background plane to fill viewport
+    if (this.backgroundPlane) {
+      this.backgroundPlane.position.set(width / 2, height / 2, -1);
+      this.backgroundPlane.scale.set(width, height, 1);
+    }
 
     console.log('[ARRenderer] Resized to:', width, 'x', height, 'Camera bounds:', {
       left: this.camera.left,
@@ -121,18 +156,63 @@ class ARRenderer {
   }
 
   /**
+   * Update camera background from OpenCV frame
+   * @param {cv.Mat} frame - OpenCV frame to display as background
+   */
+  updateCameraBackground(frame) {
+    if (!frame || !this.backgroundPlane) return;
+
+    try {
+      // Store reference to current frame
+      this.lastCameraFrame = frame;
+
+      // Update size to match frame
+      this.updateSize(frame.cols, frame.rows);
+
+      // Convert OpenCV Mat to canvas
+      if (!this._backgroundCanvas) {
+        this._backgroundCanvas = document.createElement('canvas');
+        this._backgroundContext = this._backgroundCanvas.getContext('2d', {
+          willReadFrequently: false,
+          alpha: false
+        });
+      }
+      this._backgroundCanvas.width = frame.cols;
+      this._backgroundCanvas.height = frame.rows;
+      cv.imshow(this._backgroundCanvas, frame);
+
+      // Update texture from canvas
+      if (!this.backgroundTexture) {
+        this.backgroundTexture = new THREE.CanvasTexture(this._backgroundCanvas);
+        this.backgroundTexture.minFilter = THREE.LinearFilter;
+        this.backgroundTexture.magFilter = THREE.LinearFilter;
+        this.backgroundTexture.flipY = false; // Don't flip
+        this.backgroundPlane.material.map = this.backgroundTexture;
+        this.backgroundPlane.material.needsUpdate = true;
+      } else {
+        this.backgroundTexture.needsUpdate = true;
+      }
+    } catch (error) {
+      console.error('[ARRenderer] Error updating camera background:', error);
+    }
+  }
+
+  /**
    * Render frame with tracking and videos
    * @param {Array} trackingResults
+   * @param {cv.Mat} cameraFrame - Current camera frame to render as background
    */
-  render(trackingResults = []) {
+  render(trackingResults = [], cameraFrame = null) {
     if (!this.enabled || !this.renderer || !this.scene) return;
 
-    this.updateSize();
+    // Update background with current camera frame for perfect sync
+    if (cameraFrame) {
+      this.updateCameraBackground(cameraFrame);
+    }
 
-    // Get OpenCV processing resolution
-    const outputCanvas = document.getElementById('output');
-    const opencvWidth = outputCanvas?.width || 640;
-    const opencvHeight = outputCanvas?.height || 480;
+    // Get OpenCV processing resolution (same as camera frame)
+    const opencvWidth = this.cameraWidth || 640;
+    const opencvHeight = this.cameraHeight || 480;
 
     // Track which targets are active
     const activeTargets = new Set();
@@ -363,6 +443,15 @@ class ARRenderer {
   dispose() {
     for (const targetId of Array.from(this.targetObjects.keys())) {
       this.removeTarget(targetId);
+    }
+
+    // Clean up background
+    if (this.backgroundTexture) {
+      this.backgroundTexture.dispose();
+    }
+    if (this.backgroundPlane) {
+      this.backgroundPlane.geometry.dispose();
+      this.backgroundPlane.material.dispose();
     }
 
     if (this.renderer) {

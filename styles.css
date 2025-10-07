@@ -556,7 +556,15 @@ body {
     background: #000;
 }
 
-#video,
+#video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none; /* Hidden - rendering camera feed in Three.js for perfect sync */
+}
+
 #output,
 #arCanvas {
     position: absolute;

@@ -417,7 +417,7 @@ class ImageTracker {
                 this.profiler.endTimer('optical_flow_tracking');
             }
 
-            // Render AR overlays (tracking + videos)
+            // Render AR overlays (tracking + videos + camera background)
             if (this.arRenderer) {
                 this.profiler.startTimer('ar_rendering');
 
@@ -438,8 +438,9 @@ class ImageTracker {
                     }
                 }
 
-                // Render everything (rectangles + videos)
-                this.arRenderer.render(trackingResults);
+                // Render everything (camera background + rectangles + videos)
+                // Pass the same frame we used for tracking to ensure perfect sync
+                this.arRenderer.render(trackingResults, frameToProcess);
 
                 this.profiler.endTimer('ar_rendering');
             }
