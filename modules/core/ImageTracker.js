@@ -101,28 +101,38 @@ class ImageTracker {
     async startTracking() {
         if (this.state.isTracking) return;
 
+        // Preload AR renderer before showing prompt
+        await this.preloadARRenderer();
+
+        // Show permission prompt
+        this.showPermissionPrompt();
+    }
+
+    async preloadARRenderer() {
+        // Initialize AR renderer early (before camera starts)
+        if (!this.arRenderer) {
+            console.log('[ImageTracker] Preloading ARRenderer...');
+            if (typeof ARRenderer === 'undefined') {
+                console.error('[ImageTracker] ARRenderer not found! Check module loading.');
+            } else {
+                const videoElement = document.getElementById('video');
+                console.log('[ImageTracker] Creating ARRenderer with video element:', videoElement);
+                this.arRenderer = new ARRenderer('arCanvas', videoElement, {
+                    enabled: true,
+                    muted: false, // Audio on by default
+                    showTrackingRects: false // Hidden by default
+                });
+                console.log('[ImageTracker] ARRenderer preloaded:', this.arRenderer);
+            }
+        }
+    }
+
+    async startTrackingAfterPermission() {
         this.ui.updateStatus('Starting tracking...');
 
         try {
-            // Start camera
+            // Start camera (browser will show camera permission dialog)
             await this.camera.start();
-
-            // Initialize AR renderer now that camera is ready
-            if (!this.arRenderer) {
-                console.log('[ImageTracker] Checking for ARRenderer...');
-                if (typeof ARRenderer === 'undefined') {
-                    console.error('[ImageTracker] ARRenderer not found! Check module loading.');
-                } else {
-                    const videoElement = document.getElementById('video');
-                    console.log('[ImageTracker] Creating ARRenderer with video element:', videoElement);
-                    this.arRenderer = new ARRenderer('arCanvas', videoElement, {
-                        enabled: true,
-                        muted: true,
-                        showTrackingRects: false // Hidden by default
-                    });
-                    console.log('[ImageTracker] ARRenderer created:', this.arRenderer);
-                }
-            }
 
             // Update UI
             this.ui.updateControlsForTracking(true);
@@ -219,6 +229,30 @@ class ImageTracker {
         if (this.arRenderer) {
             this.arRenderer.setMuted(muted);
         }
+    }
+
+    showPermissionPrompt() {
+        const permissionPrompt = document.getElementById('permissionPrompt');
+        const startARBtn = document.getElementById('startARBtn');
+
+        if (!permissionPrompt || !startARBtn) return;
+
+        // Show the prompt
+        permissionPrompt.style.display = 'flex';
+
+        // Handle button click
+        const handleClick = async () => {
+            // Hide the prompt
+            permissionPrompt.style.display = 'none';
+
+            // Start tracking (this will trigger camera permission)
+            await this.startTrackingAfterPermission();
+
+            // Remove listener
+            startARBtn.removeEventListener('click', handleClick);
+        };
+
+        startARBtn.addEventListener('click', handleClick);
     }
 
     processVideo() {

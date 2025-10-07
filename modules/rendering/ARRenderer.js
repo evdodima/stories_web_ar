@@ -258,11 +258,13 @@ class ARRenderer {
       }
     }
 
-    // Hide objects for non-active targets
+    // Hide objects for non-active targets and pause videos
     for (const [targetId, targetObj] of this.targetObjects) {
       if (!activeTargets.has(targetId)) {
         targetObj.videoPlane.visible = false;
         targetObj.trackingLine.visible = false;
+        // Pause video when target is lost
+        this.videoManager.pauseVideo(targetId);
       }
     }
 

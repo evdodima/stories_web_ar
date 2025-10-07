@@ -21,6 +21,15 @@
         </div>
     </div>
 
+    <!-- Permission prompt -->
+    <div id="permissionPrompt" class="audio-prompt" style="display: none;">
+        <div class="audio-prompt-content">
+            <h2>📷 Start AR Experience</h2>
+            <p>Allow camera and audio access to begin</p>
+            <button id="startARBtn" class="btn btn-primary">Start</button>
+        </div>
+    </div>
+
     <div class="app-shell">
         <!-- Fullscreen camera viewport -->
         <main class="viewport viewport-fullscreen">
@@ -99,7 +108,7 @@
                     <span class="toggle-label">Enable video overlay</span>
                 </label>
                 <label class="toggle-row">
-                    <input type="checkbox" id="muteVideos" checked>
+                    <input type="checkbox" id="muteVideos">
                     <span class="toggle-label">Mute videos</span>
                 </label>
 
