@@ -15,7 +15,8 @@
         './modules/reference/ReferenceImageManager.js',
         './modules/detection/FeatureDetector.js',
         './modules/tracking/OpticalFlowTracker.js',
-        './modules/visualization/Visualizer.js',
+        './modules/rendering/VideoManager.js',
+        './modules/rendering/ARRenderer.js',
         './modules/core/ImageTracker.js'
     ];
 

@@ -557,7 +557,8 @@ body {
 }
 
 #video,
-#output {
+#output,
+#arCanvas {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -566,7 +567,13 @@ body {
 }
 
 #output {
+    display: none; /* Hidden - using ARRenderer instead */
     z-index: 10;
+    pointer-events: none;
+}
+
+#arCanvas {
+    z-index: 10; /* On top for AR rendering */
     pointer-events: none;
 }
 

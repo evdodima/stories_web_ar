@@ -37,7 +37,7 @@ class ImageTracker {
         this.referenceManager = new ReferenceImageManager();
         this.detector = null;
         this.opticalFlow = null;
-        this.visualizer = new Visualizer();
+        this.arRenderer = null; // Will be initialized after camera starts
 
         // Initialize when OpenCV is ready
         this.waitForOpenCV();
@@ -84,7 +84,9 @@ class ImageTracker {
         // Set up UI event listeners (database-only mode)
         this.ui.setupEventListeners({
             onStartTracking: () => this.startTracking(),
-            onStopTracking: () => this.stopTracking()
+            onStopTracking: () => this.stopTracking(),
+            onVideoOverlayToggle: (enabled) => this.toggleVideoOverlay(enabled),
+            onMuteVideos: (muted) => this.setVideosMuted(muted)
         });
 
         // Get vocabulary query from database loader
@@ -103,6 +105,23 @@ class ImageTracker {
         try {
             // Start camera
             await this.camera.start();
+
+            // Initialize AR renderer now that camera is ready
+            if (!this.arRenderer) {
+                console.log('[ImageTracker] Checking for ARRenderer...');
+                if (typeof ARRenderer === 'undefined') {
+                    console.error('[ImageTracker] ARRenderer not found! Check module loading.');
+                } else {
+                    const videoElement = document.getElementById('video');
+                    console.log('[ImageTracker] Creating ARRenderer with video element:', videoElement);
+                    this.arRenderer = new ARRenderer('arCanvas', videoElement, {
+                        enabled: true,
+                        muted: true,
+                        showTrackingRects: true
+                    });
+                    console.log('[ImageTracker] ARRenderer created:', this.arRenderer);
+                }
+            }
 
             // Update UI
             this.ui.updateControlsForTracking(true);
@@ -171,9 +190,28 @@ class ImageTracker {
         }
         this.state.trackedTargets.clear();
 
+        // Clean up AR renderer
+        if (this.arRenderer) {
+            for (const targetId of Array.from(this.state.trackedTargets.keys())) {
+                this.arRenderer.removeTarget(targetId);
+            }
+        }
+
         // Update UI
         this.ui.updateControlsForTracking(false);
         this.ui.updateStatus('Tracking stopped.');
+    }
+
+    toggleVideoOverlay(enabled) {
+        if (this.arRenderer) {
+            this.arRenderer.setEnabled(enabled);
+        }
+    }
+
+    setVideosMuted(muted) {
+        if (this.arRenderer) {
+            this.arRenderer.setMuted(muted);
+        }
     }
 
     processVideo() {
@@ -379,17 +417,32 @@ class ImageTracker {
                 this.profiler.endTimer('optical_flow_tracking');
             }
 
-            // Visualize results for all targets
-            this.profiler.startTimer('visualization');
-            this.visualizer.renderMultipleResults(
-                frameToProcess,
-                trackingResults,
-                this.ui.canvas,
-                this.state.drawKeypoints,
-                this.state.visualizeFlowPoints ? this.state.featurePoints : null,
-                this.state.flowStatus
-            );
-            this.profiler.endTimer('visualization');
+            // Render AR overlays (tracking + videos)
+            if (this.arRenderer) {
+                this.profiler.startTimer('ar_rendering');
+
+                // Update videos for tracked targets
+                for (const result of trackingResults) {
+                    if (result.success && result.corners) {
+                        const target = this.referenceManager.getTarget(result.targetId);
+                        if (target && target.videoUrl) {
+                            // Don't await - let it load asynchronously
+                            this.arRenderer.updateTarget(
+                                result.targetId,
+                                result.corners,
+                                target.videoUrl
+                            ).catch(err => {
+                                console.error('[ImageTracker] Video update error:', err);
+                            });
+                        }
+                    }
+                }
+
+                // Render everything (rectangles + videos)
+                this.arRenderer.render(trackingResults);
+
+                this.profiler.endTimer('ar_rendering');
+            }
 
             // Update tracking mode indicator
             this.ui.updateTrackingMode();

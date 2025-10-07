@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="styles.css">
     <!-- Load OpenCV.js asynchronously with more reliable loading -->
     <script src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js" async></script>
+    <!-- Load Three.js for WebGL rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
     <script src="imageTracker.js" defer></script>
 </head>
 <body>
@@ -25,6 +27,7 @@
             <div class="viewport-inner">
                 <video id="video" autoplay playsinline></video>
                 <canvas id="output"></canvas>
+                <canvas id="arCanvas"></canvas>
             </div>
 
             <!-- Floating menu button -->
@@ -86,6 +89,14 @@
                 <label class="toggle-row">
                     <input type="checkbox" id="visualizeFlowPoints">
                     <span class="toggle-label">Show tracking feature points</span>
+                </label>
+                <label class="toggle-row">
+                    <input type="checkbox" id="enableVideoOverlay" checked>
+                    <span class="toggle-label">Enable video overlay</span>
+                </label>
+                <label class="toggle-row">
+                    <input type="checkbox" id="muteVideos" checked>
+                    <span class="toggle-label">Mute videos</span>
                 </label>
 
                 <div class="slider-group" data-slider="detection">

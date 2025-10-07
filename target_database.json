@@ -42016,7 +42016,8 @@
         "ransac_threshold": 5.0,
         "optical_flow_compatible": true,
         "recommended": true
-      }
+      },
+      "videoUrl": "https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4"
     },
     {
       "id": "flower",
@@ -77314,7 +77315,8 @@
         "ransac_threshold": 5.0,
         "optical_flow_compatible": true,
         "recommended": true
-      }
+      },
+      "videoUrl": "https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4"
     },
     {
       "id": "photo1246096",
@@ -112624,7 +112626,8 @@
         "ransac_threshold": 5.0,
         "optical_flow_compatible": true,
         "recommended": true
-      }
+      },
+      "videoUrl": "https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4"
     },
     {
       "id": "photo_2025-08-16_10-14-13",
@@ -131908,7 +131911,8 @@
         "ransac_threshold": 5.0,
         "optical_flow_compatible": true,
         "recommended": true
-      }
+      },
+      "videoUrl": "https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4"
     },
     {
       "id": "reference",
@@ -167220,7 +167224,8 @@
         "ransac_threshold": 5.0,
         "optical_flow_compatible": true,
         "recommended": true
-      }
+      },
+      "videoUrl": "https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4"
     },
     {
       "id": "rocks",
@@ -202538,7 +202543,8 @@
         "ransac_threshold": 5.0,
         "optical_flow_compatible": true,
         "recommended": true
-      }
+      },
+      "videoUrl": "https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4"
     }
   ]
 }

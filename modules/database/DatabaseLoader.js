@@ -90,6 +90,7 @@ class DatabaseLoader {
       label: dbTarget.id,
       filename: dbTarget.filename,
       numFeatures: dbTarget.num_features,
+      videoUrl: dbTarget.videoUrl, // Video URL for AR overlay
       referenceData: {
         keypoints: keypoints,
         descriptors: descriptors,

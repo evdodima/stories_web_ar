@@ -49,6 +49,10 @@ class UIManager {
         this.controlPanel = byId('controlPanel');
         this.closePanel = byId('closePanel');
         this.targetInfo = byId('targetInfo');
+
+        // Video overlay controls
+        this.enableVideoOverlayToggle = byId('enableVideoOverlay');
+        this.muteVideosToggle = byId('muteVideos');
     }
 
     initializeInterfaceState() {
@@ -76,7 +80,7 @@ class UIManager {
     }
 
     setupEventListeners(handlers) {
-        const { onStartTracking, onStopTracking } = handlers;
+        const { onStartTracking, onStopTracking, onVideoOverlayToggle, onMuteVideos } = handlers;
 
         this.startButton.addEventListener('click', () => {
             if (this.tracker.referenceManager?.hasTargets()) {
@@ -163,6 +167,19 @@ class UIManager {
         if (this.closePanel) {
             this.closePanel.addEventListener('click', () => {
                 this.controlPanel.classList.remove('open');
+            });
+        }
+
+        // Video overlay controls
+        if (this.enableVideoOverlayToggle && onVideoOverlayToggle) {
+            this.enableVideoOverlayToggle.addEventListener('change', () => {
+                onVideoOverlayToggle(this.enableVideoOverlayToggle.checked);
+            });
+        }
+
+        if (this.muteVideosToggle && onMuteVideos) {
+            this.muteVideosToggle.addEventListener('change', () => {
+                onMuteVideos(this.muteVideosToggle.checked);
             });
         }
     }
