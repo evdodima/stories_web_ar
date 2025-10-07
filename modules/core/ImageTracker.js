@@ -399,19 +399,13 @@ class ImageTracker {
             let shouldRunDetector = this.state.frameCount % this.state.detectionInterval === 0 ||
                                    !this.state.useOpticalFlow;
 
-            // Limit to 2 simultaneous tracked targets for performance
-            const maxTrackedTargets = 2;
-            const currentlyTrackedCount = this.state.trackedTargets.size;
-
+            // OPTIMIZATION: Detect all targets but only track the selected one
             if (targets.length === 0) {
                 trackingResults = [];
             } else if (shouldRunDetector) {
-                // If already tracking max targets, only try to detect those
+                // Always detect all targets to enable switching between them
+                // This allows us to see which target is closest to center
                 let targetsToDetect = targets;
-                if (currentlyTrackedCount >= maxTrackedTargets) {
-                    const trackedIds = Array.from(this.state.trackedTargets.keys());
-                    targetsToDetect = targets.filter(t => trackedIds.includes(t.id));
-                }
 
                 // Run full feature detection for targets
                 this.profiler.startTimer('detection_total');
@@ -501,9 +495,14 @@ class ImageTracker {
                     }
                 }
             } else {
-                // Use optical flow for all tracked targets
+                // OPTIMIZATION: Only use optical flow for active target (single-video mode)
                 this.profiler.startTimer('optical_flow_tracking');
-                for (const [targetId, tracked] of this.state.trackedTargets) {
+
+                if (this.state.activeVideoTarget && this.state.trackedTargets.has(this.state.activeVideoTarget)) {
+                    // Only track the currently selected target
+                    const targetId = this.state.activeVideoTarget;
+                    const tracked = this.state.trackedTargets.get(targetId);
+
                     const flowResult = this.opticalFlow.track(
                         tracked.lastFrame,
                         frameToProcess,
@@ -548,6 +547,15 @@ class ImageTracker {
                         });
                     }
                 }
+                // Clean up tracking data for non-active targets to save memory
+                for (const [targetId, tracked] of this.state.trackedTargets) {
+                    if (targetId !== this.state.activeVideoTarget) {
+                        if (tracked.lastFrame) tracked.lastFrame.delete();
+                        this.state.trackedTargets.delete(targetId);
+                        this.opticalFlow.resetTrackingState(targetId);
+                    }
+                }
+
                 this.profiler.endTimer('optical_flow_tracking');
             }
 
