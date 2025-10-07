@@ -85,6 +85,7 @@ class ImageTracker {
         this.ui.setupEventListeners({
             onStartTracking: () => this.startTracking(),
             onStopTracking: () => this.stopTracking(),
+            onShowTrackingRects: (show) => this.toggleTrackingRects(show),
             onVideoOverlayToggle: (enabled) => this.toggleVideoOverlay(enabled),
             onMuteVideos: (muted) => this.setVideosMuted(muted)
         });
@@ -117,7 +118,7 @@ class ImageTracker {
                     this.arRenderer = new ARRenderer('arCanvas', videoElement, {
                         enabled: true,
                         muted: true,
-                        showTrackingRects: true
+                        showTrackingRects: false // Hidden by default
                     });
                     console.log('[ImageTracker] ARRenderer created:', this.arRenderer);
                 }
@@ -200,6 +201,12 @@ class ImageTracker {
         // Update UI
         this.ui.updateControlsForTracking(false);
         this.ui.updateStatus('Tracking stopped.');
+    }
+
+    toggleTrackingRects(show) {
+        if (this.arRenderer) {
+            this.arRenderer.setShowTrackingRects(show);
+        }
     }
 
     toggleVideoOverlay(enabled) {

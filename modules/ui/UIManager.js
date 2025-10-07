@@ -51,6 +51,7 @@ class UIManager {
         this.targetInfo = byId('targetInfo');
 
         // Video overlay controls
+        this.showTrackingRectsToggle = byId('showTrackingRects');
         this.enableVideoOverlayToggle = byId('enableVideoOverlay');
         this.muteVideosToggle = byId('muteVideos');
     }
@@ -80,7 +81,7 @@ class UIManager {
     }
 
     setupEventListeners(handlers) {
-        const { onStartTracking, onStopTracking, onVideoOverlayToggle, onMuteVideos } = handlers;
+        const { onStartTracking, onStopTracking, onShowTrackingRects, onVideoOverlayToggle, onMuteVideos } = handlers;
 
         this.startButton.addEventListener('click', () => {
             if (this.tracker.referenceManager?.hasTargets()) {
@@ -171,6 +172,12 @@ class UIManager {
         }
 
         // Video overlay controls
+        if (this.showTrackingRectsToggle && onShowTrackingRects) {
+            this.showTrackingRectsToggle.addEventListener('change', () => {
+                onShowTrackingRects(this.showTrackingRectsToggle.checked);
+            });
+        }
+
         if (this.enableVideoOverlayToggle && onVideoOverlayToggle) {
             this.enableVideoOverlayToggle.addEventListener('change', () => {
                 onVideoOverlayToggle(this.enableVideoOverlayToggle.checked);
