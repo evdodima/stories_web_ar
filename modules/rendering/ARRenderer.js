@@ -202,8 +202,9 @@ class ARRenderer {
    * Render frame with tracking and videos
    * @param {Array} trackingResults
    * @param {cv.Mat} cameraFrame - Current camera frame to render as background
+   * @param {string} selectedTargetId - ID of target to show video for (single-video mode)
    */
-  render(trackingResults = [], cameraFrame = null) {
+  render(trackingResults = [], cameraFrame = null, selectedTargetId = null) {
     if (!this.enabled || !this.renderer || !this.scene) return;
 
     // Update background with current camera frame for perfect sync
@@ -240,12 +241,18 @@ class ARRenderer {
         this.targetObjects.set(result.targetId, targetObj);
       }
 
-      // Update video plane
-      const video = this.videoManager.getVideo(result.targetId);
-      if (video && video.readyState >= 2) {
-        this.updateVideoPlane(targetObj.videoPlane, video, scaledCorners);
-        targetObj.videoPlane.visible = true;
+      // Update video plane - only show for selected target
+      const isSelectedTarget = selectedTargetId === result.targetId;
+      if (isSelectedTarget) {
+        const video = this.videoManager.getVideo(result.targetId);
+        if (video && video.readyState >= 2) {
+          this.updateVideoPlane(targetObj.videoPlane, video, scaledCorners);
+          targetObj.videoPlane.visible = true;
+        } else {
+          targetObj.videoPlane.visible = false;
+        }
       } else {
+        // Not selected - hide video
         targetObj.videoPlane.visible = false;
       }
 
@@ -264,6 +271,9 @@ class ARRenderer {
         targetObj.videoPlane.visible = false;
         targetObj.trackingLine.visible = false;
         // Pause video when target is lost
+        this.videoManager.pauseVideo(targetId);
+      } else if (selectedTargetId && targetId !== selectedTargetId) {
+        // Target is visible but not selected - pause its video
         this.videoManager.pauseVideo(targetId);
       }
     }

@@ -26,6 +26,11 @@ class ImageTracker {
             flowStatus: null, // Status of optical flow tracking points
             maxFeatures: 800, // Maximum number of feature points to extract per frame
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
+
+            // Single-video mode with center-priority selection
+            activeVideoTarget: null, // Currently playing video target ID
+            targetSelectionTime: 0, // When current target was selected
+            minSwitchDelay: 2000, // Minimum 2 seconds before switching to another target
         };
 
         // Initialize profiler
@@ -255,6 +260,94 @@ class ImageTracker {
         startARBtn.addEventListener('click', handleClick);
     }
 
+    /**
+     * Select best target to display based on center proximity
+     * @param {Array} trackingResults - All tracked targets
+     * @param {number} frameWidth - Frame width
+     * @param {number} frameHeight - Frame height
+     * @returns {string|null} - Selected target ID
+     */
+    selectBestTarget(trackingResults, frameWidth, frameHeight) {
+        const now = Date.now();
+        const centerX = frameWidth / 2;
+        const centerY = frameHeight / 2;
+
+        // Filter successful tracking results
+        const validTargets = trackingResults.filter(r => r.success && r.corners);
+        if (validTargets.length === 0) {
+            // No targets visible
+            this.state.activeVideoTarget = null;
+            return null;
+        }
+
+        // If only one target, select it
+        if (validTargets.length === 1) {
+            const targetId = validTargets[0].targetId;
+            if (this.state.activeVideoTarget !== targetId) {
+                this.state.activeVideoTarget = targetId;
+                this.state.targetSelectionTime = now;
+            }
+            return targetId;
+        }
+
+        // Multiple targets visible - apply selection logic
+        const currentTarget = this.state.activeVideoTarget;
+        const timeSinceSelection = now - this.state.targetSelectionTime;
+        const canSwitch = timeSinceSelection > this.state.minSwitchDelay;
+
+        // Check if current target is still visible
+        const currentStillVisible = currentTarget && validTargets.some(r => r.targetId === currentTarget);
+
+        if (currentStillVisible && !canSwitch) {
+            // Keep current target (resistance to switching)
+            return currentTarget;
+        }
+
+        // Calculate distance from center for each target
+        const targetDistances = validTargets.map(result => {
+            const corners = result.corners;
+            // Calculate center of target
+            const targetCenterX = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+            const targetCenterY = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+
+            // Distance from frame center
+            const distance = Math.sqrt(
+                Math.pow(targetCenterX - centerX, 2) +
+                Math.pow(targetCenterY - centerY, 2)
+            );
+
+            return {
+                targetId: result.targetId,
+                distance: distance
+            };
+        });
+
+        // If current target is visible and close enough, keep it (hysteresis)
+        if (currentStillVisible) {
+            const currentDistance = targetDistances.find(t => t.targetId === currentTarget)?.distance;
+            const closestDistance = Math.min(...targetDistances.map(t => t.distance));
+
+            // Only switch if another target is significantly closer (30% threshold)
+            if (currentDistance && currentDistance < closestDistance * 1.3) {
+                return currentTarget;
+            }
+        }
+
+        // Select target closest to center
+        const bestTarget = targetDistances.reduce((best, current) =>
+            current.distance < best.distance ? current : best
+        );
+
+        // Update active target
+        if (this.state.activeVideoTarget !== bestTarget.targetId) {
+            console.log(`[ImageTracker] Switching video target to: ${bestTarget.targetId}`);
+            this.state.activeVideoTarget = bestTarget.targetId;
+            this.state.targetSelectionTime = now;
+        }
+
+        return bestTarget.targetId;
+    }
+
     processVideo() {
         // Exit if not tracking
         if (!this.state.isTracking) return;
@@ -458,19 +551,27 @@ class ImageTracker {
                 this.profiler.endTimer('optical_flow_tracking');
             }
 
+            // Select best target for video display (center-priority with resistance)
+            const selectedTargetId = this.selectBestTarget(
+                trackingResults,
+                frameToProcess.cols,
+                frameToProcess.rows
+            );
+
             // Render AR overlays (tracking + videos + camera background)
             if (this.arRenderer) {
                 this.profiler.startTimer('ar_rendering');
 
-                // Update videos for tracked targets
-                for (const result of trackingResults) {
-                    if (result.success && result.corners) {
-                        const target = this.referenceManager.getTarget(result.targetId);
+                // Update video only for the selected target
+                if (selectedTargetId) {
+                    const selectedResult = trackingResults.find(r => r.targetId === selectedTargetId);
+                    if (selectedResult && selectedResult.success && selectedResult.corners) {
+                        const target = this.referenceManager.getTarget(selectedTargetId);
                         if (target && target.videoUrl) {
                             // Don't await - let it load asynchronously
                             this.arRenderer.updateTarget(
-                                result.targetId,
-                                result.corners,
+                                selectedTargetId,
+                                selectedResult.corners,
                                 target.videoUrl
                             ).catch(err => {
                                 console.error('[ImageTracker] Video update error:', err);
@@ -481,7 +582,8 @@ class ImageTracker {
 
                 // Render everything (camera background + rectangles + videos)
                 // Pass the same frame we used for tracking to ensure perfect sync
-                this.arRenderer.render(trackingResults, frameToProcess);
+                // Only render video for selected target
+                this.arRenderer.render(trackingResults, frameToProcess, selectedTargetId);
 
                 this.profiler.endTimer('ar_rendering');
             }
