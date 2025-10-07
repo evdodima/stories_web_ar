@@ -187,6 +187,7 @@ class ARRenderer {
         this.backgroundTexture.minFilter = THREE.LinearFilter;
         this.backgroundTexture.magFilter = THREE.LinearFilter;
         this.backgroundTexture.flipY = false; // Don't flip
+        this.backgroundTexture.colorSpace = THREE.SRGBColorSpace; // Match canvas color space
         this.backgroundPlane.material.map = this.backgroundTexture;
         this.backgroundPlane.material.needsUpdate = true;
       } else {
