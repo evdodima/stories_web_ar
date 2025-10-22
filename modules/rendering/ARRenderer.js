@@ -245,11 +245,26 @@ class ARRenderer {
       const isSelectedTarget = selectedTargetId === result.targetId;
       if (isSelectedTarget) {
         const video = this.videoManager.getVideo(result.targetId);
-        if (video && video.readyState >= 2) {
-          this.updateVideoPlane(targetObj.videoPlane, video, scaledCorners);
-          targetObj.videoPlane.visible = true;
+        if (video) {
+          console.log(`[ARRenderer] 📹 Video for ${result.targetId}:`, {
+            readyState: video.readyState,
+            paused: video.paused,
+            currentTime: video.currentTime.toFixed(2),
+            duration: video.duration,
+            networkState: video.networkState
+          });
+
+          if (video.readyState >= 2) {
+            this.updateVideoPlane(targetObj.videoPlane, video, scaledCorners);
+            targetObj.videoPlane.visible = true;
+          } else {
+            // Video not ready yet - show loading state
+            targetObj.videoPlane.visible = false;
+            console.warn(`[ARRenderer] ⏳ Video not ready (readyState: ${video.readyState})`);
+          }
         } else {
           targetObj.videoPlane.visible = false;
+          console.warn(`[ARRenderer] ❌ No video element found for ${result.targetId}`);
         }
       } else {
         // Not selected - hide video

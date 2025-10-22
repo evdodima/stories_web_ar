@@ -247,7 +247,28 @@ class ImageTracker {
 
         // Handle button click
         const handleClick = async () => {
-            // Hide the prompt
+            console.log('[ImageTracker] 🎬 User interaction - unlocking video playback');
+
+            // CRITICAL: Create and play a dummy silent video to unlock autoplay policy
+            // This must happen synchronously during the user click event
+            const dummyVideo = document.createElement('video');
+            dummyVideo.muted = true; // Start muted to ensure play() succeeds
+            dummyVideo.style.display = 'none';
+            // Use a data URL for instant "video" that unlocks playback
+            dummyVideo.src = 'https://s3.eu-north-1.amazonaws.com/stories.public/output.mp4';
+            document.body.appendChild(dummyVideo);
+
+            // Don't await - just fire and forget
+            dummyVideo.play().then(() => {
+                console.log('[ImageTracker] ✓ Video playback unlocked');
+                dummyVideo.pause();
+                setTimeout(() => dummyVideo.remove(), 100);
+            }).catch(e => {
+                console.warn('[ImageTracker] Could not unlock video:', e);
+                dummyVideo.remove();
+            });
+
+            // Hide the prompt immediately
             permissionPrompt.style.display = 'none';
 
             // Start tracking (this will trigger camera permission)

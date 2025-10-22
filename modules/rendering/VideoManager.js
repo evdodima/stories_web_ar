@@ -40,17 +40,20 @@ class VideoManager {
     if (active) {
       // Check if still loading
       if (active.loading) {
-        console.log('[VideoManager] Video still loading for target:', targetId);
+        console.log('[VideoManager] ⏳ Video still loading for target:', targetId);
         return null;
       }
 
       active.lastSeen = Date.now();
       if (active.url === videoUrl) {
-        console.log('[VideoManager] Returning existing video for target:', targetId);
+        console.log('[VideoManager] ✓ Returning existing video for target:', targetId,
+          'readyState:', active.video.readyState,
+          'paused:', active.video.paused,
+          'currentTime:', active.video.currentTime);
         return { video: active.video, isNew: false };
       } else {
         // URL changed - need to reload
-        console.log('[VideoManager] URL changed, reloading video');
+        console.log('[VideoManager] ↻ URL changed, reloading video');
         await this.loadVideo(active.video, videoUrl);
         active.url = videoUrl;
         return { video: active.video, isNew: false };
@@ -193,10 +196,22 @@ class VideoManager {
    */
   playVideo(targetId) {
     const active = this.activeVideos.get(targetId);
-    if (active && active.video.paused) {
-      active.video.play().catch(e => {
-        console.warn(`Failed to play video for ${targetId}:`, e);
+    if (active && active.video) {
+      console.log(`[VideoManager] 🎬 Play request for ${targetId}:`, {
+        paused: active.video.paused,
+        readyState: active.video.readyState,
+        currentTime: active.video.currentTime,
+        duration: active.video.duration,
+        src: active.video.src ? active.video.src.substring(0, 50) + '...' : 'none'
       });
+
+      if (active.video.paused) {
+        active.video.play().catch(e => {
+          console.error(`❌ Failed to play video for ${targetId}:`, e);
+        });
+      }
+    } else {
+      console.warn(`[VideoManager] ⚠️ No active video found for ${targetId}`);
     }
   }
 
