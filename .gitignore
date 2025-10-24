@@ -35,6 +35,3 @@ yarn-error.log*
 .env.local
 .env.*.local
 
-# Deployment configuration (contains server credentials)
-deploy.config
-deploy.*.config
