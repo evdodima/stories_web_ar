@@ -64,6 +64,7 @@ public:
                    const std::vector<cv::KeyPoint>& targetKeypoints,
                    const cv::Mat& targetDescriptors,
                    const std::vector<cv::Point2f>& targetCorners,
+                   const cv::Size& frameSize,
                    DetectionMatch& result);
 
   // Batch matching against multiple targets
@@ -74,6 +75,7 @@ public:
     const std::vector<std::vector<cv::KeyPoint>>& targetKeypoints,
     const std::vector<cv::Mat>& targetDescriptors,
     const std::vector<std::vector<cv::Point2f>>& targetCorners,
+    const cv::Size& frameSize,
     int maxResults = 3);
 
   // Statistics

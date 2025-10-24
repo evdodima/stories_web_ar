@@ -17,6 +17,29 @@ using json = nlohmann::json;
 
 using namespace webar;
 
+// ========================================
+// TEST MODE CONFIGURATION
+// ========================================
+// Set these flags to configure what to test
+
+// Detection-only mode: runs feature matching on every frame without tracking
+// Set to true to test only detection and matching performance
+// Set to false for full tracking with optical flow
+const bool DETECTION_ONLY_MODE = true;
+
+// Additional config flags
+const bool ENABLE_PROFILING = true;      // Show detailed timing logs
+const int MAX_FEATURES = 800;            // Maximum features to extract per frame
+const float MATCH_RATIO = 0.7f;          // Lowe's ratio test threshold
+const int RANSAC_ITERATIONS = 2000;      // RANSAC homography iterations
+const float RANSAC_THRESHOLD = 3.0f;     // RANSAC inlier threshold (pixels)
+
+// Optical flow config (only used when DETECTION_ONLY_MODE = false)
+const int TRACKING_POINTS = 50;          // Points for optical flow tracking
+const int DETECTION_INTERVAL = 5;        // Run detection every N frames
+
+// ========================================
+
 /**
  * Load target database from JSON file
  * Parses JSON and loads all targets into the engine
@@ -323,7 +346,23 @@ void runRealtimeTracking(AREngine& engine, int cameraId = 0) {
                 if (result.detected) {
                     std::cout << "    * " << result.targetId
                               << " [" << result.trackingMode << "]"
-                              << " conf=" << (int)(result.confidence * 100) << "%" << std::endl;
+                              << " conf=" << (int)(result.confidence * 100) << "%";
+
+                    // In detection-only mode, show more details
+                    if (DETECTION_ONLY_MODE) {
+                        std::cout << " (pure detection - no tracking)";
+                    }
+                    std::cout << std::endl;
+
+                    // Show corner positions for debugging
+                    if (ENABLE_PROFILING && result.corners.size() == 4) {
+                        std::cout << "      Corners: ["
+                                  << "(" << (int)result.corners[0].x << "," << (int)result.corners[0].y << ") "
+                                  << "(" << (int)result.corners[1].x << "," << (int)result.corners[1].y << ") "
+                                  << "(" << (int)result.corners[2].x << "," << (int)result.corners[2].y << ") "
+                                  << "(" << (int)result.corners[3].x << "," << (int)result.corners[3].y << ")]"
+                                  << std::endl;
+                    }
                 }
             }
             if (results.empty()) {
@@ -347,23 +386,33 @@ void runRealtimeTracking(AREngine& engine, int cameraId = 0) {
         totalFps += currentFps;
         frameCount++;
 
+        // Draw mode indicator
+        std::string modeText = DETECTION_ONLY_MODE ?
+                              "MODE: DETECTION ONLY" : "MODE: FULL TRACKING";
+        cv::Scalar modeColor = DETECTION_ONLY_MODE ?
+                              cv::Scalar(255, 128, 0) : cv::Scalar(0, 255, 0);
+        cv::putText(frame, modeText, cv::Point(10, 30),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, modeColor, 2);
+
         // Draw stats on frame
         std::string statsText = "FPS: " + std::to_string((int)currentFps) +
                                " | Total: " + std::to_string((int)stats.totalMs) + "ms" +
-                               " | Det: " + std::to_string((int)stats.detectionMs) + "ms" +
-                               " | Track: " + std::to_string((int)stats.trackingMs) + "ms";
-        cv::putText(frame, statsText, cv::Point(10, 30),
+                               " | Det: " + std::to_string((int)stats.detectionMs) + "ms";
+        if (!DETECTION_ONLY_MODE) {
+            statsText += " | Track: " + std::to_string((int)stats.trackingMs) + "ms";
+        }
+        cv::putText(frame, statsText, cv::Point(10, 55),
                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);
 
         // Draw target count and detected count
         std::string targetText = "Detected: " + std::to_string(results.size()) +
                                 " / Total: " + std::to_string(engine.getTargetCount());
-        cv::putText(frame, targetText, cv::Point(10, 50),
+        cv::putText(frame, targetText, cv::Point(10, 75),
                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);
 
         // Draw frame number
         std::string frameText = "Frame: " + std::to_string(stats.frameNumber);
-        cv::putText(frame, frameText, cv::Point(10, 70),
+        cv::putText(frame, frameText, cv::Point(10, 95),
                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);
 
         // Display frame
@@ -432,18 +481,42 @@ int main(int argc, char** argv) {
     // Create engine
     AREngine engine;
 
-    // Configure engine for realtime tracking
+    // Configure engine based on test mode flags
     EngineConfig config;
-    config.useOpticalFlow = true;  // Enable optical flow for smooth tracking
-    config.detectionInterval = 5;  // Run detection every 5 frames
-    config.maxFeatures = 800;
-    config.maxTrackingPoints = 50;  // Fewer points for better performance
-    config.matchRatioThreshold = 0.7;
-    config.enableProfiling = true;  // Enable detailed logging
+
+    if (DETECTION_ONLY_MODE) {
+        // DETECTION-ONLY MODE: Test detection and matching on every frame
+        config.useOpticalFlow = false;     // Disable optical flow tracking
+        config.detectionInterval = 1;      // Run detection every frame
+        std::cout << "[Init] *** DETECTION-ONLY MODE ***" << std::endl;
+        std::cout << "[Init] Optical flow tracking: DISABLED" << std::endl;
+        std::cout << "[Init] Running detection every frame" << std::endl;
+    } else {
+        // FULL TRACKING MODE: Detection + optical flow + pose filtering
+        config.useOpticalFlow = true;      // Enable optical flow tracking
+        config.detectionInterval = DETECTION_INTERVAL;
+        config.maxTrackingPoints = TRACKING_POINTS;
+        std::cout << "[Init] *** FULL TRACKING MODE ***" << std::endl;
+        std::cout << "[Init] Optical flow tracking: ENABLED" << std::endl;
+        std::cout << "[Init] Detection interval: every " << DETECTION_INTERVAL << " frames" << std::endl;
+        std::cout << "[Init] Max tracking points: " << TRACKING_POINTS << std::endl;
+    }
+
+    // Common configuration
+    config.maxFeatures = MAX_FEATURES;
+    config.matchRatioThreshold = MATCH_RATIO;
+    config.ransacIterations = RANSAC_ITERATIONS;
+    config.ransacThreshold = RANSAC_THRESHOLD;
+    config.enableProfiling = ENABLE_PROFILING;
 
     engine.setConfig(config);
-    std::cout << "[Init] Engine configured for realtime tracking" << std::endl;
-    std::cout << "[Init] Profiling enabled - detailed logs will appear" << std::endl;
+
+    std::cout << "[Init] Configuration:" << std::endl;
+    std::cout << "  - Max features: " << MAX_FEATURES << std::endl;
+    std::cout << "  - Match ratio threshold: " << MATCH_RATIO << std::endl;
+    std::cout << "  - RANSAC iterations: " << RANSAC_ITERATIONS << std::endl;
+    std::cout << "  - RANSAC threshold: " << RANSAC_THRESHOLD << "px" << std::endl;
+    std::cout << "  - Profiling: " << (ENABLE_PROFILING ? "ENABLED" : "DISABLED") << std::endl;
 
     // Load target database from JSON file
     if (!loadTargetDatabase(engine, dbPath)) {

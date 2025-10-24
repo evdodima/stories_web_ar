@@ -230,6 +230,7 @@ void AREngine::detectTargets(const cv::Mat& frame,
     targetBatch.keypoints,
     targetBatch.descriptors,
     targetBatch.corners,
+    cv::Size(frame.cols, frame.rows),
     targetManager_->getConfig().maxCandidates);
 
   if (config_.enableProfiling && frameCounter_ % 30 == 0) {
