@@ -643,6 +643,9 @@ body {
     height: 100%;
     object-fit: cover;
     display: none; /* Hidden - rendering camera feed in Three.js for perfect sync */
+    /* Force video to adapt to orientation changes */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 #output,
@@ -652,6 +655,9 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* Force canvas to adapt to orientation changes */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 #output {

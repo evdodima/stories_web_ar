@@ -139,10 +139,21 @@ class ARRenderer {
    * Handle resize/orientation change events
    */
   handleResize() {
+    console.log('[ARRenderer] Handling resize/orientation change');
+
     // Force re-check of video dimensions
     this.cameraWidth = 0;
     this.cameraHeight = 0;
-    this.updateSize();
+
+    // Wait a bit for video element to stabilize after orientation change
+    setTimeout(() => {
+      this.updateSize();
+
+      // Force a render to update canvas
+      if (this.scene && this.camera && this.renderer) {
+        this.renderer.render(this.scene, this.camera);
+      }
+    }, 100);
   }
 
   /**

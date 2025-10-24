@@ -111,15 +111,37 @@ class ImageTracker {
         const handleResize = () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
+                console.log('[ImageTracker] Handling orientation/resize change');
+
+                // Force video refresh to prevent freezing
+                if (this.camera && this.camera.video) {
+                    const video = this.camera.video;
+
+                    // Force video to refresh by toggling play/pause
+                    if (!video.paused) {
+                        video.pause();
+                        setTimeout(() => {
+                            video.play().catch(err => {
+                                console.warn('[ImageTracker] Video play after resize failed:', err);
+                            });
+                        }, 50);
+                    }
+                }
+
                 // Force canvas resize if ARRenderer exists
                 if (this.arRenderer && this.arRenderer.renderer) {
                     this.arRenderer.handleResize();
                 }
-            }, 100);
+            }, 150);
         };
 
         window.addEventListener('resize', handleResize);
         window.addEventListener('orientationchange', handleResize);
+
+        // Also handle screen orientation API if available
+        if (screen.orientation) {
+            screen.orientation.addEventListener('change', handleResize);
+        }
     }
 
     async startTracking() {
