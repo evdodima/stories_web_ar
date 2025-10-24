@@ -101,6 +101,25 @@ class ImageTracker {
         // Initialize detector with vocabulary tree and optical flow tracker
         this.detector = new FeatureDetector(this.state, this.profiler, vocabularyQuery);
         this.opticalFlow = new OpticalFlowTracker(this.state);
+
+        // Handle orientation/resize changes
+        this.setupOrientationHandling();
+    }
+
+    setupOrientationHandling() {
+        let resizeTimeout;
+        const handleResize = () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                // Force canvas resize if ARRenderer exists
+                if (this.arRenderer && this.arRenderer.renderer) {
+                    this.arRenderer.handleResize();
+                }
+            }, 100);
+        };
+
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
     }
 
     async startTracking() {

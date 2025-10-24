@@ -136,6 +136,16 @@ class ARRenderer {
   }
 
   /**
+   * Handle resize/orientation change events
+   */
+  handleResize() {
+    // Force re-check of video dimensions
+    this.cameraWidth = 0;
+    this.cameraHeight = 0;
+    this.updateSize();
+  }
+
+  /**
    * Update video overlay for tracked target
    * @param {string} targetId
    * @param {Array<{x, y}>} corners - 4 corners [TL, TR, BR, BL]
