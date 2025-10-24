@@ -650,11 +650,12 @@ body {
 
 #output,
 #arCanvas {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    width: 100vw;
+    height: 100vh;
+    height: -webkit-fill-available;
+    /* No object-fit - canvas fills viewport, texture scaled in WebGL */
     /* Force canvas to adapt to orientation changes */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);

@@ -29,9 +29,13 @@ class ARRenderer {
       cleanupDelay: 3000
     });
 
-    // Camera dimensions
+    // Viewport dimensions (canvas size)
     this.cameraWidth = 0;
     this.cameraHeight = 0;
+
+    // OpenCV processing dimensions (frame resolution)
+    this.frameWidth = 0;
+    this.frameHeight = 0;
 
     this.initialize();
   }
@@ -94,16 +98,15 @@ class ARRenderer {
   }
 
   /**
-   * Update renderer size to match camera feed
+   * Update renderer size to match viewport (aspect-fill)
    */
   updateSize(width, height) {
     if (!this.renderer) return;
 
-    // Use provided dimensions or fall back to video element
+    // Use viewport dimensions for aspect-fill effect
     if (!width || !height) {
-      if (!this.cameraVideo) return;
-      width = this.cameraVideo.videoWidth || 640;
-      height = this.cameraVideo.videoHeight || 480;
+      width = window.innerWidth;
+      height = window.innerHeight;
     }
 
     if (width === this.cameraWidth && height === this.cameraHeight) return;
@@ -121,10 +124,29 @@ class ARRenderer {
     this.camera.bottom = height;
     this.camera.updateProjectionMatrix();
 
-    // Update background plane to fill viewport
+    // Update background plane to fill viewport with aspect-fill
     if (this.backgroundPlane) {
+      // Use frame dimensions if available, otherwise fall back to video element
+      const frameWidth = this.frameWidth || this.cameraVideo?.videoWidth || 640;
+      const frameHeight = this.frameHeight || this.cameraVideo?.videoHeight || 480;
+      const frameAspect = frameWidth / frameHeight;
+      const canvasAspect = width / height;
+
+      let bgWidth, bgHeight;
+
+      // Aspect-fill: scale to cover entire viewport
+      if (frameAspect > canvasAspect) {
+        // Frame is wider - fit to height, crop width
+        bgHeight = height;
+        bgWidth = height * frameAspect;
+      } else {
+        // Frame is taller - fit to width, crop height
+        bgWidth = width;
+        bgHeight = width / frameAspect;
+      }
+
       this.backgroundPlane.position.set(width / 2, height / 2, -1);
-      this.backgroundPlane.scale.set(width, height, 1);
+      this.backgroundPlane.scale.set(bgWidth, bgHeight, 1);
     }
 
     console.log('[ARRenderer] Resized to:', width, 'x', height, 'Camera bounds:', {
@@ -187,8 +209,14 @@ class ARRenderer {
       // Store reference to current frame
       this.lastCameraFrame = frame;
 
-      // Update size to match frame
-      this.updateSize(frame.cols, frame.rows);
+      // Track OpenCV frame dimensions
+      this.frameWidth = frame.cols;
+      this.frameHeight = frame.rows;
+
+      // Ensure canvas is sized to viewport (only on first frame)
+      if (this.cameraWidth === 0 || this.cameraHeight === 0) {
+        this.updateSize();
+      }
 
       // Convert OpenCV Mat to canvas
       if (!this._backgroundCanvas) {
@@ -233,9 +261,9 @@ class ARRenderer {
       this.updateCameraBackground(cameraFrame);
     }
 
-    // Get OpenCV processing resolution (same as camera frame)
-    const opencvWidth = this.cameraWidth || 640;
-    const opencvHeight = this.cameraHeight || 480;
+    // Get OpenCV processing resolution (from frame dimensions)
+    const opencvWidth = this.frameWidth || 640;
+    const opencvHeight = this.frameHeight || 480;
 
     // Track which targets are active
     const activeTargets = new Set();
