@@ -1,0 +1,14 @@
+{
+  "name": "webar-image-tracking",
+  "version": "1.0.0",
+  "description": "WebAR Image Tracking Application",
+  "scripts": {
+    "build": "node build.js",
+    "serve": "npx serve",
+    "dev": "python -m http.server"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.0",
+    "fs-extra": "^11.1.1"
+  }
+}
