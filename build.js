@@ -74,27 +74,12 @@ const ULTRA_OBFUSCATION_OPTIONS = {
 };
 
 /**
- * Advanced code optimization and minification
+ * Minimal safe code optimization
+ * Comment removal is unsafe with regex - let obfuscator handle it
  */
 function optimizeCode(content) {
   return content
-    // Remove comments (but preserve string literals)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '')
-    
-    // Remove special characters that might cause issues
-    .replace(/[^\x20-\x7E\n\r]/g, '') // Remove non-ASCII characters
-    
-    // Remove unnecessary whitespace
-    .replace(/\s+/g, ' ')
-    .replace(/\s*([{}();,=])\s*/g, '$1')
-    
-    // Optimize common patterns
-    .replace(/function\s*\(\s*\)\s*{/g, 'function(){')
-    .replace(/if\s*\(\s*true\s*\)/g, 'if(1)')
-    .replace(/if\s*\(\s*false\s*\)/g, 'if(0)')
-    
-    // Remove empty lines
+    // Only remove empty lines
     .replace(/\n\s*\n/g, '\n')
     .trim();
 }
