@@ -1,0 +1,101 @@
+# WebAR WASM Engine - CMake Build Configuration (Simplified with Emscripten OpenCV)
+cmake_minimum_required(VERSION 3.15)
+project(webar_engine)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Source files
+set(SOURCES
+    src/ar_engine.cpp
+    src/feature_detector.cpp
+    src/optical_flow_tracker.cpp
+    src/target_manager.cpp
+    src/memory_pool.cpp
+    src/api.cpp
+)
+
+# Header files
+set(HEADERS
+    include/ar_engine.hpp
+    include/feature_detector.hpp
+    include/optical_flow_tracker.hpp
+    include/target_manager.hpp
+    include/memory_pool.hpp
+)
+
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/opencv/include/opencv4)
+
+# Create WASM library
+add_executable(webar_engine ${SOURCES} ${HEADERS})
+
+# Link OpenCV libraries
+target_link_libraries(webar_engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/libopencv_core.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/libopencv_imgproc.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/libopencv_features2d.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/libopencv_video.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/libopencv_calib3d.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/opencv/lib/libopencv_flann.a
+)
+
+# Emscripten-specific settings
+if(EMSCRIPTEN)
+  set(CMAKE_EXECUTABLE_SUFFIX ".js")
+
+  # Compiler flags (RTTI and exceptions needed for Embind and try/catch)
+  set_target_properties(webar_engine PROPERTIES
+      COMPILE_FLAGS "-O3"
+  )
+
+  # Linker flags
+  set(EMSCRIPTEN_LINK_FLAGS
+      "-O3"
+      "-s WASM=1"
+      "-s MODULARIZE=1"
+      "-s EXPORT_NAME='createWebarModule'"
+      "-s ALLOW_MEMORY_GROWTH=1"
+      "-s INITIAL_MEMORY=67108864"  # 64MB initial
+      "-s MAXIMUM_MEMORY=268435456"  # 256MB max
+      "-s EXPORTED_RUNTIME_METHODS=['cwrap','ccall','writeArrayToMemory']"
+      "-s EXPORTED_FUNCTIONS=['_malloc','_free','_onModuleLoaded']"
+      "--bind"  # Enable Embind
+      "-s ASSERTIONS=0"
+      "-s DISABLE_EXCEPTION_CATCHING=0"  # Enable exceptions for try/catch
+      "-s ENVIRONMENT=web"
+      "-s MALLOC=emmalloc"
+      "-s USE_ZLIB=1"  # OpenCV needs zlib for gzopen etc.
+      # Performance optimizations
+      "-s AGGRESSIVE_VARIABLE_ELIMINATION=1"
+  )
+
+  # Join flags into single string
+  string(REPLACE ";" " " EMSCRIPTEN_LINK_FLAGS_STR "${EMSCRIPTEN_LINK_FLAGS}")
+  set_target_properties(webar_engine PROPERTIES
+      LINK_FLAGS "${EMSCRIPTEN_LINK_FLAGS_STR}"
+  )
+
+  # Output to public/wasm directory
+  set_target_properties(webar_engine PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../public/wasm"
+  )
+
+endif()
+
+# Installation
+install(TARGETS webar_engine
+    RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../public/wasm
+)
+
+# Print configuration summary
+message(STATUS "")
+message(STATUS "WebAR Engine Configuration (Simplified):")
+message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "  Using: Emscripten built-in OpenCV port")
+message(STATUS "  Output Directory: ${CMAKE_CURRENT_SOURCE_DIR}/../public/wasm")
+message(STATUS "")
+message(STATUS "Note: First build will download OpenCV (~5 minutes)")
+message(STATUS "")

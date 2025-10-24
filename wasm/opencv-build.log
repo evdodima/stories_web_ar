@@ -1,0 +1,991 @@
+[0;32mBuilding OpenCV for Emscripten[0m
+====================================
+
+Cloning OpenCV 4.8.0...
+Cloning into 'opencv-src'...
+warning: refs/tags/4.8.0 53296de62872b5e7d042ddffb49679fbdcca99f6 is not a commit!
+Note: switching to 'f9a59f2592993d3dcc080e495f4f5e02dd8ec7ef'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Updating files:  63% (4578/7179)Updating files:  64% (4595/7179)Updating files:  65% (4667/7179)Updating files:  66% (4739/7179)Updating files:  67% (4810/7179)Updating files:  68% (4882/7179)Updating files:  69% (4954/7179)Updating files:  70% (5026/7179)Updating files:  71% (5098/7179)Updating files:  72% (5169/7179)Updating files:  73% (5241/7179)Updating files:  74% (5313/7179)Updating files:  75% (5385/7179)Updating files:  76% (5457/7179)Updating files:  77% (5528/7179)Updating files:  78% (5600/7179)Updating files:  79% (5672/7179)Updating files:  80% (5744/7179)Updating files:  81% (5815/7179)Updating files:  82% (5887/7179)Updating files:  83% (5959/7179)Updating files:  84% (6031/7179)Updating files:  85% (6103/7179)Updating files:  86% (6174/7179)Updating files:  87% (6246/7179)Updating files:  88% (6318/7179)Updating files:  89% (6390/7179)Updating files:  90% (6462/7179)Updating files:  91% (6533/7179)Updating files:  92% (6605/7179)Updating files:  93% (6677/7179)Updating files:  94% (6749/7179)Updating files:  95% (6821/7179)Updating files:  96% (6892/7179)Updating files:  97% (6964/7179)Updating files:  98% (7036/7179)Updating files:  99% (7108/7179)Updating files: 100% (7179/7179)Updating files: 100% (7179/7179), done.
+
+[0;32mConfiguring OpenCV build...[0m
+
+emcmake: cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=../../opencv -DBUILD_SHARED_LIBS=OFF -DBUILD_opencv_apps=OFF -DBUILD_opencv_python=OFF -DBUILD_opencv_python2=OFF -DBUILD_opencv_python3=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -DWITH_PNG=OFF -DWITH_JPEG=OFF -DWITH_TIFF=OFF -DWITH_WEBP=OFF -DWITH_OPENJPEG=OFF -DWITH_JASPER=OFF -DWITH_OPENEXR=OFF -DWITH_TBB=OFF -DWITH_IPP=OFF -DWITH_PTHREADS_PF=OFF -DCV_ENABLE_INTRINSICS=OFF -DBUILD_ITT=OFF -DWITH_ITT=OFF -DBUILD_LIST=core,imgproc,features2d,video,calib3d -DCPU_BASELINE= -DCPU_DISPATCH= -DCMAKE_TOOLCHAIN_FILE=/Users/evdodima/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake -DCMAKE_CROSSCOMPILING_EMULATOR=/Users/evdodima/emsdk/node/22.16.0_64bit/bin/node in directory /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/build
+-- Detected processor: x86
+-- Found PythonInterp: /Users/evdodima/.pyenv/shims/python2.7 (found suitable version "2.7.18", minimum required is "2.7") 
+-- Could NOT find PythonLibs (missing: PYTHON_LIBRARIES PYTHON_INCLUDE_DIRS) (Required is at least version "2.7")
+-- Cannot probe for Python/Numpy support (because we are cross-compiling OpenCV)
+-- If you want to enable Python/Numpy support, set the following variables:
+--   PYTHON2_INCLUDE_PATH
+--   PYTHON2_LIBRARIES (optional on Unix-like systems)
+--   PYTHON2_NUMPY_INCLUDE_DIRS
+--   PYTHON3_INCLUDE_PATH
+--   PYTHON3_LIBRARIES (optional on Unix-like systems)
+--   PYTHON3_NUMPY_INCLUDE_DIRS
+-- Found PythonInterp: /opt/homebrew/bin/python3 (found suitable version "3.13.5", minimum required is "3.2") 
+-- Could NOT find PythonLibs (missing: PYTHON_LIBRARIES PYTHON_INCLUDE_DIRS) (Required is at least version "3.13")
+-- Cannot probe for Python/Numpy support (because we are cross-compiling OpenCV)
+-- If you want to enable Python/Numpy support, set the following variables:
+--   PYTHON2_INCLUDE_PATH
+--   PYTHON2_LIBRARIES (optional on Unix-like systems)
+--   PYTHON2_NUMPY_INCLUDE_DIRS
+--   PYTHON3_INCLUDE_PATH
+--   PYTHON3_LIBRARIES (optional on Unix-like systems)
+--   PYTHON3_NUMPY_INCLUDE_DIRS
+Python 2.7.18
+-- Looking for ccache - not found
+-- Performing Test HAVE_CXX_FSIGNED_CHAR
+-- Performing Test HAVE_CXX_FSIGNED_CHAR - Success
+-- Performing Test HAVE_C_FSIGNED_CHAR
+-- Performing Test HAVE_C_FSIGNED_CHAR - Success
+-- Performing Test HAVE_CXX_W
+-- Performing Test HAVE_CXX_W - Success
+-- Performing Test HAVE_C_W
+-- Performing Test HAVE_C_W - Success
+-- Performing Test HAVE_CXX_WALL
+-- Performing Test HAVE_CXX_WALL - Success
+-- Performing Test HAVE_C_WALL
+-- Performing Test HAVE_C_WALL - Success
+-- Performing Test HAVE_CXX_WRETURN_TYPE
+-- Performing Test HAVE_CXX_WRETURN_TYPE - Success
+-- Performing Test HAVE_C_WRETURN_TYPE
+-- Performing Test HAVE_C_WRETURN_TYPE - Success
+-- Performing Test HAVE_CXX_WNON_VIRTUAL_DTOR
+-- Performing Test HAVE_CXX_WNON_VIRTUAL_DTOR - Success
+-- Performing Test HAVE_C_WNON_VIRTUAL_DTOR
+-- Performing Test HAVE_C_WNON_VIRTUAL_DTOR - Success
+-- Performing Test HAVE_CXX_WADDRESS
+-- Performing Test HAVE_CXX_WADDRESS - Success
+-- Performing Test HAVE_C_WADDRESS
+-- Performing Test HAVE_C_WADDRESS - Success
+-- Performing Test HAVE_CXX_WSEQUENCE_POINT
+-- Performing Test HAVE_CXX_WSEQUENCE_POINT - Success
+-- Performing Test HAVE_C_WSEQUENCE_POINT
+-- Performing Test HAVE_C_WSEQUENCE_POINT - Success
+-- Performing Test HAVE_CXX_WFORMAT
+-- Performing Test HAVE_CXX_WFORMAT - Success
+-- Performing Test HAVE_C_WFORMAT
+-- Performing Test HAVE_C_WFORMAT - Success
+-- Performing Test HAVE_CXX_WFORMAT_SECURITY
+-- Performing Test HAVE_CXX_WFORMAT_SECURITY - Success
+-- Performing Test HAVE_C_WFORMAT_SECURITY
+-- Performing Test HAVE_C_WFORMAT_SECURITY - Success
+-- Performing Test HAVE_CXX_WMISSING_DECLARATIONS
+-- Performing Test HAVE_CXX_WMISSING_DECLARATIONS - Success
+-- Performing Test HAVE_C_WMISSING_DECLARATIONS
+-- Performing Test HAVE_C_WMISSING_DECLARATIONS - Success
+-- Performing Test HAVE_CXX_WMISSING_PROTOTYPES
+-- Performing Test HAVE_CXX_WMISSING_PROTOTYPES - Success
+-- Performing Test HAVE_C_WMISSING_PROTOTYPES
+-- Performing Test HAVE_C_WMISSING_PROTOTYPES - Success
+-- Performing Test HAVE_CXX_WSTRICT_PROTOTYPES
+-- Performing Test HAVE_CXX_WSTRICT_PROTOTYPES - Success
+-- Performing Test HAVE_C_WSTRICT_PROTOTYPES
+-- Performing Test HAVE_C_WSTRICT_PROTOTYPES - Success
+-- Performing Test HAVE_CXX_WUNDEF
+-- Performing Test HAVE_CXX_WUNDEF - Success
+-- Performing Test HAVE_C_WUNDEF
+-- Performing Test HAVE_C_WUNDEF - Success
+-- Performing Test HAVE_CXX_WINIT_SELF
+-- Performing Test HAVE_CXX_WINIT_SELF - Success
+-- Performing Test HAVE_C_WINIT_SELF
+-- Performing Test HAVE_C_WINIT_SELF - Success
+-- Performing Test HAVE_CXX_WPOINTER_ARITH
+-- Performing Test HAVE_CXX_WPOINTER_ARITH - Success
+-- Performing Test HAVE_C_WPOINTER_ARITH
+-- Performing Test HAVE_C_WPOINTER_ARITH - Success
+-- Performing Test HAVE_CXX_WSHADOW
+-- Performing Test HAVE_CXX_WSHADOW - Success
+-- Performing Test HAVE_C_WSHADOW
+-- Performing Test HAVE_C_WSHADOW - Success
+-- Performing Test HAVE_CXX_WSIGN_PROMO
+-- Performing Test HAVE_CXX_WSIGN_PROMO - Success
+-- Performing Test HAVE_C_WSIGN_PROMO
+-- Performing Test HAVE_C_WSIGN_PROMO - Success
+-- Performing Test HAVE_CXX_WUNINITIALIZED
+-- Performing Test HAVE_CXX_WUNINITIALIZED - Success
+-- Performing Test HAVE_C_WUNINITIALIZED
+-- Performing Test HAVE_C_WUNINITIALIZED - Success
+-- Performing Test HAVE_CXX_WINCONSISTENT_MISSING_OVERRIDE
+-- Performing Test HAVE_CXX_WINCONSISTENT_MISSING_OVERRIDE - Success
+-- Performing Test HAVE_C_WINCONSISTENT_MISSING_OVERRIDE
+-- Performing Test HAVE_C_WINCONSISTENT_MISSING_OVERRIDE - Success
+-- Performing Test HAVE_CXX_WNO_DELETE_NON_VIRTUAL_DTOR
+-- Performing Test HAVE_CXX_WNO_DELETE_NON_VIRTUAL_DTOR - Success
+-- Performing Test HAVE_C_WNO_DELETE_NON_VIRTUAL_DTOR
+-- Performing Test HAVE_C_WNO_DELETE_NON_VIRTUAL_DTOR - Success
+-- Performing Test HAVE_CXX_WNO_UNNAMED_TYPE_TEMPLATE_ARGS
+-- Performing Test HAVE_CXX_WNO_UNNAMED_TYPE_TEMPLATE_ARGS - Success
+-- Performing Test HAVE_C_WNO_UNNAMED_TYPE_TEMPLATE_ARGS
+-- Performing Test HAVE_C_WNO_UNNAMED_TYPE_TEMPLATE_ARGS - Success
+-- Performing Test HAVE_CXX_WNO_COMMENT
+-- Performing Test HAVE_CXX_WNO_COMMENT - Success
+-- Performing Test HAVE_C_WNO_COMMENT
+-- Performing Test HAVE_C_WNO_COMMENT - Success
+-- Performing Test HAVE_CXX_WNO_DEPRECATED_ENUM_ENUM_CONVERSION
+-- Performing Test HAVE_CXX_WNO_DEPRECATED_ENUM_ENUM_CONVERSION - Success
+-- Performing Test HAVE_C_WNO_DEPRECATED_ENUM_ENUM_CONVERSION
+-- Performing Test HAVE_C_WNO_DEPRECATED_ENUM_ENUM_CONVERSION - Success
+-- Performing Test HAVE_CXX_WNO_DEPRECATED_ANON_ENUM_ENUM_CONVERSION
+-- Performing Test HAVE_CXX_WNO_DEPRECATED_ANON_ENUM_ENUM_CONVERSION - Success
+-- Performing Test HAVE_C_WNO_DEPRECATED_ANON_ENUM_ENUM_CONVERSION
+-- Performing Test HAVE_C_WNO_DEPRECATED_ANON_ENUM_ENUM_CONVERSION - Success
+-- Performing Test HAVE_CXX_FDIAGNOSTICS_SHOW_OPTION
+-- Performing Test HAVE_CXX_FDIAGNOSTICS_SHOW_OPTION - Success
+-- Performing Test HAVE_C_FDIAGNOSTICS_SHOW_OPTION
+-- Performing Test HAVE_C_FDIAGNOSTICS_SHOW_OPTION - Success
+-- Performing Test HAVE_CXX_QUNUSED_ARGUMENTS
+-- Performing Test HAVE_CXX_QUNUSED_ARGUMENTS - Success
+-- Performing Test HAVE_C_QUNUSED_ARGUMENTS
+-- Performing Test HAVE_C_QUNUSED_ARGUMENTS - Success
+-- Performing Test HAVE_CXX_FFUNCTION_SECTIONS
+-- Performing Test HAVE_CXX_FFUNCTION_SECTIONS - Success
+-- Performing Test HAVE_C_FFUNCTION_SECTIONS
+-- Performing Test HAVE_C_FFUNCTION_SECTIONS - Success
+-- Performing Test HAVE_CXX_FDATA_SECTIONS
+-- Performing Test HAVE_CXX_FDATA_SECTIONS - Success
+-- Performing Test HAVE_C_FDATA_SECTIONS
+-- Performing Test HAVE_C_FDATA_SECTIONS - Success
+-- Performing Test HAVE_CPU_BASELINE_FLAGS
+-- Performing Test HAVE_CPU_BASELINE_FLAGS - Success
+-- Performing Test HAVE_CXX_MFPMATH_387
+-- Performing Test HAVE_CXX_MFPMATH_387 - Failed
+-- Performing Test HAVE_C_MFPMATH_387
+-- Performing Test HAVE_C_MFPMATH_387 - Failed
+-- Performing Test HAVE_CXX_FVISIBILITY_HIDDEN
+-- Performing Test HAVE_CXX_FVISIBILITY_HIDDEN - Success
+-- Performing Test HAVE_C_FVISIBILITY_HIDDEN
+-- Performing Test HAVE_C_FVISIBILITY_HIDDEN - Success
+-- Performing Test HAVE_CXX_FVISIBILITY_INLINES_HIDDEN
+-- Performing Test HAVE_CXX_FVISIBILITY_INLINES_HIDDEN - Success
+-- Performing Test HAVE_C_FVISIBILITY_INLINES_HIDDEN
+-- Performing Test HAVE_C_FVISIBILITY_INLINES_HIDDEN - Success
+-- Performing Test HAVE_LINK_NO_UNDEFINED
+-- Performing Test HAVE_LINK_NO_UNDEFINED - Failed
+-- Looking for pthread.h
+-- Looking for pthread.h - found
+-- Looking for posix_memalign
+-- Looking for posix_memalign - found
+-- Looking for malloc.h
+-- Looking for malloc.h - found
+-- Looking for memalign
+-- Looking for memalign - found
+-- Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR) (Required is at least version "1.2.3")
+-- Looking for fseeko
+-- Looking for fseeko - found
+-- Looking for unistd.h
+-- Looking for unistd.h - found
+-- Looking for sys/types.h
+-- Looking for sys/types.h - found
+-- Looking for stdint.h
+-- Looking for stdint.h - found
+-- Looking for stddef.h
+-- Looking for stddef.h - found
+-- Check size of off64_t
+-- Check size of off64_t - failed
+-- Performing Test HAVE_C_WNO_SHORTEN_64_TO_32
+-- Performing Test HAVE_C_WNO_SHORTEN_64_TO_32 - Success
+-- Performing Test HAVE_C_WNO_ATTRIBUTES
+-- Performing Test HAVE_C_WNO_ATTRIBUTES - Success
+-- Performing Test HAVE_C_WNO_STRICT_PROTOTYPES
+-- Performing Test HAVE_C_WNO_STRICT_PROTOTYPES - Success
+-- Performing Test HAVE_C_WNO_MISSING_PROTOTYPES
+-- Performing Test HAVE_C_WNO_MISSING_PROTOTYPES - Success
+-- Performing Test HAVE_C_WNO_MISSING_DECLARATIONS
+-- Performing Test HAVE_C_WNO_MISSING_DECLARATIONS - Success
+-- Performing Test HAVE_C_WNO_SHIFT_NEGATIVE_VALUE
+-- Performing Test HAVE_C_WNO_SHIFT_NEGATIVE_VALUE - Success
+-- Performing Test HAVE_C_WNO_UNDEF
+-- Performing Test HAVE_C_WNO_UNDEF - Success
+-- Performing Test HAVE_C_WNO_IMPLICIT_FALLTHROUGH
+-- Performing Test HAVE_C_WNO_IMPLICIT_FALLTHROUGH - Success
+-- libva: missing va.h header (VA_INCLUDE_DIR)
+-- Could not find OpenBLAS include. Turning OpenBLAS_FOUND off
+-- Could not find OpenBLAS lib. Turning OpenBLAS_FOUND off
+-- Could NOT find Atlas (missing: Atlas_CBLAS_INCLUDE_DIR Atlas_CLAPACK_INCLUDE_DIR Atlas_CBLAS_LIBRARY Atlas_BLAS_LIBRARY Atlas_LAPACK_LIBRARY) 
+-- Looking for sgemm_
+-- Looking for sgemm_ - not found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Could NOT find BLAS (missing: BLAS_LIBRARIES) 
+-- Could NOT find LAPACK (missing: LAPACK_LIBRARIES) 
+    Reason given by package: LAPACK could not be found because dependency BLAS could not be found.
+
+-- Performing Test HAVE_CXX_WNO_DEPRECATED
+-- Performing Test HAVE_CXX_WNO_DEPRECATED - Success
+-- Performing Test HAVE_CXX_WNO_MISSING_PROTOTYPES
+-- Performing Test HAVE_CXX_WNO_MISSING_PROTOTYPES - Success
+-- Performing Test HAVE_CXX_WNO_MISSING_DECLARATIONS
+-- Performing Test HAVE_CXX_WNO_MISSING_DECLARATIONS - Success
+-- Performing Test HAVE_CXX_WNO_SHADOW
+-- Performing Test HAVE_CXX_WNO_SHADOW - Success
+-- Performing Test HAVE_CXX_WNO_UNUSED_PARAMETER
+-- Performing Test HAVE_CXX_WNO_UNUSED_PARAMETER - Success
+-- Performing Test HAVE_CXX_WNO_UNUSED_LOCAL_TYPEDEFS
+-- Performing Test HAVE_CXX_WNO_UNUSED_LOCAL_TYPEDEFS - Success
+-- Performing Test HAVE_CXX_WNO_SIGN_COMPARE
+-- Performing Test HAVE_CXX_WNO_SIGN_COMPARE - Success
+-- Performing Test HAVE_CXX_WNO_SIGN_PROMO
+-- Performing Test HAVE_CXX_WNO_SIGN_PROMO - Success
+-- Performing Test HAVE_CXX_WNO_UNDEF
+-- Performing Test HAVE_CXX_WNO_UNDEF - Success
+-- Performing Test HAVE_CXX_WNO_TAUTOLOGICAL_UNDEFINED_COMPARE
+-- Performing Test HAVE_CXX_WNO_TAUTOLOGICAL_UNDEFINED_COMPARE - Success
+-- Performing Test HAVE_CXX_WNO_IGNORED_QUALIFIERS
+-- Performing Test HAVE_CXX_WNO_IGNORED_QUALIFIERS - Success
+-- Performing Test HAVE_CXX_WNO_EXTRA
+-- Performing Test HAVE_CXX_WNO_EXTRA - Success
+-- Performing Test HAVE_CXX_WNO_UNUSED_FUNCTION
+-- Performing Test HAVE_CXX_WNO_UNUSED_FUNCTION - Success
+-- Performing Test HAVE_CXX_WNO_UNUSED_CONST_VARIABLE
+-- Performing Test HAVE_CXX_WNO_UNUSED_CONST_VARIABLE - Success
+-- Performing Test HAVE_CXX_WNO_SHORTEN_64_TO_32
+-- Performing Test HAVE_CXX_WNO_SHORTEN_64_TO_32 - Success
+-- Performing Test HAVE_CXX_WNO_INVALID_OFFSETOF
+-- Performing Test HAVE_CXX_WNO_INVALID_OFFSETOF - Success
+-- Performing Test HAVE_CXX_WNO_ENUM_COMPARE_SWITCH
+-- Performing Test HAVE_CXX_WNO_ENUM_COMPARE_SWITCH - Success
+-- Performing Test HAVE_CXX_WNO_SUGGEST_OVERRIDE
+-- Performing Test HAVE_CXX_WNO_SUGGEST_OVERRIDE - Success
+-- Performing Test HAVE_CXX_WNO_INCONSISTENT_MISSING_OVERRIDE
+-- Performing Test HAVE_CXX_WNO_INCONSISTENT_MISSING_OVERRIDE - Success
+-- Performing Test HAVE_CXX_WNO_IMPLICIT_FALLTHROUGH
+-- Performing Test HAVE_CXX_WNO_IMPLICIT_FALLTHROUGH - Success
+-- Performing Test HAVE_CXX_WNO_ARRAY_BOUNDS
+-- Performing Test HAVE_CXX_WNO_ARRAY_BOUNDS - Success
+-- Performing Test HAVE_C_WNO_UNUSED_VARIABLE
+-- Performing Test HAVE_C_WNO_UNUSED_VARIABLE - Success
+-- Performing Test HAVE_C_WNO_SHADOW
+-- Performing Test HAVE_C_WNO_SHADOW - Success
+-- ADE: Downloading v0.1.2a.zip from https://github.com/opencv/ade/archive/v0.1.2a.zip
+-- Checking for module 'gtk+-3.0'
+--   Package 'gtk+-3.0' not found
+-- Checking for module 'gtk+-2.0'
+--   Package 'gtk+-2.0' not found
+-- Checking for module 'gthread-2.0>=2.32'
+--   Package 'gthread-2.0' not found
+-- Checking for modules 'libavcodec;libavformat;libavutil;libswscale'
+--   Package 'libavcodec' not found
+--   Package 'libavformat' not found
+--   Package 'libavutil' not found
+--   Package 'libswscale' not found
+-- FFMPEG is disabled. Required libraries: libavcodec;libavformat;libavutil;libswscale. Missing libraries: libavcodec;libavformat;libavutil;libswscale
+-- Checking for module 'gstreamer-base-1.0'
+--   Package 'gstreamer-base-1.0' not found
+-- Checking for module 'gstreamer-app-1.0'
+--   Package 'gstreamer-app-1.0' not found
+-- Checking for module 'gstreamer-riff-1.0'
+--   Package 'gstreamer-riff-1.0' not found
+-- Checking for module 'gstreamer-pbutils-1.0'
+--   Package 'gstreamer-pbutils-1.0' not found
+-- Checking for module 'gstreamer-video-1.0'
+--   Package 'gstreamer-video-1.0' not found
+-- Checking for module 'gstreamer-audio-1.0'
+--   Package 'gstreamer-audio-1.0' not found
+-- Checking for module 'libdc1394-2'
+--   Package 'libdc1394-2' not found
+-- Using whitelist: opencv_calib3d;opencv_core;opencv_features2d;opencv_imgproc;opencv_video
+-- Module opencv_dnn disabled by whitelist
+-- Module opencv_gapi disabled by whitelist
+-- Module opencv_highgui disabled by whitelist
+-- Module opencv_imgcodecs disabled by whitelist
+-- Module opencv_java_bindings_generator disabled by whitelist
+-- Module opencv_js_bindings_generator disabled by whitelist
+-- Module opencv_ml disabled by whitelist
+-- Module opencv_objc_bindings_generator disabled by whitelist
+-- Module opencv_objdetect disabled by whitelist
+-- Module opencv_photo disabled by whitelist
+-- Module opencv_python_bindings_generator disabled by whitelist
+-- Module opencv_python_tests disabled by whitelist
+-- Module opencv_stitching disabled by whitelist
+-- Module opencv_videoio disabled by whitelist
+-- Allocator metrics storage type: 'long long'
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/corner.avx.cpp
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/imgwarp.avx2.cpp
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/imgwarp.lasx.cpp
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/imgwarp.sse4_1.cpp
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/resize.avx2.cpp
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/resize.lasx.cpp
+-- Excluding from source files list (optimization is disabled): modules/imgproc/src/resize.sse4_1.cpp
+-- Excluding from source files list (optimization is disabled): modules/features2d/src/fast.avx2.cpp
+-- 
+-- General configuration for OpenCV 4.8.0 =====================================
+--   Version control:               4.8.0
+-- 
+--   Platform:
+--     Timestamp:                   2025-10-24T07:02:39Z
+--     Host:                        Darwin 25.0.0 arm64
+--     Target:                      Emscripten 1 x86
+--     CMake:                       3.23.2
+--     CMake generator:             Unix Makefiles
+--     CMake build tool:            /opt/local/bin/gmake
+--     Configuration:               Release
+-- 
+--   CPU/HW features:
+--     Baseline:
+-- 
+--   C/C++:
+--     Built as dynamic libs?:      NO
+--     C++ standard:                11
+--     C++ Compiler:                /Users/evdodima/emsdk/upstream/emscripten/em++  (ver 22.0.0)
+--     C++ flags (Release):         -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments -ffunction-sections -fdata-sections  -fvisibility=hidden -fvisibility-inlines-hidden -O3 -DNDEBUG  -DNDEBUG
+--     C++ flags (Debug):           -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments -ffunction-sections -fdata-sections  -fvisibility=hidden -fvisibility-inlines-hidden -g  -O0 -DDEBUG -D_DEBUG
+--     C Compiler:                  /Users/evdodima/emsdk/upstream/emscripten/emcc
+--     C flags (Release):           -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments -ffunction-sections -fdata-sections  -fvisibility=hidden -fvisibility-inlines-hidden -O3 -DNDEBUG  -DNDEBUG
+--     C flags (Debug):             -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments -ffunction-sections -fdata-sections  -fvisibility=hidden -fvisibility-inlines-hidden -g  -O0 -DDEBUG -D_DEBUG
+--     Linker flags (Release):      -Wl,--gc-sections  
+--     Linker flags (Debug):        -Wl,--gc-sections  
+--     ccache:                      NO
+--     Precompiled headers:         NO
+--     Extra dependencies:
+--     3rdparty dependencies:       zlib
+-- 
+--   OpenCV modules:
+--     To be built:                 calib3d core features2d flann imgproc video
+--     Disabled:                    world
+--     Disabled by dependency:      dnn gapi highgui imgcodecs java_bindings_generator js_bindings_generator ml objc_bindings_generator objdetect photo python_bindings_generator python_tests stitching videoio
+--     Unavailable:                 java python2 python3 ts
+--     Applications:                -
+--     Documentation:               NO
+--     Non-free algorithms:         NO
+-- 
+--   GUI: 
+--     GTK+:                        NO
+-- 
+--   Media I/O: 
+--     ZLib:                        build (ver 1.2.13)
+--     HDR:                         YES
+--     SUNRASTER:                   YES
+--     PXM:                         YES
+--     PFM:                         YES
+-- 
+--   Video I/O:
+--     DC1394:                      NO
+--     FFMPEG:                      NO
+--       avcodec:                   NO
+--       avformat:                  NO
+--       avutil:                    NO
+--       swscale:                   NO
+--       avresample:                NO
+--     GStreamer:                   NO
+--     v4l/v4l2:                    NO
+-- 
+--   Parallel framework:            none
+-- 
+--   Trace:                         YES (built-in)
+-- 
+--   Other third-party libraries:
+--     VA:                          NO
+--     Lapack:                      NO
+--     Custom HAL:                  NO
+--     Protobuf:                    build (3.19.1)
+--     Flatbuffers:                 builtin/3rdparty (23.5.9)
+-- 
+--   OpenCL:                        YES (no extra features)
+--     Include path:                /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/3rdparty/include/opencl/1.2
+--     Link libraries:              Dynamic load
+-- 
+--   Python (for build):            /Users/evdodima/.pyenv/shims/python2.7
+-- 
+--   Install to:                    /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv
+-- -----------------------------------------------------------------
+-- 
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/build
+
+[0;32mBuilding OpenCV (this takes ~10 minutes)...[0m
+
+emmake: "make -j10" in "/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/build"
+[  0%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/adler32.c.o
+[  0%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/compress.c.o
+[  1%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/crc32.c.o
+[  1%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/gzclose.c.o
+[  1%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/deflate.c.o
+[  1%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/gzwrite.c.o
+[  1%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/inflate.c.o
+[  3%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/infback.c.o
+[  3%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/gzlib.c.o
+[  3%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/gzread.c.o
+[  3%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/inffast.c.o
+[  3%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/inftrees.c.o
+[  4%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/trees.c.o
+[  4%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/uncompr.c.o
+[  4%] Building C object 3rdparty/zlib/CMakeFiles/zlib.dir/zutil.c.o
+[  6%] Linking C static library ../lib/libzlib.a
+[  6%] Built target zlib
+[  6%] Processing OpenCL kernels (core)
+[  6%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/algorithm.cpp.o
+[  6%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/arithm.dispatch.cpp.o
+[  6%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/async.cpp.o
+[  7%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/array.cpp.o
+[  8%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/alloc.cpp.o
+[  8%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/arithm.cpp.o
+[  8%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/batch_distance.cpp.o
+[  8%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/buffer_area.cpp.o
+[  9%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/bindings_utils.cpp.o
+[  9%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/channels.cpp.o
+[  9%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/check.cpp.o
+[ 10%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/command_line_parser.cpp.o
+[ 10%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/conjugate_gradient.cpp.o
+[ 10%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/convert.dispatch.cpp.o
+[ 12%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/convert_c.cpp.o
+[ 12%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/convert_scale.dispatch.cpp.o
+[ 12%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/copy.cpp.o
+[ 12%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/count_non_zero.dispatch.cpp.o
+[ 13%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/cuda_gpu_mat.cpp.o
+[ 13%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/cuda_gpu_mat_nd.cpp.o
+[ 13%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/cuda_host_mem.cpp.o
+[ 14%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/cuda_info.cpp.o
+[ 14%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/cuda_stream.cpp.o
+[ 14%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/datastructs.cpp.o
+[ 14%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/directx.cpp.o
+[ 15%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/downhill_simplex.cpp.o
+[ 15%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/dxt.cpp.o
+[ 15%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/gl_core_3_1.cpp.o
+[ 17%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/glob.cpp.o
+[ 17%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/hal_internal.cpp.o
+[ 17%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/has_non_zero.dispatch.cpp.o
+[ 17%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/kmeans.cpp.o
+[ 18%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/lapack.cpp.o
+[ 18%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/lda.cpp.o
+[ 18%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/logger.cpp.o
+[ 19%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/lpsolver.cpp.o
+[ 19%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/lut.cpp.o
+[ 19%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/mathfuncs.cpp.o
+[ 20%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/mathfuncs_core.dispatch.cpp.o
+[ 20%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matmul.dispatch.cpp.o
+[ 20%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix.cpp.o
+[ 20%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_c.cpp.o
+[ 21%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_decomp.cpp.o
+[ 21%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_expressions.cpp.o
+[ 21%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_iterator.cpp.o
+[ 23%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_operations.cpp.o
+[ 23%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_sparse.cpp.o
+[ 23%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_transform.cpp.o
+[ 23%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/matrix_wrap.cpp.o
+[ 24%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/mean.dispatch.cpp.o
+[ 24%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/merge.dispatch.cpp.o
+[ 24%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/minmax.cpp.o
+[ 25%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/norm.cpp.o
+[ 25%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/ocl.cpp.o
+[ 25%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/opencl/runtime/opencl_clblas.cpp.o
+[ 25%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/opencl/runtime/opencl_clfft.cpp.o
+[ 26%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/opencl/runtime/opencl_core.cpp.o
+[ 26%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/opengl.cpp.o
+[ 26%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/out.cpp.o
+[ 28%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/ovx.cpp.o
+[ 28%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/parallel.cpp.o
+[ 28%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/parallel/parallel.cpp.o
+[ 29%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/parallel/parallel_openmp.cpp.o
+/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/modules/core/src/opencl/runtime/opencl_core.cpp:265:2: warning: ("OPENCV: OpenCL dynamic library loader: check configuration") [-W#warnings]
+  265 | #warning("OPENCV: OpenCL dynamic library loader: check configuration")
+      |  ^
+[ 29%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/parallel/parallel_tbb.cpp.o
+/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/modules/core/src/opencl/runtime/opencl_core.cpp:67:20: warning: unused function 'getRuntimePath' [-Wunused-function]
+   67 | static const char* getRuntimePath(const char* defaultPath)
+      |                    ^~~~~~~~~~~~~~
+2 warnings generated.
+[ 29%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/parallel_impl.cpp.o
+[ 29%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/pca.cpp.o
+[ 30%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/persistence.cpp.o
+[ 30%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/persistence_base64_encoding.cpp.o
+[ 30%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/persistence_json.cpp.o
+[ 31%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/persistence_types.cpp.o
+[ 31%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/persistence_xml.cpp.o
+[ 31%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/persistence_yml.cpp.o
+[ 31%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/rand.cpp.o
+[ 32%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/softfloat.cpp.o
+[ 32%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/split.dispatch.cpp.o
+[ 32%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/stat.dispatch.cpp.o
+[ 34%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/stat_c.cpp.o
+[ 34%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/stl.cpp.o
+[ 34%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/sum.dispatch.cpp.o
+[ 34%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/system.cpp.o
+[ 35%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/tables.cpp.o
+[ 35%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/trace.cpp.o
+[ 36%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/umatrix.cpp.o
+[ 36%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/types.cpp.o
+[ 36%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/utils/datafile.cpp.o
+[ 36%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/utils/filesystem.cpp.o
+[ 36%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/utils/logtagconfigparser.cpp.o
+[ 37%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/utils/logtagmanager.cpp.o
+[ 37%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/utils/samples.cpp.o
+[ 37%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/src/va_intel.cpp.o
+[ 39%] Building CXX object modules/core/CMakeFiles/opencv_core.dir/opencl_kernels_core.cpp.o
+[ 39%] Linking CXX static library ../../lib/libopencv_core.a
+[ 39%] Built target opencv_core
+[ 39%] Processing OpenCL kernels (imgproc)
+[ 40%] Building CXX object modules/flann/CMakeFiles/opencv_flann.dir/src/miniflann.cpp.o
+[ 40%] Building CXX object modules/flann/CMakeFiles/opencv_flann.dir/src/flann.cpp.o
+[ 40%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/approx.cpp.o
+[ 40%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/canny.cpp.o
+[ 40%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/box_filter.dispatch.cpp.o
+[ 42%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/accum.dispatch.cpp.o
+[ 42%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/blend.cpp.o
+[ 43%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/accum.cpp.o
+[ 43%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/clahe.cpp.o
+[ 43%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/bilateral_filter.dispatch.cpp.o
+[ 43%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/color.cpp.o
+[ 43%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/color_hsv.dispatch.cpp.o
+[ 43%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/color_lab.cpp.o
+[ 45%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/color_rgb.dispatch.cpp.o
+[ 45%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/color_yuv.dispatch.cpp.o
+[ 45%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/colormap.cpp.o
+[ 46%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/connectedcomponents.cpp.o
+[ 46%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/contours.cpp.o
+[ 46%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/convhull.cpp.o
+[ 46%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/corner.cpp.o
+[ 47%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/cornersubpix.cpp.o
+/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/modules/imgproc/src/color_lab.cpp:948:19: warning: unused variable 'enablePackedLab' [-Wunused-const-variable]
+  948 | static const bool enablePackedLab = true;
+      |                   ^~~~~~~~~~~~~~~
+/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/modules/imgproc/src/color_lab.cpp:965:19: warning: unused variable 'enablePackedRGB2Luv' [-Wunused-const-variable]
+  965 | static const bool enablePackedRGB2Luv = true;
+      |                   ^~~~~~~~~~~~~~~~~~~
+/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/modules/imgproc/src/color_lab.cpp:966:19: warning: unused variable 'enablePackedLuv2RGB' [-Wunused-const-variable]
+  966 | static const bool enablePackedLuv2RGB = true;
+      |                   ^~~~~~~~~~~~~~~~~~~
+/Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv-src/modules/imgproc/src/color_lab.cpp:1369:20: warning: unused function 'trilinearPackedInterpolate' [-Wunused-function]
+ 1369 | static inline void trilinearPackedInterpolate(const v_uint16x8& inX, const v_uint16x8& inY, const v_uint16x8& inZ,
+      |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~
+[ 47%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/demosaicing.cpp.o
+[ 47%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/deriv.cpp.o
+[ 48%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/distransform.cpp.o
+4 warnings generated.
+[ 48%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/drawing.cpp.o
+[ 48%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/emd.cpp.o
+[ 50%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/featureselect.cpp.o
+[ 50%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/filter.dispatch.cpp.o
+[ 50%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/floodfill.cpp.o
+[ 50%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/gabor.cpp.o
+[ 51%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/generalized_hough.cpp.o
+[ 51%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/geometry.cpp.o
+[ 51%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/grabcut.cpp.o
+[ 52%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/hershey_fonts.cpp.o
+[ 52%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/hough.cpp.o
+[ 52%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/histogram.cpp.o
+[ 52%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/imgwarp.cpp.o
+[ 53%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/intelligent_scissors.cpp.o
+[ 53%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/intersection.cpp.o
+[ 53%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/linefit.cpp.o
+[ 54%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/lsd.cpp.o
+[ 54%] Linking CXX static library ../../lib/libopencv_flann.a
+[ 54%] Built target opencv_flann
+[ 54%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/main.cpp.o
+[ 54%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/matchcontours.cpp.o
+[ 54%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/median_blur.dispatch.cpp.o
+[ 56%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/min_enclosing_triangle.cpp.o
+[ 56%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/moments.cpp.o
+[ 56%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/morph.dispatch.cpp.o
+[ 57%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/phasecorr.cpp.o
+[ 57%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/pyramids.cpp.o
+[ 57%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/resize.cpp.o
+[ 57%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/rotcalipers.cpp.o
+[ 58%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/samplers.cpp.o
+[ 58%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/segmentation.cpp.o
+[ 58%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/shapedescr.cpp.o
+[ 59%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/smooth.dispatch.cpp.o
+[ 59%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/spatialgradient.cpp.o
+[ 59%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/stackblur.cpp.o
+[ 60%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/subdivision2d.cpp.o
+[ 60%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/sumpixels.dispatch.cpp.o
+[ 60%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/tables.cpp.o
+[ 60%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/templmatch.cpp.o
+[ 62%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/thresh.cpp.o
+[ 62%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/src/utils.cpp.o
+[ 62%] Building CXX object modules/imgproc/CMakeFiles/opencv_imgproc.dir/opencl_kernels_imgproc.cpp.o
+[ 63%] Linking CXX static library ../../lib/libopencv_imgproc.a
+[ 63%] Built target opencv_imgproc
+[ 63%] Processing OpenCL kernels (features2d)
+[ 63%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/blobdetector.cpp.o
+[ 64%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/affine_feature.cpp.o
+[ 64%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/brisk.cpp.o
+[ 65%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/agast.cpp.o
+[ 65%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/bagofwords.cpp.o
+[ 67%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/draw.cpp.o
+[ 67%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/agast_score.cpp.o
+[ 67%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/dynamic.cpp.o
+[ 67%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/evaluation.cpp.o
+[ 67%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/akaze.cpp.o
+[ 67%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/fast.cpp.o
+[ 68%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/fast_score.cpp.o
+[ 68%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/feature2d.cpp.o
+[ 68%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/gftt.cpp.o
+[ 69%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/kaze.cpp.o
+[ 69%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/kaze/AKAZEFeatures.cpp.o
+[ 69%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/kaze/KAZEFeatures.cpp.o
+[ 69%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/kaze/fed.cpp.o
+[ 70%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/kaze/nldiffusion_functions.cpp.o
+[ 70%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/keypoint.cpp.o
+[ 70%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/main.cpp.o
+[ 71%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/matchers.cpp.o
+[ 71%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/mser.cpp.o
+[ 71%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/orb.cpp.o
+[ 71%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/src/sift.dispatch.cpp.o
+[ 73%] Building CXX object modules/features2d/CMakeFiles/opencv_features2d.dir/opencl_kernels_features2d.cpp.o
+[ 73%] Linking CXX static library ../../lib/libopencv_features2d.a
+[ 73%] Built target opencv_features2d
+[ 73%] Processing OpenCL kernels (calib3d)
+[ 73%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/calibinit.cpp.o
+[ 73%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/calibration.cpp.o
+[ 73%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/chessboard.cpp.o
+[ 74%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/ap3p.cpp.o
+[ 75%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/checkchessboard.cpp.o
+[ 75%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/calibration_handeye.cpp.o
+[ 75%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/circlesgrid.cpp.o
+[ 76%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/dls.cpp.o
+[ 76%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/compat_ptsetreg.cpp.o
+[ 76%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/epnp.cpp.o
+[ 76%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/fisheye.cpp.o
+[ 78%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/five-point.cpp.o
+[ 78%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/fundam.cpp.o
+[ 78%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/homography_decomp.cpp.o
+[ 79%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/ippe.cpp.o
+[ 79%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/levmarq.cpp.o
+[ 79%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/main.cpp.o
+[ 79%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/p3p.cpp.o
+[ 80%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/polynom_solver.cpp.o
+[ 80%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/posit.cpp.o
+[ 80%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/ptsetreg.cpp.o
+[ 81%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/quadsubpix.cpp.o
+[ 81%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/rho.cpp.o
+[ 81%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/solvepnp.cpp.o
+[ 82%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/sqpnp.cpp.o
+[ 82%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/stereobm.cpp.o
+[ 82%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/stereosgbm.cpp.o
+[ 82%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/triangulate.cpp.o
+[ 84%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/undistort.dispatch.cpp.o
+[ 84%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/upnp.cpp.o
+[ 84%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/bundle.cpp.o
+[ 85%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/degeneracy.cpp.o
+[ 85%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/dls_solver.cpp.o
+[ 85%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/essential_solver.cpp.o
+[ 85%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/estimator.cpp.o
+[ 86%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/fundamental_solver.cpp.o
+[ 86%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/gamma_values.cpp.o
+[ 86%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/homography_solver.cpp.o
+[ 87%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/local_optimization.cpp.o
+[ 87%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/pnp_solver.cpp.o
+[ 87%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/quality.cpp.o
+[ 87%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/ransac_solvers.cpp.o
+[ 89%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/sampler.cpp.o
+[ 89%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/termination.cpp.o
+[ 89%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/src/usac/utils.cpp.o
+[ 90%] Building CXX object modules/calib3d/CMakeFiles/opencv_calib3d.dir/opencl_kernels_calib3d.cpp.o
+[ 90%] Linking CXX static library ../../lib/libopencv_calib3d.a
+[ 90%] Built target opencv_calib3d
+[ 90%] Processing OpenCL kernels (video)
+[ 91%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/camshift.cpp.o
+[ 91%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/optflowgf.cpp.o
+[ 91%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/lkpyramid.cpp.o
+[ 92%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/dis_flow.cpp.o
+[ 92%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/bgfg_KNN.cpp.o
+[ 92%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_feature.cpp.o
+[ 92%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/bgfg_gaussmix2.cpp.o
+[ 92%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/optical_flow_io.cpp.o
+[ 92%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/ecc.cpp.o
+[ 93%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/kalman.cpp.o
+[ 93%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_feature_set.cpp.o
+[ 93%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_mil_model.cpp.o
+[ 95%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_mil_state.cpp.o
+[ 95%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_model.cpp.o
+[ 95%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_sampler.cpp.o
+[ 95%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_sampler_algorithm.cpp.o
+[ 96%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracker_state_estimator.cpp.o
+[ 96%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracking_feature.cpp.o
+[ 96%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/detail/tracking_online_mil.cpp.o
+[ 97%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/tracker.cpp.o
+[ 97%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/tracker_dasiamrpn.cpp.o
+[ 97%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/tracker_goturn.cpp.o
+[ 98%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/tracker_mil.cpp.o
+[ 98%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/tracking/tracker_nano.cpp.o
+[ 98%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/src/variational_refinement.cpp.o
+[ 98%] Building CXX object modules/video/CMakeFiles/opencv_video.dir/opencl_kernels_video.cpp.o
+[100%] Linking CXX static library ../../lib/libopencv_video.a
+[100%] Built target opencv_video
+
+[0;32mInstalling OpenCV...[0m
+
+Consolidate compiler generated dependencies of target zlib
+[  6%] Built target zlib
+Consolidate compiler generated dependencies of target opencv_core
+[ 39%] Built target opencv_core
+Consolidate compiler generated dependencies of target opencv_flann
+[ 40%] Built target opencv_flann
+Consolidate compiler generated dependencies of target opencv_imgproc
+[ 63%] Built target opencv_imgproc
+Consolidate compiler generated dependencies of target opencv_features2d
+[ 73%] Built target opencv_features2d
+Consolidate compiler generated dependencies of target opencv_calib3d
+[ 90%] Built target opencv_calib3d
+Consolidate compiler generated dependencies of target opencv_video
+[100%] Built target opencv_video
+Install the project...
+-- Install configuration: "Release"
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/flatbuffers-LICENSE.txt
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/opencl-headers-LICENSE.txt
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/ade-LICENSE
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/cvconfig.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/opencv_modules.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/cmake/opencv4/OpenCVModules.cmake
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/cmake/opencv4/OpenCVModules-release.cmake
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/cmake/opencv4/OpenCVConfig-version.cmake
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/cmake/opencv4/OpenCVConfig.cmake
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/bin/setup_vars_opencv4.sh
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/valgrind.supp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/valgrind_3rdparty.supp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/opencv4/3rdparty/libzlib.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/zlib-LICENSE
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/protobuf-LICENSE
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/protobuf-README.md
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/quirc-LICENSE
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/opencv.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/libopencv_core.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/affine.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/async.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/base.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/bindings_utils.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/bufferpool.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/check.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/core.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/core_c.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda.inl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/block.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/border_interpolate.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/color.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/common.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/datamov_utils.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/detail/color_detail.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/detail/reduce.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/detail/reduce_key_val.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/detail/transform_detail.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/detail/type_traits_detail.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/detail/vec_distance_detail.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/dynamic_smem.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/emulation.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/filters.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/funcattrib.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/functional.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/limits.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/reduce.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/saturate_cast.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/scan.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/simd_functions.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/transform.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/type_traits.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/utility.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/vec_distance.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/vec_math.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/vec_traits.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/warp.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/warp_reduce.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda/warp_shuffle.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda_stream_accessor.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cuda_types.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cv_cpu_dispatch.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cv_cpu_helper.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cvdef.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cvstd.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cvstd.inl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/cvstd_wrapper.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/detail/async_promise.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/detail/dispatch_helper.impl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/detail/exception_ptr.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/directx.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/dualquaternion.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/dualquaternion.inl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/eigen.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/fast_math.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/hal.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/interface.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_avx.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_avx512.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_cpp.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_forward.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_lasx.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_msa.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_neon.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_rvv.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_rvv071.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_rvv_010_compat_non-policy.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_rvv_010_compat_overloaded-non-policy.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_rvv_compat_overloaded.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_rvv_scalable.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_sse.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_sse_em.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_vsx.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/intrin_wasm.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/msa_macros.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/hal/simd_utils.impl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/mat.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/mat.inl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/matx.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/neon_utils.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/ocl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/ocl_genbase.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/ocl_defs.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/opencl_info.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/opencl_svm.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/autogenerated/opencl_clblas.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/autogenerated/opencl_clfft.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/autogenerated/opencl_core.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/autogenerated/opencl_core_wrappers.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/autogenerated/opencl_gl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/autogenerated/opencl_gl_wrappers.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_clblas.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_clfft.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_core.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_core_wrappers.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_gl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_gl_wrappers.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_svm_20.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_svm_definitions.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opencl/runtime/opencl_svm_hsa_extension.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/opengl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/operations.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/optim.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/ovx.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/parallel/backend/parallel_for.openmp.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/parallel/backend/parallel_for.tbb.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/parallel/parallel_backend.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/persistence.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/quaternion.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/quaternion.inl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/saturate.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/simd_intrinsics.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/softfloat.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/sse_utils.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/traits.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/types.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/types_c.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utility.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/allocator_stats.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/allocator_stats.impl.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/filesystem.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/fp_control_utils.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/instrumentation.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/logger.defines.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/logger.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/logtag.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/tls.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/utils/trace.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/va_intel.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/version.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/core/vsx_utils.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/licenses/opencv4/SoftFloat-COPYING.txt
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/libopencv_flann.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/all_indices.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/allocator.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/any.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/autotuned_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/composite_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/config.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/defines.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/dist.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/dummy.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/dynamic_bitset.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/flann.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/flann_base.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/general.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/ground_truth.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/hdf5.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/heap.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/hierarchical_clustering_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/index_testing.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/kdtree_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/kdtree_single_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/kmeans_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/linear_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/logger.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/lsh_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/lsh_table.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/matrix.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/miniflann.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/nn_index.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/object_factory.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/params.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/random.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/result_set.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/sampling.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/saving.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/simplex_downhill.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/flann/timer.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/libopencv_imgproc.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/bindings.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/detail/gcgraph.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/hal/hal.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/hal/interface.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/imgproc.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/imgproc_c.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/segmentation.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/imgproc/types_c.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/libopencv_features2d.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/features2d.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/features2d/features2d.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/features2d/hal/interface.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/libopencv_calib3d.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/calib3d.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/calib3d/calib3d.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/calib3d/calib3d_c.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/lib/libopencv_video.a
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/video.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/video/background_segm.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/video/detail/tracking.detail.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/video/legacy/constants_c.h
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/video/tracking.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/include/opencv4/opencv2/video/video.hpp
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_eye.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_eye_tree_eyeglasses.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_frontalcatface.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_frontalcatface_extended.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_frontalface_alt.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_frontalface_alt2.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_frontalface_alt_tree.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_frontalface_default.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_fullbody.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_lefteye_2splits.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_license_plate_rus_16stages.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_lowerbody.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_profileface.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_righteye_2splits.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_russian_plate_number.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_smile.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/haarcascades/haarcascade_upperbody.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/lbpcascades/lbpcascade_frontalcatface.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/lbpcascades/lbpcascade_frontalface.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/lbpcascades/lbpcascade_frontalface_improved.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/lbpcascades/lbpcascade_profileface.xml
+-- Installing: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv/share/opencv4/lbpcascades/lbpcascade_silverware.xml
+
+[0;32m✓ OpenCV built successfully![0m
+Installed to: /Users/evdodima/workspace/StoriesAlbum/Webar app/wasm/opencv
+
+-rw-r--r--  1 evdodima  staff   2.4M Oct 24 10:03 opencv/lib/libopencv_calib3d.a
+-rw-r--r--  1 evdodima  staff   3.5M Oct 24 10:02 opencv/lib/libopencv_core.a
+-rw-r--r--  1 evdodima  staff   847K Oct 24 10:03 opencv/lib/libopencv_features2d.a
+-rw-r--r--  1 evdodima  staff   716K Oct 24 10:02 opencv/lib/libopencv_flann.a
+-rw-r--r--  1 evdodima  staff   4.6M Oct 24 10:03 opencv/lib/libopencv_imgproc.a
+-rw-r--r--  1 evdodima  staff   540K Oct 24 10:03 opencv/lib/libopencv_video.a
+

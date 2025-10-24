@@ -1,0 +1,32 @@
+# Build artifacts
+build/
+opencv-src/
+
+# OpenCV libraries (large files)
+opencv/lib/
+opencv/share/
+
+# Build outputs
+*.o
+*.a
+*.wasm
+*.js
+*.js.mem
+*.data
+*.symbols
+
+# CMake cache
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

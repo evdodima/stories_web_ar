@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAR Image Tracking - WASM Edition</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Loading screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2>Stories Album AR</h2>
+            <p id="loadingMessage">Initializing WASM engine...</p>
+        </div>
+    </div>
+
+    <!-- Permission prompt -->
+    <div id="permissionPrompt" class="audio-prompt" style="display: none;">
+        <div class="audio-prompt-content">
+            <h2>📷 Start AR Experience</h2>
+            <p>Allow camera and audio access to begin</p>
+            <button id="startARBtn" class="btn btn-primary">Start</button>
+        </div>
+    </div>
+
+    <div class="app-shell">
+        <!-- Fullscreen camera viewport -->
+        <main class="viewport viewport-fullscreen">
+            <div class="viewport-inner">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="output" style="display:none;"></canvas>
+                <canvas id="arCanvas"></canvas>
+            </div>
+
+            <!-- Floating menu button -->
+            <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+
+            <!-- Target info overlay -->
+            <div id="targetInfo" class="ar-overlay-info"></div>
+        </main>
+
+        <!-- Slide-out control panel -->
+        <aside class="control-panel" id="controlPanel">
+            <header class="panel-header">
+                <h1 class="panel-title">Stories Album AR</h1>
+                <p class="panel-subtitle">WASM-powered tracking</p>
+                <button id="closePanel" class="close-panel" aria-label="Close panel">×</button>
+            </header>
+
+            <section class="panel-section" data-panel="reference">
+                <div class="section-heading">
+                    <h2>Target Database</h2>
+                    <p>Targets loaded from pre-built database.</p>
+                </div>
+                <div class="info-card">
+                    <span class="info-label">Database Mode</span>
+                    <p class="info-text">All targets are loaded from <code>target_database.json</code>.</p>
+                </div>
+            </section>
+
+            <section class="panel-section" data-panel="tracking">
+                <div class="section-heading">
+                    <h2>Tracking session</h2>
+                    <p>Control when detection starts and stops.</p>
+                </div>
+                <div class="button-row">
+                    <button id="startTracking" class="btn btn-primary">Start tracking</button>
+                    <button id="stopTracking" class="btn btn-ghost">Stop</button>
+                </div>
+            </section>
+
+            <section class="panel-section" data-panel="options">
+                <div class="section-heading">
+                    <h2>Fine tuning</h2>
+                    <p>Adjust the tracker to balance performance and stability.</p>
+                </div>
+                <label class="toggle-row">
+                    <input type="checkbox" id="useOpticalFlow" checked>
+                    <span class="toggle-label">Use optical flow between detections</span>
+                </label>
+                <label class="toggle-row">
+                    <input type="checkbox" id="showTrackingRects">
+                    <span class="toggle-label">Show tracking rectangles</span>
+                </label>
+                <label class="toggle-row">
+                    <input type="checkbox" id="enableVideoOverlay" checked>
+                    <span class="toggle-label">Enable video overlay</span>
+                </label>
+
+                <div class="slider-group" data-slider="detection">
+                    <div class="slider-header">
+                        <span>Detection interval</span>
+                        <span id="intervalValue" class="slider-value">15</span>
+                    </div>
+                    <input type="range" id="detectionInterval" min="1" max="60" value="15">
+                    <p class="slider-hint">Lower values refresh more often but use more CPU.</p>
+                </div>
+
+                <div class="slider-group" data-slider="features">
+                    <div class="slider-header">
+                        <span>Max feature points</span>
+                        <span id="maxFeaturesValue" class="slider-value">800</span>
+                    </div>
+                    <input type="range" id="maxFeatures" min="20" max="1000" value="800">
+                    <p class="slider-hint">Fewer points improve speed; more points aid stability.</p>
+                </div>
+            </section>
+
+            <section class="panel-section" data-panel="status">
+                <div class="status-card">
+                    <span class="status-label">Status</span>
+                    <p id="statusMessage" class="status-text">Loading...</p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Engine</span>
+                    <p class="status-text"><span id="engineInfo">WASM initializing...</span></p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Database</span>
+                    <p class="status-text"><span id="databaseInfo">Not loaded</span></p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Frame rate</span>
+                    <p class="status-text"><span id="fpsValue">0 fps</span></p>
+                </div>
+                <div class="status-card">
+                    <span class="status-label">Performance</span>
+                    <p class="status-text"><span id="perfValue">0ms</span></p>
+                </div>
+            </section>
+
+            <footer class="panel-footer">
+                <p class="footer-note">Powered by WebAssembly + OpenCV</p>
+            </footer>
+        </aside>
+    </div>
+
+    <!-- Load Three.js for WebGL rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+    <!-- Load JavaScript modules -->
+    <script src="js/ar-bridge.js"></script>
+    <script src="js/camera-io.js"></script>
+    <script src="js/target-loader.js"></script>
+
+    <!-- Keep existing rendering/UI modules -->
+    <script src="modules/rendering/VideoManager.js"></script>
+    <script src="modules/rendering/ARRenderer.js"></script>
+    <script src="modules/ui/UIManager.js"></script>
+
+    <!-- Main application -->
+    <script type="module">
+        /**
+         * WebAR WASM Application
+         * Integrates WASM engine with UI and rendering
+         */
+
+        class WebarApp {
+          constructor() {
+            this.arBridge = null;
+            this.cameraIO = null;
+            this.targetLoader = null;
+            this.renderer = null;
+            this.videoManager = null;
+            this.uiManager = null;
+
+            this.isRunning = false;
+            this.animationFrameId = null;
+            this.fpsCounter = { frames: 0, lastTime: 0, fps: 0 };
+          }
+
+          async initialize() {
+            try {
+              // Update loading message
+              this.updateLoadingMessage('Loading WASM engine...');
+
+              // Initialize AR Bridge
+              this.arBridge = new ARBridge();
+              await this.arBridge.initialize();
+
+              this.updateLoadingMessage('Loading target database...');
+
+              // Initialize Target Loader
+              this.targetLoader = new TargetLoader(this.arBridge);
+              const targetCount = await this.targetLoader.loadDatabase();
+
+              document.getElementById('databaseInfo').textContent =
+                `${targetCount} targets loaded`;
+              document.getElementById('engineInfo').textContent =
+                'WASM engine ready';
+
+              this.updateLoadingMessage('Initializing camera...');
+
+              // Initialize Camera
+              this.cameraIO = new CameraIO();
+              const videoEl = document.getElementById('video');
+              const outputEl = document.getElementById('output');
+
+              console.log('[WebarApp] Video element:', videoEl);
+              console.log('[WebarApp] Output canvas:', outputEl);
+
+              await this.cameraIO.initialize(videoEl, outputEl);
+
+              // Check video visibility
+              const videoStyle = window.getComputedStyle(videoEl);
+              console.log('[WebarApp] Video element styles:', {
+                display: videoStyle.display,
+                visibility: videoStyle.visibility,
+                width: videoStyle.width,
+                height: videoStyle.height,
+                opacity: videoStyle.opacity
+              });
+
+              // Initialize Renderer with camera video element
+              this.renderer = new window.ARRenderer('arCanvas', videoEl, {
+                enabled: true,
+                showTrackingRects: true,
+                muted: true
+              });
+
+              // Update renderer size to match camera
+              const camDims = this.cameraIO.getDimensions();
+              this.renderer.updateSize(camDims.width, camDims.height);
+
+              console.log('[WebarApp] Renderer initialized with camera feed');
+
+              // Initialize Video Manager
+              this.videoManager = new window.VideoManager();
+
+              // Initialize UI Manager (skip for now, using manual UI handling)
+              // this.uiManager = new window.UIManager();
+              this.setupUIHandlers();
+
+              // Configure engine
+              this.updateEngineConfig();
+
+              // Hide loading screen
+              document.getElementById('loadingScreen').style.display = 'none';
+
+              // Show permission prompt
+              document.getElementById('permissionPrompt').style.display = 'flex';
+
+              console.log('[WebarApp] Initialized successfully');
+
+            } catch (error) {
+              console.error('[WebarApp] Initialization failed:', error);
+              this.updateLoadingMessage(`Error: ${error.message}`);
+            }
+          }
+
+          setupUIHandlers() {
+            // Start AR button
+            document.getElementById('startARBtn').addEventListener('click', () => {
+              document.getElementById('permissionPrompt').style.display = 'none';
+              this.startTracking();
+            });
+
+            // Start/Stop buttons
+            document.getElementById('startTracking').addEventListener('click', () => {
+              this.startTracking();
+            });
+
+            document.getElementById('stopTracking').addEventListener('click', () => {
+              this.stopTracking();
+            });
+
+            // Config changes
+            document.getElementById('useOpticalFlow').addEventListener('change', () => {
+              this.updateEngineConfig();
+            });
+
+            document.getElementById('detectionInterval').addEventListener('input', (e) => {
+              document.getElementById('intervalValue').textContent = e.target.value;
+              this.updateEngineConfig();
+            });
+
+            document.getElementById('maxFeatures').addEventListener('input', (e) => {
+              document.getElementById('maxFeaturesValue').textContent = e.target.value;
+              this.updateEngineConfig();
+            });
+          }
+
+          updateEngineConfig() {
+            const config = {
+              useOpticalFlow: document.getElementById('useOpticalFlow').checked,
+              detectionInterval: parseInt(document.getElementById('detectionInterval').value),
+              maxFeatures: parseInt(document.getElementById('maxFeatures').value),
+              maxTrackingPoints: 100,
+              matchRatioThreshold: 0.7
+            };
+
+            this.arBridge.setConfig(config);
+            console.log('[WebarApp] Config updated:', config);
+          }
+
+          startTracking() {
+            if (this.isRunning) return;
+
+            console.log('[WebarApp] Starting tracking...');
+            console.log('[WebarApp] Camera IO:', !!this.cameraIO);
+            console.log('[WebarApp] AR Bridge:', !!this.arBridge);
+            console.log('[WebarApp] Renderer:', !!this.renderer);
+
+            this.isRunning = true;
+            this.arBridge.startTracking();
+            document.getElementById('statusMessage').textContent = 'Tracking active';
+
+            console.log('[WebarApp] Starting process loop...');
+            this.processLoop();
+          }
+
+          stopTracking() {
+            this.isRunning = false;
+            this.arBridge.stopTracking();
+            document.getElementById('statusMessage').textContent = 'Tracking stopped';
+
+            if (this.animationFrameId) {
+              cancelAnimationFrame(this.animationFrameId);
+              this.animationFrameId = null;
+            }
+          }
+
+          processLoop() {
+            if (!this.isRunning) {
+              console.log('[WebarApp] Process loop stopped - isRunning is false');
+              return;
+            }
+
+            // Capture frame
+            const frameData = this.cameraIO.captureFrameRaw();
+            if (frameData) {
+              // Process with WASM engine
+              try {
+                const results = this.arBridge.processFrame(
+                  frameData.data,
+                  frameData.width,
+                  frameData.height,
+                  frameData.channels
+                );
+
+                // Log first few frames
+                if (this.fpsCounter.frames < 3) {
+                  console.log('[WebarApp] Frame processed:', {
+                    width: frameData.width,
+                    height: frameData.height,
+                    channels: frameData.channels,
+                    resultsCount: results.length,
+                    detected: results.filter(r => r.detected).length
+                  });
+                }
+
+                // Update renderer
+                this.updateRenderer(results);
+
+                // Update stats
+                this.updateStats();
+              } catch (error) {
+                console.error('[WebarApp] Error processing frame:', error);
+              }
+            } else {
+              if (this.fpsCounter.frames === 0) {
+                console.warn('[WebarApp] No frame data captured');
+              }
+            }
+
+            // Continue loop
+            this.animationFrameId = requestAnimationFrame(() => {
+              this.processLoop();
+            });
+          }
+
+          updateRenderer(results) {
+            if (!this.renderer) return;
+
+            // Update renderer settings
+            const showRects = document.getElementById('showTrackingRects').checked;
+            this.renderer.showTrackingRects = showRects;
+
+            // Convert results format for renderer
+            const trackingResults = results.filter(r => r.detected).map(r => ({
+              targetId: r.targetId,
+              success: r.detected,
+              confidence: r.confidence,
+              corners: r.corners
+            }));
+
+            // Get current camera frame for background rendering
+            const cameraFrame = this.cameraIO.captureFrame();
+
+            // Render with camera background and tracking overlays
+            this.renderer.render(trackingResults, cameraFrame, null);
+          }
+
+          updateStats() {
+            // Update FPS
+            const now = performance.now();
+            this.fpsCounter.frames++;
+
+            if (now - this.fpsCounter.lastTime >= 1000) {
+              this.fpsCounter.fps = this.fpsCounter.frames;
+              this.fpsCounter.frames = 0;
+              this.fpsCounter.lastTime = now;
+
+              document.getElementById('fpsValue').textContent =
+                `${this.fpsCounter.fps} fps`;
+            }
+
+            // Update performance stats
+            const stats = this.arBridge.getFrameStats();
+            document.getElementById('perfValue').textContent =
+              `${stats.totalMs.toFixed(1)}ms (det: ${stats.detectionMs.toFixed(1)}ms, track: ${stats.trackingMs.toFixed(1)}ms)`;
+          }
+
+          updateLoadingMessage(message) {
+            const elem = document.getElementById('loadingMessage');
+            if (elem) {
+              elem.textContent = message;
+            }
+          }
+        }
+
+        // Initialize app when DOM is ready
+        const app = new WebarApp();
+        app.initialize();
+
+        // Export to window for debugging
+        window.webarApp = app;
+    </script>
+</body>
+</html>

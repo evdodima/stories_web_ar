@@ -1,0 +1,41 @@
+{
+  "name": "webar-image-tracking",
+  "version": "2.0.0",
+  "description": "WebAR Image Tracking with WASM-powered computer vision",
+  "main": "index.html",
+  "scripts": {
+    "build:wasm": "cd wasm && ./build-simple.sh",
+    "build:wasm:manual": "cd wasm && ./build.sh",
+    "build": "npm run build:wasm",
+    "serve": "npx serve -l 8000",
+    "dev": "npm run build:wasm && npm run serve",
+    "watch:wasm": "nodemon --watch wasm/src --watch wasm/include --ext cpp,hpp --exec 'npm run build:wasm'",
+    "start": "npm run serve",
+    "clean": "rm -rf wasm/build wasm/opencv-src public/wasm/*.wasm public/wasm/*.js",
+    "test": "echo 'No automated tests yet - test in browser'",
+    "lint:cpp": "echo 'C++ linting not configured'",
+    "size": "ls -lh public/wasm/*.wasm public/wasm/*.js 2>/dev/null || echo 'No WASM files built yet. Run: npm run build:wasm'"
+  },
+  "keywords": [
+    "webAR",
+    "wasm",
+    "opencv",
+    "image-tracking",
+    "computer-vision",
+    "webassembly"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "serve": "^14.2.0"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

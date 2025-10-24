@@ -156,8 +156,8 @@ class ARRenderer {
   }
 
   /**
-   * Update camera background from OpenCV frame
-   * @param {cv.Mat} frame - OpenCV frame to display as background
+   * Update camera background from OpenCV frame or ImageData
+   * @param {cv.Mat|ImageData} frame - OpenCV frame or ImageData to display as background
    */
   updateCameraBackground(frame) {
     if (!frame || !this.backgroundPlane) return;
@@ -166,10 +166,7 @@ class ARRenderer {
       // Store reference to current frame
       this.lastCameraFrame = frame;
 
-      // Update size to match frame
-      this.updateSize(frame.cols, frame.rows);
-
-      // Convert OpenCV Mat to canvas
+      // Create canvas if needed
       if (!this._backgroundCanvas) {
         this._backgroundCanvas = document.createElement('canvas');
         this._backgroundContext = this._backgroundCanvas.getContext('2d', {
@@ -177,9 +174,23 @@ class ARRenderer {
           alpha: false
         });
       }
-      this._backgroundCanvas.width = frame.cols;
-      this._backgroundCanvas.height = frame.rows;
-      cv.imshow(this._backgroundCanvas, frame);
+
+      // Handle different frame types
+      if (frame instanceof ImageData) {
+        // ImageData from canvas
+        this._backgroundCanvas.width = frame.width;
+        this._backgroundCanvas.height = frame.height;
+        this._backgroundContext.putImageData(frame, 0, 0);
+        this.updateSize(frame.width, frame.height);
+      } else if (frame.cols && frame.rows) {
+        // OpenCV Mat
+        this._backgroundCanvas.width = frame.cols;
+        this._backgroundCanvas.height = frame.rows;
+        cv.imshow(this._backgroundCanvas, frame);
+        this.updateSize(frame.cols, frame.rows);
+      } else {
+        return;
+      }
 
       // Update texture from canvas
       if (!this.backgroundTexture) {

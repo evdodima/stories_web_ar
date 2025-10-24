@@ -1,83 +1,88 @@
-# WebAR Image Tracking
+# WebAR Image Tracking - WASM Edition
 
-A custom WebAR image tracking solution built using OpenCV.js and Three.js. This application allows you to track images in real-time using your camera and overlay 3D content on top of them.
+Production-ready WebAR image tracking with all computer vision in WebAssembly.
 
-## Features
+## 🚀 Quick Start (5 Minutes)
 
-- Real-time image tracking using OpenCV's feature detection
-- 3D object rendering with Three.js
-- Camera access from any device with a browser
-- No markers required - use any image as a reference
-- Works on mobile and desktop browsers
-
-## How It Works
-
-1. Upload a reference image that you want to track
-2. Point your camera at the printed version of the image
-3. The app will detect the image in the real world and overlay a 3D cube on top of it
-4. The 3D object will follow the image as you move your camera or the image
-
-## Technical Details
-
-This solution uses:
-
-- **OpenCV.js** for image processing and feature detection
-- **ORB** (Oriented FAST and Rotated BRIEF) feature detector for robust real-time tracking
-- **Three.js** for 3D rendering
-- **Homography Matrix** to calculate the transformation between the reference image and the camera view
-
-## Requirements
-
-- A modern web browser with WebGL and WebRTC support
-- Camera access
-- For best results, use images with many distinct features (avoid repetitive patterns or overly simple images)
-
-## Getting Started
-
-1. Clone this repository
-2. Open `index.html` in a web server (cannot be run directly from the filesystem due to security restrictions)
-3. Allow camera access when prompted
-4. Upload a reference image
-5. Click "Start Tracking"
-6. Point your camera at a physical copy of the reference image
-
-## Running Locally
-
-You can use any local web server to run this project. For example:
+### 1. Activate Emscripten
 
 ```bash
-# Using Python 3
-python -m http.server
-
-# Using Node.js
-npx serve
+source ~/emsdk/emsdk_env.sh
 ```
 
-Then navigate to `http://localhost:8000` (or whichever port your server uses).
+### 2. Build WASM Module
 
-## Customizing the 3D Object
+```bash
+npm install
+npm run build:wasm
+```
 
-Currently, the app displays a simple green cube as the 3D object. You can customize this by modifying the `initThreeJS()` method in `imageTracker.js`. Replace the cube with any 3D model of your choice, including:
+**First build takes ~5 minutes** (downloads OpenCV automatically)
+**Subsequent builds take ~30 seconds**
 
-- Custom 3D models (glTF, OBJ, etc.)
-- Interactive animations
-- UI elements or information cards
+### 3. Run
 
-## Performance Considerations
+```bash
+npm run serve
+```
 
-- The image tracking algorithm is computationally intensive, especially on mobile devices
-- For better performance, use smaller reference images with distinct features
-- The app limits processing to approximately 30fps to reduce CPU usage
-- Memory management is critical - all OpenCV objects are properly cleaned up after use
+Open: http://localhost:8000/index-wasm.html
 
-## Future Improvements
+---
 
-- Support for tracking multiple images simultaneously
-- Add more complex 3D models and animations
-- Implement marker-less tracking for specific surfaces
-- Optimize for mobile performance
-- Add support for ARCore/ARKit for improved tracking when available
+## 📖 Documentation
 
-## License
+- **New here?** → Read [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md)
+- **Need details?** → See [WASM_README.md](WASM_README.md)
+- **Want architecture?** → Check [ARCHITECTURE.md](ARCHITECTURE.md)
+- **API reference?** → [WASM_README.md](WASM_README.md#api-reference)
 
-MIT
+---
+
+## 🛠️ Commands
+
+```bash
+# Build WASM module (uses pre-built OpenCV)
+npm run build:wasm
+
+# Build and serve
+npm run dev
+
+# Just serve (no build)
+npm run serve
+
+# Watch for changes and rebuild
+npm run watch:wasm
+
+# Clean build artifacts
+npm run clean
+
+# Check WASM file sizes
+npm run size
+```
+
+---
+
+## 📂 Project Structure
+
+```
+webar-app/
+├── wasm/              # C++ WASM engine
+├── js/                # JavaScript bridge
+├── public/wasm/       # Built WASM output
+├── index-wasm.html    # WASM version
+└── BUILD_INSTRUCTIONS.md
+```
+
+---
+
+## 🔧 Quick Troubleshooting
+
+**"emcc not found"** → Run: `source ~/emsdk/emsdk_env.sh`
+**Build fails** → Run: `npm run clean && npm run build:wasm`
+
+See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for details.
+
+---
+
+**Status**: ✅ Ready to build!

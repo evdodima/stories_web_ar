@@ -1,0 +1,106 @@
+╔══════════════════════════════════════════════════════════════╗
+║          HOW TO BUILD WASM MODULE - SIMPLE GUIDE            ║
+╔══════════════════════════════════════════════════════════════╗
+
+STEP 1: Activate Emscripten
+----------------------------
+You MUST do this in every new terminal before building!
+
+Run this command:
+
+    source ~/emsdk/emsdk_env.sh
+
+Verify it worked:
+
+    emcc --version
+
+Should show: emcc (Emscripten...) 4.x.x
+
+
+STEP 2: Build
+-------------
+Now you can build:
+
+    cd "/Users/evdodima/workspace/StoriesAlbum/Webar app"
+    npm run build:wasm
+
+OR use the helper script (checks Emscripten automatically):
+
+    ./build.sh
+
+
+STEP 3: Test
+------------
+Start the server:
+
+    npm run serve
+
+Open browser:
+
+    http://localhost:8000/index-wasm.html
+
+
+═══════════════════════════════════════════════════════════════
+
+QUICK REFERENCE
+===============
+
+Activate Emscripten (required first):
+    source ~/emsdk/emsdk_env.sh
+
+Build (after activating):
+    npm run build:wasm
+
+Clean:
+    npm run clean
+
+Serve:
+    npm run serve
+
+Check files:
+    ls -lh public/wasm/
+
+═══════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING
+===============
+
+Error: "emcc: command not found"
+    → Run: source ~/emsdk/emsdk_env.sh
+
+Error: "Emscripten not found"
+    → Run: source ~/emsdk/emsdk_env.sh
+
+Build fails:
+    → Clean and retry:
+      npm run clean
+      npm run build:wasm
+
+═══════════════════════════════════════════════════════════════
+
+WHAT YOU SHOULD SEE
+===================
+
+After successful build:
+
+    ✓ Build successful!
+    Output files:
+      - webar_engine.wasm (3.2M)
+      - webar_engine.js (147K)
+    
+    Files are in: public/wasm/
+
+═══════════════════════════════════════════════════════════════
+
+COPY/PASTE THIS FULL SEQUENCE:
+===============================
+
+source ~/emsdk/emsdk_env.sh
+cd "/Users/evdodima/workspace/StoriesAlbum/Webar app"
+npm run clean
+npm run build:wasm
+npm run serve
+
+Then open: http://localhost:8000/index-wasm.html
+
+═══════════════════════════════════════════════════════════════
