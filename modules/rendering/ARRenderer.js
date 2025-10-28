@@ -2,11 +2,13 @@
  * AR Renderer - Three.js-based AR overlay renderer
  *
  * Renders both tracking rectangles and video overlays using Three.js WebGL.
+ * Uses ViewportManager for centralized dimension management.
  */
 class ARRenderer {
-  constructor(canvasId, cameraVideo, options = {}) {
+  constructor(canvasId, cameraVideo, viewportManager, options = {}) {
     this.canvasId = canvasId;
     this.cameraVideo = cameraVideo;
+    this.viewportManager = viewportManager;
     this.enabled = options.enabled !== false;
     this.showTrackingRects = options.showTrackingRects !== false;
 
@@ -38,6 +40,11 @@ class ARRenderer {
     this.frameHeight = 0;
 
     this.initialize();
+
+    // Subscribe to viewport updates
+    this.viewportManager.on('update', (data) => {
+      this.onViewportUpdate(data);
+    });
   }
 
   /**
@@ -98,16 +105,12 @@ class ARRenderer {
   }
 
   /**
-   * Update renderer size to match viewport (aspect-fill)
+   * Update renderer size using ViewportManager dimensions
    */
-  updateSize(width, height) {
-    if (!this.renderer) return;
+  updateSize() {
+    if (!this.renderer || !this.viewportManager) return;
 
-    // Use viewport dimensions for aspect-fill effect
-    if (!width || !height) {
-      width = window.innerWidth;
-      height = window.innerHeight;
-    }
+    const { width, height } = this.viewportManager.getDimensions();
 
     if (width === this.cameraWidth && height === this.cameraHeight) return;
 
@@ -117,65 +120,86 @@ class ARRenderer {
     this.renderer.setSize(width, height, false);
 
     // Update camera to match canvas coordinates
-    // Origin (0,0) is top-left, Y increases downward (standard canvas coordinates)
+    // Origin (0,0) is top-left, Y increases downward (standard canvas)
     this.camera.left = 0;
     this.camera.right = width;
     this.camera.top = 0;
     this.camera.bottom = height;
     this.camera.updateProjectionMatrix();
 
-    // Update background plane to fill viewport with aspect-fill
-    if (this.backgroundPlane) {
-      // Use frame dimensions if available, otherwise fall back to video element
-      const frameWidth = this.frameWidth || this.cameraVideo?.videoWidth || 640;
-      const frameHeight = this.frameHeight || this.cameraVideo?.videoHeight || 480;
-      const frameAspect = frameWidth / frameHeight;
-      const canvasAspect = width / height;
+    // Update background plane using ViewportManager's aspect-fill calculation
+    this.updateBackgroundPlane();
 
-      let bgWidth, bgHeight;
+    console.log('[ARRenderer] Resized to:', width, 'x', height);
+  }
 
-      // Aspect-fill: scale to cover entire viewport
-      if (frameAspect > canvasAspect) {
-        // Frame is wider - fit to height, crop width
-        bgHeight = height;
-        bgWidth = height * frameAspect;
+  /**
+   * Update background plane sizing using ViewportManager
+   */
+  updateBackgroundPlane() {
+    if (!this.backgroundPlane) return;
+
+    // Use OpenCV frame dimensions if available, fallback to video dimensions
+    let frameWidth = this.frameWidth;
+    let frameHeight = this.frameHeight;
+
+    // If frame dimensions not set, use video dimensions as fallback
+    if (!frameWidth || !frameHeight) {
+      if (this.cameraVideo && this.cameraVideo.videoWidth > 0) {
+        frameWidth = this.cameraVideo.videoWidth;
+        frameHeight = this.cameraVideo.videoHeight;
+        console.log('[ARRenderer] Using video dimensions as fallback:', {
+          video: `${frameWidth}x${frameHeight}`
+        });
       } else {
-        // Frame is taller - fit to width, crop height
-        bgWidth = width;
-        bgHeight = width / frameAspect;
+        console.warn('[ARRenderer] No dimensions available for background plane');
+        return;
       }
-
-      this.backgroundPlane.position.set(width / 2, height / 2, -1);
-      this.backgroundPlane.scale.set(bgWidth, bgHeight, 1);
     }
 
-    console.log('[ARRenderer] Resized to:', width, 'x', height, 'Camera bounds:', {
-      left: this.camera.left,
-      right: this.camera.right,
-      top: this.camera.top,
-      bottom: this.camera.bottom
+    const { width, height } = this.viewportManager.getDimensions();
+    const scale = this.viewportManager.getAspectFillScale(
+      frameWidth,
+      frameHeight
+    );
+
+    this.backgroundPlane.position.set(scale.x, scale.y, -1);
+    this.backgroundPlane.scale.set(scale.width, scale.height, 1);
+
+    console.log('[ARRenderer] Background scaled:', {
+      frame: `${frameWidth}x${frameHeight}`,
+      viewport: `${width}x${height}`,
+      background: `${scale.width.toFixed(0)}x${scale.height.toFixed(0)}`
     });
   }
 
   /**
-   * Handle resize/orientation change events
+   * Handle viewport updates from ViewportManager
+   * @param {Object} data - Update data from ViewportManager
    */
-  handleResize() {
-    console.log('[ARRenderer] Handling resize/orientation change');
+  onViewportUpdate(data) {
+    console.log('[ARRenderer] Viewport update:', {
+      dimensions: `${data.width}x${data.height}`,
+      orientation: data.orientation,
+      orientationChanged: data.orientationChanged
+    });
 
-    // Force re-check of video dimensions
-    this.cameraWidth = 0;
-    this.cameraHeight = 0;
+    // Update renderer size
+    this.updateSize();
 
-    // Wait a bit for video element to stabilize after orientation change
-    setTimeout(() => {
-      this.updateSize();
+    // Only update background plane if dimensions are available
+    // During orientation change, camera restarts and dimensions may not be available yet
+    if (data.orientationChanged &&
+        (!this.frameWidth || !this.frameHeight) &&
+        (!this.cameraVideo?.videoWidth || !this.cameraVideo?.videoHeight)) {
+      console.log('[ARRenderer] Skipping background update - waiting for camera restart');
+      return;
+    }
 
-      // Force a render to update canvas
-      if (this.scene && this.camera && this.renderer) {
-        this.renderer.render(this.scene, this.camera);
-      }
-    }, 100);
+    // Force a render to update canvas immediately
+    if (this.scene && this.camera && this.renderer) {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   /**
@@ -203,7 +227,13 @@ class ARRenderer {
    * @param {cv.Mat} frame - OpenCV frame to display as background
    */
   updateCameraBackground(frame) {
-    if (!frame || !this.backgroundPlane) return;
+    if (!frame || !this.backgroundPlane) {
+      console.warn('[ARRenderer] updateCameraBackground called but:', {
+        hasFrame: !!frame,
+        hasBackgroundPlane: !!this.backgroundPlane
+      });
+      return;
+    }
 
     try {
       // Store reference to current frame
@@ -212,6 +242,15 @@ class ARRenderer {
       // Track OpenCV frame dimensions
       this.frameWidth = frame.cols;
       this.frameHeight = frame.rows;
+
+      console.log('[ARRenderer] DEBUG - updateCameraBackground:', {
+        frameType: frame.constructor.name,
+        frameCols: frame.cols,
+        frameRows: frame.rows,
+        frameChannels: frame.channels(),
+        frameDepth: frame.depth(),
+        frameData: frame.data ? `${frame.data.length} bytes` : 'no data'
+      });
 
       // Ensure canvas is sized to viewport (only on first frame)
       if (this.cameraWidth === 0 || this.cameraHeight === 0) {
@@ -225,25 +264,73 @@ class ARRenderer {
           willReadFrequently: false,
           alpha: false
         });
+        console.log('[ARRenderer] DEBUG - Created background canvas');
       }
+
+      // Check if canvas size changed (orientation change)
+      const sizeChanged = this._backgroundCanvas.width !== frame.cols ||
+                          this._backgroundCanvas.height !== frame.rows;
+
       this._backgroundCanvas.width = frame.cols;
       this._backgroundCanvas.height = frame.rows;
+
+      console.log('[ARRenderer] DEBUG - Before cv.imshow:', {
+        canvasWidth: this._backgroundCanvas.width,
+        canvasHeight: this._backgroundCanvas.height,
+        sizeChanged
+      });
+
       cv.imshow(this._backgroundCanvas, frame);
 
+      console.log('[ARRenderer] DEBUG - After cv.imshow, checking canvas data');
+
+      // Check if canvas has actual image data
+      const imageData = this._backgroundContext.getImageData(0, 0,
+        Math.min(10, this._backgroundCanvas.width),
+        Math.min(10, this._backgroundCanvas.height));
+      console.log('[ARRenderer] DEBUG - Canvas pixel sample (first 40 bytes):',
+        Array.from(imageData.data.slice(0, 40)));
+
       // Update texture from canvas
-      if (!this.backgroundTexture) {
+      // If size changed, recreate texture to avoid WebGL dimension mismatch
+      if (!this.backgroundTexture || sizeChanged) {
+        // Dispose old texture if it exists
+        if (this.backgroundTexture) {
+          console.log('[ARRenderer] Frame dimensions changed, recreating texture');
+          this.backgroundTexture.dispose();
+        }
+
         this.backgroundTexture = new THREE.CanvasTexture(this._backgroundCanvas);
         this.backgroundTexture.minFilter = THREE.LinearFilter;
         this.backgroundTexture.magFilter = THREE.LinearFilter;
-        this.backgroundTexture.flipY = false; // Don't flip
-        this.backgroundTexture.colorSpace = THREE.SRGBColorSpace; // Match canvas color space
+        this.backgroundTexture.flipY = false;
+        this.backgroundTexture.colorSpace = THREE.SRGBColorSpace;
         this.backgroundPlane.material.map = this.backgroundTexture;
         this.backgroundPlane.material.needsUpdate = true;
+
+        // Update background plane scale with new frame dimensions
+        this.updateBackgroundPlane();
+
+        console.log('[ARRenderer] DEBUG - Created texture:', {
+          textureWidth: this.backgroundTexture.image.width,
+          textureHeight: this.backgroundTexture.image.height,
+          materialMap: !!this.backgroundPlane.material.map,
+          planeScale: {
+            x: this.backgroundPlane.scale.x,
+            y: this.backgroundPlane.scale.y
+          },
+          planePosition: {
+            x: this.backgroundPlane.position.x,
+            y: this.backgroundPlane.position.y,
+            z: this.backgroundPlane.position.z
+          }
+        });
       } else {
         this.backgroundTexture.needsUpdate = true;
       }
     } catch (error) {
       console.error('[ARRenderer] Error updating camera background:', error);
+      console.error('[ARRenderer] Error stack:', error.stack);
     }
   }
 
@@ -265,6 +352,12 @@ class ARRenderer {
     const opencvWidth = this.frameWidth || 640;
     const opencvHeight = this.frameHeight || 480;
 
+    // Get background plane scale (the actual displayed size after aspect-fill)
+    const bgScale = this.viewportManager.getAspectFillScale(
+      opencvWidth,
+      opencvHeight
+    );
+
     // Track which targets are active
     const activeTargets = new Set();
 
@@ -276,12 +369,31 @@ class ARRenderer {
 
       activeTargets.add(result.targetId);
 
-      // Convert corners from OpenCV pixel coordinates to normalized coordinates (0-1)
-      // Then scale to camera resolution
-      const scaledCorners = result.corners.map(corner => ({
-        x: (corner.x / opencvWidth) * this.cameraWidth,
-        y: (corner.y / opencvHeight) * this.cameraHeight
-      }));
+      // Convert corners from OpenCV pixel coordinates to background plane world coordinates
+      // CRITICAL: Account for background plane position and size!
+      // Background is centered and aspect-filled, may extend beyond viewport
+      const scaledCorners = result.corners.map(corner => {
+        const u = corner.x / opencvWidth;   // Normalized X (0-1)
+        const v = corner.y / opencvHeight;  // Normalized Y (0-1)
+        return {
+          x: bgScale.x - bgScale.width / 2 + u * bgScale.width,
+          y: bgScale.y - bgScale.height / 2 + v * bgScale.height
+        };
+      });
+
+      // Debug log for first detection
+      if (!this._loggedScaling) {
+        console.log('[ARRenderer] SCALING DEBUG:', {
+          originalCorner: result.corners[0],
+          opencvSpace: `${opencvWidth}x${opencvHeight}`,
+          viewportSpace: `${this.cameraWidth}x${this.cameraHeight}`,
+          backgroundPlane: `${bgScale.width.toFixed(0)}x${bgScale.height.toFixed(0)}`,
+          scaledCorner: scaledCorners[0],
+          scaleFactorX: bgScale.width / opencvWidth,
+          scaleFactorY: bgScale.height / opencvHeight
+        });
+        this._loggedScaling = true;
+      }
 
       // Get or create target objects
       let targetObj = this.targetObjects.get(result.targetId);
@@ -453,12 +565,20 @@ class ARRenderer {
       if (!this._debugFrameCount) this._debugFrameCount = 0;
       this._debugFrameCount++;
       if (this._debugFrameCount % 60 === 0) {
-        console.log('[ARRenderer] Tracking line corners:', {
-          TL: `(${corners[0].x}, ${corners[0].y})`,
-          TR: `(${corners[1].x}, ${corners[1].y})`,
-          BR: `(${corners[2].x}, ${corners[2].y})`,
-          BL: `(${corners[3].x}, ${corners[3].y})`,
-          cameraSize: `${this.cameraWidth}x${this.cameraHeight}`
+        console.log('[ARRenderer] COORDINATE DEBUG:', {
+          corners: {
+            TL: `(${corners[0].x.toFixed(0)}, ${corners[0].y.toFixed(0)})`,
+            TR: `(${corners[1].x.toFixed(0)}, ${corners[1].y.toFixed(0)})`,
+            BR: `(${corners[2].x.toFixed(0)}, ${corners[2].y.toFixed(0)})`,
+            BL: `(${corners[3].x.toFixed(0)}, ${corners[3].y.toFixed(0)})`
+          },
+          viewport: `${this.cameraWidth}x${this.cameraHeight}`,
+          backgroundPlane: {
+            scale: `${this.backgroundPlane.scale.x.toFixed(0)}x${this.backgroundPlane.scale.y.toFixed(0)}`,
+            position: `${this.backgroundPlane.position.x.toFixed(0)}, ${this.backgroundPlane.position.y.toFixed(0)}`
+          },
+          opencvFrame: `${this.frameWidth}x${this.frameHeight}`,
+          cameraOrtho: `${this.camera.left},${this.camera.right},${this.camera.top},${this.camera.bottom}`
         });
       }
     } catch (error) {

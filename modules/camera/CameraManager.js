@@ -1,37 +1,63 @@
 /**
  * Manages camera access and video capture
+ * Includes state machine for reliable stream lifecycle management
  */
 class CameraManager {
+    // State machine constants
+    static STATE = {
+        STOPPED: 'stopped',
+        INITIALIZING: 'initializing',
+        READY: 'ready',
+        ERROR: 'error'
+    };
+
     constructor() {
         this.video = document.getElementById('video');
         this.canvas = document.getElementById('output');
         this.stream = null;
+        this.state = CameraManager.STATE.STOPPED;
+        this.currentConstraints = null;
     }
 
-    async start() {
+    async start(constraints = null) {
         try {
-            // Try to use rear camera first with preferred settings
-            const constraints = this.getCameraConstraints();
+            this.state = CameraManager.STATE.INITIALIZING;
 
-            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // Use provided constraints or get defaults
+            const cameraConstraints = constraints || this.getCameraConstraints();
+            this.currentConstraints = cameraConstraints;
+
+            console.log('CameraManager: Starting with constraints:',
+                        cameraConstraints.video);
+
+            this.stream = await navigator.mediaDevices.getUserMedia(
+              cameraConstraints
+            );
             this.video.srcObject = this.stream;
 
             // Start video playback (critical for mobile)
             await this.video.play();
 
-            // Wait for video to be ready
-            return this.waitForVideoReady();
+            // Wait for video to be ready with stable dimensions
+            await this.waitForVideoReady();
+
+            this.state = CameraManager.STATE.READY;
+            console.log(`CameraManager: Ready (${this.video.videoWidth}x` +
+                        `${this.video.videoHeight})`);
+
+            return true;
         } catch (error) {
+            this.state = CameraManager.STATE.ERROR;
             console.error('Camera start error:', error);
             throw new Error(`Camera access error: ${error.message}`);
         }
     }
 
-    getCameraConstraints() {
+    getCameraConstraints(width = 1280, height = 960) {
         return {
             video: {
-                width: { ideal: 1280 },
-                height: { ideal: 960 },
+                width: { ideal: width },
+                height: { ideal: height },
                 facingMode: 'environment' // Prefer rear camera
             },
             audio: false
@@ -40,17 +66,26 @@ class CameraManager {
 
 
     async waitForVideoReady() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds max wait
+
             const checkVideo = () => {
-                if (this.video.readyState >= 2 && // HAVE_CURRENT_DATA or better
+                attempts++;
+
+                // Check for HAVE_ENOUGH_DATA (readyState 4) for most reliable
+                // playback, fallback to HAVE_CURRENT_DATA (readyState 2)
+                if (this.video.readyState >= 2 &&
                     this.video.videoWidth > 0 &&
                     this.video.videoHeight > 0) {
 
-                    // Canvas size will be set dynamically based on processing resolution
-                    // This is handled in the first frame capture
+                    console.log(`CameraManager: Video ready after ` +
+                                `${attempts * 100}ms`);
                     resolve();
+                } else if (attempts >= maxAttempts) {
+                    reject(new Error('Video failed to initialize after 5s'));
                 } else {
-                    // Check again in a short while
+                    // Check again in 100ms
                     setTimeout(checkVideo, 100);
                 }
             };
@@ -58,13 +93,12 @@ class CameraManager {
             // Start checking if video is ready
             checkVideo();
 
-            // Also set up the loadeddata event as a backup
-            this.video.addEventListener('loadeddata', () => {
-                // Double check dimensions are available
+            // Also set up the loadedmetadata event as a backup
+            this.video.addEventListener('loadedmetadata', () => {
                 if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
                     resolve();
                 }
-            });
+            }, { once: true });
         });
     }
 
@@ -75,6 +109,47 @@ class CameraManager {
             this.video.srcObject = null;
             this.stream = null;
         }
+        this.state = CameraManager.STATE.STOPPED;
+        console.log('CameraManager: Stopped');
+    }
+
+    /**
+     * Restart camera stream with new constraints
+     * Used during orientation changes to get optimal resolution
+     * @param {Object} constraints - Camera constraints from ViewportManager
+     */
+    async restart(constraints = null) {
+        console.log('CameraManager: Restarting stream...');
+
+        // Stop existing stream
+        this.stop();
+
+        // Small delay to ensure stream is fully released
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Start with new constraints
+        return this.start(constraints);
+    }
+
+    /**
+     * Get current video dimensions
+     * @returns {{width: number, height: number}}
+     */
+    getDimensions() {
+        return {
+            width: this.video.videoWidth || 0,
+            height: this.video.videoHeight || 0
+        };
+    }
+
+    /**
+     * Check if camera is ready for frame capture
+     * @returns {boolean}
+     */
+    isReady() {
+        return this.state === CameraManager.STATE.READY &&
+               this.video.videoWidth > 0 &&
+               this.video.videoHeight > 0;
     }
 
     captureFrame(maxDimension) {

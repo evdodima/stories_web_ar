@@ -36,6 +36,9 @@ class ImageTracker {
         // Initialize profiler
         this.profiler = new PerformanceProfiler();
 
+        // Initialize viewport manager (central dimension authority)
+        this.viewportManager = new ViewportManager();
+
         // Initialize sub-modules
         this.ui = new UIManager(this);
         this.camera = new CameraManager();
@@ -107,40 +110,56 @@ class ImageTracker {
     }
 
     setupOrientationHandling() {
-        let resizeTimeout;
-        const handleResize = () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                console.log('[ImageTracker] Handling orientation/resize change');
+        // Subscribe to viewport updates from ViewportManager
+        this.viewportManager.on('update', async (data) => {
+            console.log('[ImageTracker] Viewport update received:', data);
 
-                // Force video refresh to prevent freezing
-                if (this.camera && this.camera.video) {
-                    const video = this.camera.video;
+            // Only restart camera stream if orientation actually changed
+            if (data.orientationChanged && this.state.isTracking) {
+                await this.handleOrientationChange();
+            }
+        });
+    }
 
-                    // Force video to refresh by toggling play/pause
-                    if (!video.paused) {
-                        video.pause();
-                        setTimeout(() => {
-                            video.play().catch(err => {
-                                console.warn('[ImageTracker] Video play after resize failed:', err);
-                            });
-                        }, 50);
-                    }
-                }
+    async handleOrientationChange() {
+        console.log('[ImageTracker] Orientation changed - restarting camera...');
 
-                // Force canvas resize if ARRenderer exists
-                if (this.arRenderer && this.arRenderer.renderer) {
-                    this.arRenderer.handleResize();
-                }
-            }, 150);
-        };
+        try {
+            // Pause tracking temporarily (but keep render loop running)
+            const wasTracking = this.state.isTracking;
+            this.state.isTracking = false;
 
-        window.addEventListener('resize', handleResize);
-        window.addEventListener('orientationchange', handleResize);
+            // Clear ARRenderer frame dimensions to force recalculation
+            if (this.arRenderer) {
+                this.arRenderer.frameWidth = 0;
+                this.arRenderer.frameHeight = 0;
+            }
 
-        // Also handle screen orientation API if available
-        if (screen.orientation) {
-            screen.orientation.addEventListener('change', handleResize);
+            // Get new optimal constraints from ViewportManager
+            const newConstraints = this.viewportManager.getCameraConstraints();
+
+            // Restart camera stream with new constraints
+            await this.camera.restart(newConstraints);
+
+            // Wait a bit for video dimensions to stabilize
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Force ARRenderer to update background plane with new video dimensions
+            if (this.arRenderer) {
+                this.arRenderer.updateBackgroundPlane();
+            }
+
+            // Resume tracking and restart processing loop
+            if (wasTracking) {
+                this.state.isTracking = true;
+                console.log('[ImageTracker] Camera restarted, resuming tracking...');
+
+                // Restart the processing loop
+                this.processVideo();
+            }
+        } catch (error) {
+            console.error('[ImageTracker] Error handling orientation change:', error);
+            this.ui.updateStatus('Error restarting camera after rotation');
         }
     }
 
@@ -163,11 +182,16 @@ class ImageTracker {
             } else {
                 const videoElement = document.getElementById('video');
                 console.log('[ImageTracker] Creating ARRenderer with video element:', videoElement);
-                this.arRenderer = new ARRenderer('arCanvas', videoElement, {
+                this.arRenderer = new ARRenderer(
+                  'arCanvas',
+                  videoElement,
+                  this.viewportManager,
+                  {
                     enabled: true,
                     muted: false, // Audio on by default
                     showTrackingRects: false // Hidden by default
-                });
+                  }
+                );
                 console.log('[ImageTracker] ARRenderer preloaded:', this.arRenderer);
             }
         }
@@ -177,8 +201,11 @@ class ImageTracker {
         this.ui.updateStatus('Starting tracking...');
 
         try {
-            // Start camera (browser will show camera permission dialog)
-            await this.camera.start();
+            // Get optimal camera constraints for current orientation
+            const constraints = this.viewportManager.getCameraConstraints();
+
+            // Start camera with orientation-aware constraints
+            await this.camera.start(constraints);
 
             // Update UI
             this.ui.updateControlsForTracking(true);

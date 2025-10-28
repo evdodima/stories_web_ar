@@ -16,6 +16,7 @@
         './modules/detection/FeatureDetector.js',
         './modules/tracking/OpticalFlowTracker.js',
         './modules/rendering/VideoManager.js',
+        './modules/core/ViewportManager.js',
         './modules/rendering/ARRenderer.js',
         './modules/core/ImageTracker.js'
     ];

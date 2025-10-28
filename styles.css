@@ -643,9 +643,12 @@ body {
     height: 100%;
     object-fit: cover;
     display: none; /* Hidden - rendering camera feed in Three.js for perfect sync */
-    /* Force video to adapt to orientation changes */
+    /* GPU acceleration for smooth playback */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
+    /* Prevent video from being interrupted during orientation changes */
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 #output,
@@ -654,11 +657,17 @@ body {
     inset: 0;
     width: 100vw;
     height: 100vh;
+    /* iOS Safari viewport fix */
     height: -webkit-fill-available;
-    /* No object-fit - canvas fills viewport, texture scaled in WebGL */
-    /* Force canvas to adapt to orientation changes */
+    /* Prevent layout shift during orientation changes */
+    max-width: 100vw;
+    max-height: 100vh;
+    overflow: hidden;
+    /* GPU acceleration for smooth rendering */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 #output {
