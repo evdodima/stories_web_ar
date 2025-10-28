@@ -15,7 +15,7 @@ const MODULES_DIR = './modules';
 // Module loading order (critical for dependencies)
 const MODULE_ORDER = [
   'modules/utils/PerformanceProfiler.js',
-  'modules/database/DatabaseLoader.js', 
+  'modules/database/DatabaseLoader.js',
   'modules/database/VocabularyTreeQuery.js',
   'modules/ui/UIManager.js',
   'modules/camera/CameraManager.js',
@@ -23,6 +23,7 @@ const MODULE_ORDER = [
   'modules/detection/FeatureDetector.js',
   'modules/tracking/OpticalFlowTracker.js',
   'modules/rendering/VideoManager.js',
+  'modules/core/ViewportManager.js',
   'modules/rendering/ARRenderer.js',
   'modules/core/ImageTracker.js'
 ];
