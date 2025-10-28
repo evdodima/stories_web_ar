@@ -80,19 +80,32 @@ class ViewportManager {
 
   /**
    * Get optimal camera constraints for current orientation
-   * Returns higher resolution in the longer dimension
+   * iOS-specific handling for main wide camera
    */
   getCameraConstraints() {
     const isPortrait = this.orientation === 'portrait';
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-    return {
+    const constraints = {
       video: {
-        facingMode: 'environment',
-        width: { ideal: isPortrait ? 720 : 1280 },
-        height: { ideal: isPortrait ? 1280 : 720 }
+        facingMode: { exact: 'environment' },
+        // Request higher resolution - iOS will scale appropriately
+        width: { ideal: isPortrait ? 1080 : 1920 },
+        height: { ideal: isPortrait ? 1920 : 1080 },
+        // Prefer main wide camera (not ultra-wide) on iOS
+        aspectRatio: { ideal: isPortrait ? 9/16 : 16/9 }
       },
       audio: false
     };
+
+    // On iOS, try to explicitly request main wide camera
+    if (isIOS) {
+      // Advanced constraints for iOS to prefer main camera
+      constraints.video.facingMode = 'environment';
+      constraints.video.zoom = { ideal: 1.0 }; // Main camera, not ultra-wide
+    }
+
+    return constraints;
   }
 
   /**

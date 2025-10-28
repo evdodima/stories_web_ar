@@ -42,8 +42,18 @@ class CameraManager {
             await this.waitForVideoReady();
 
             this.state = CameraManager.STATE.READY;
+
+            // Log actual camera capabilities
+            const track = this.stream.getVideoTracks()[0];
+            const settings = track.getSettings();
             console.log(`CameraManager: Ready (${this.video.videoWidth}x` +
                         `${this.video.videoHeight})`);
+            console.log('CameraManager: Camera settings:', {
+                aspectRatio: settings.aspectRatio,
+                facingMode: settings.facingMode,
+                deviceId: settings.deviceId ? 'present' : 'none',
+                zoom: settings.zoom || 'not supported'
+            });
 
             return true;
         } catch (error) {
