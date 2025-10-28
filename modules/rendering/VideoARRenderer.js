@@ -10,6 +10,9 @@ class VideoARRenderer {
     this.cameraVideo = cameraVideo;
     this.enabled = options.enabled !== false;
 
+    // Overlay scale factor (1.01 = 1% bigger than tracked image)
+    this.overlayScale = 1.01;
+
     // Three.js components
     this.scene = null;
     this.camera = null;
@@ -286,15 +289,25 @@ class VideoARRenderer {
     const centerY = (corners[0].y + corners[1].y +
                      corners[2].y + corners[3].y) / 4;
 
+    // Scale corners outward from center by overlayScale factor
+    const scaledCorners = corners.map(corner => ({
+      x: centerX + (corner.x - centerX) * this.overlayScale,
+      y: centerY + (corner.y - centerY) * this.overlayScale
+    }));
+
     // Update vertex positions for perspective
     // Vertex 0: Top-left
-    positions.setXY(0, corners[0].x - centerX, corners[0].y - centerY);
+    positions.setXY(0, scaledCorners[0].x - centerX,
+                       scaledCorners[0].y - centerY);
     // Vertex 1: Top-right
-    positions.setXY(1, corners[1].x - centerX, corners[1].y - centerY);
+    positions.setXY(1, scaledCorners[1].x - centerX,
+                       scaledCorners[1].y - centerY);
     // Vertex 2: Bottom-left
-    positions.setXY(2, corners[3].x - centerX, corners[3].y - centerY);
+    positions.setXY(2, scaledCorners[3].x - centerX,
+                       scaledCorners[3].y - centerY);
     // Vertex 3: Bottom-right
-    positions.setXY(3, corners[2].x - centerX, corners[2].y - centerY);
+    positions.setXY(3, scaledCorners[2].x - centerX,
+                       scaledCorners[2].y - centerY);
 
     positions.needsUpdate = true;
   }
