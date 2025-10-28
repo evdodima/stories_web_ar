@@ -110,19 +110,50 @@ class ImageTracker {
     }
 
     setupOrientationHandling() {
-        // Subscribe to viewport updates from ViewportManager
+        // Get overlay element reference
+        const overlay = document.getElementById('cameraTransitionOverlay');
+
+        // Show overlay immediately on resize/orientation events (no debounce)
+        // This prevents user from seeing distorted camera feed
+        const showOverlayImmediately = () => {
+            if (overlay && this.state.isTracking) {
+                overlay.classList.add('visible');
+                console.log('[ImageTracker] Overlay shown immediately on resize/orientation');
+            }
+        };
+
+        // Add immediate event listeners for instant overlay display
+        window.addEventListener('resize', showOverlayImmediately);
+        window.addEventListener('orientationchange', showOverlayImmediately);
+        if (screen.orientation) {
+            screen.orientation.addEventListener('change', showOverlayImmediately);
+        }
+
+        // Subscribe to viewport updates from ViewportManager (debounced)
+        // This handles the actual camera restart after orientation stabilizes
         this.viewportManager.on('update', async (data) => {
             console.log('[ImageTracker] Viewport update received:', data);
 
             // Only restart camera stream if orientation actually changed
             if (data.orientationChanged && this.state.isTracking) {
                 await this.handleOrientationChange();
+            } else if (overlay) {
+                // Hide overlay even if orientation didn't change (e.g., desktop resize)
+                // This ensures the overlay doesn't stay visible after simple resizes
+                overlay.classList.remove('visible');
+                console.log('[ImageTracker] Overlay hidden after viewport resize');
             }
         });
     }
 
     async handleOrientationChange() {
         console.log('[ImageTracker] Orientation changed - restarting camera...');
+
+        // Ensure black overlay is visible (should already be shown by immediate event listener)
+        const overlay = document.getElementById('cameraTransitionOverlay');
+        if (overlay) {
+            overlay.classList.add('visible');
+        }
 
         try {
             // Pause tracking temporarily (but keep render loop running)
@@ -157,9 +188,19 @@ class ImageTracker {
                 // Restart the processing loop
                 this.processVideo();
             }
+
+            // Hide black overlay after camera restart is complete
+            if (overlay) {
+                overlay.classList.remove('visible');
+            }
         } catch (error) {
             console.error('[ImageTracker] Error handling orientation change:', error);
             this.ui.updateStatus('Error restarting camera after rotation');
+
+            // Hide overlay even on error
+            if (overlay) {
+                overlay.classList.remove('visible');
+            }
         }
     }
 

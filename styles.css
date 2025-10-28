@@ -681,6 +681,30 @@ body {
     pointer-events: none;
 }
 
+/* Black overlay during orientation changes and camera restart */
+.camera-transition-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: -webkit-fill-available; /* iOS Safari viewport fix */
+    background: #000;
+    z-index: 15; /* Above AR canvas */
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    /* GPU acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.camera-transition-overlay.visible {
+    opacity: 1;
+    transition: opacity 0.05s ease-in; /* Show quickly */
+}
+
 .file-picker.is-disabled {
     opacity: 0.45;
     pointer-events: none;
