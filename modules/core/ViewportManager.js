@@ -80,32 +80,18 @@ class ViewportManager {
 
   /**
    * Get optimal camera constraints for current orientation
-   * iOS-specific handling for main wide camera
+   * Uses 4:3 aspect ratio which works well in both portrait and landscape
+   * (matches original working constraints)
    */
   getCameraConstraints() {
-    const isPortrait = this.orientation === 'portrait';
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-    const constraints = {
+    return {
       video: {
-        facingMode: { exact: 'environment' },
-        // Request higher resolution - iOS will scale appropriately
-        width: { ideal: isPortrait ? 1080 : 1920 },
-        height: { ideal: isPortrait ? 1920 : 1080 },
-        // Prefer main wide camera (not ultra-wide) on iOS
-        aspectRatio: { ideal: isPortrait ? 9/16 : 16/9 }
+        width: { ideal: 1280 },
+        height: { ideal: 960 },
+        facingMode: 'environment'
       },
       audio: false
     };
-
-    // On iOS, try to explicitly request main wide camera
-    if (isIOS) {
-      // Advanced constraints for iOS to prefer main camera
-      constraints.video.facingMode = 'environment';
-      constraints.video.zoom = { ideal: 1.0 }; // Main camera, not ultra-wide
-    }
-
-    return constraints;
   }
 
   /**
