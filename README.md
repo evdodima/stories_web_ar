@@ -16,7 +16,7 @@ A WebAR application that brings photo albums to life by playing videos when you 
 
 ### 1. Prepare Your Album
 
-Create a zip file named `album.zip` with all images and videos in the root (no folders):
+Create a zip file with all images and videos in the root (no folders):
 
 ```
 album.zip
@@ -34,11 +34,23 @@ album.zip
 - `photo502377.jpg` pairs with `video502377.mp4`
 - The code extracts the numeric ID to match them automatically
 
-### 2. Place Album in Project Root
+Upload the album to your cloud storage system and get an encoded album code.
 
-Put your `album.zip` file in the root directory of the project.
+### 2. Access the Application with Album Code
 
-### 3. Run the Application
+The app automatically downloads albums from cloud storage using an encoded URL parameter:
+
+```
+https://webar.stories-ar.com/?c=nRyZThA25blBk+AVSwZAEg==
+```
+
+The `c` parameter contains the encrypted album ID. The app will:
+1. Send the encrypted code to the backend API (`https://pro.stories-ar.com`)
+2. Backend decrypts and validates the code securely
+3. Backend fetches the download URL from storage API
+4. Frontend downloads and extracts the album automatically
+
+### 3. Run the Application (Development)
 
 ```bash
 # Using Python 3
@@ -53,19 +65,23 @@ Navigate to `http://localhost:8000` in your browser.
 ### 4. Start Tracking
 
 1. Allow camera access when prompted
-2. Wait for the album to load and vocabulary tree to build (5-15 seconds)
+2. Wait for the album to download and vocabulary tree to build (10-20 seconds)
 3. Point your camera at one of the printed photos
 4. Watch the corresponding video play on top of the image!
 
 ## How It Works
 
-### Image Target Loading
+### Album Download & Loading
 
-1. **Zip Extraction**: The app loads `album.zip` and extracts images and videos
-2. **Feature Detection**: Extracts BRISK features from each image (up to 500 per image)
-3. **Vocabulary Building**: Clusters features into a vocabulary tree using k-means
-4. **BoW & TF-IDF**: Computes Bag-of-Words and TF-IDF vectors for fast retrieval
-5. **Video Mapping**: Associates each image with its corresponding video file
+1. **URL Parsing**: Extracts encrypted album code from URL parameter
+2. **Backend API Call**: Sends encrypted code to Rails backend (`POST /api/v1/albums/download`)
+3. **Secure Processing**: Backend decrypts code, validates, and fetches pre-signed download URL
+4. **Album Download**: Downloads the album zip file with progress tracking
+5. **Zip Extraction**: Extracts images and videos from the downloaded archive
+6. **Feature Detection**: Extracts BRISK features from each image (up to 500 per image)
+7. **Vocabulary Building**: Clusters features into a vocabulary tree using k-means
+8. **BoW & TF-IDF**: Computes Bag-of-Words and TF-IDF vectors for fast retrieval
+9. **Video Mapping**: Associates each image with its corresponding video file
 
 ### Real-Time Tracking
 
@@ -132,10 +148,41 @@ Adjust in the UI control panel:
 
 ## Technical Stack
 
+### Frontend
 - **OpenCV.js**: Computer vision (BRISK, optical flow, homography)
 - **Three.js**: WebGL rendering for video overlay
 - **JSZip**: Zip file extraction in browser
 - **Vanilla JavaScript**: No framework dependencies
+
+### Backend
+- **Ruby on Rails**: Backend API proxy for secure album downloads
+- **AES Encryption**: Secure album code decryption on server
+- **AWS S3**: Pre-signed URLs for secure file downloads
+
+## Security Architecture
+
+### How It Works
+
+1. **Encrypted URL Codes**: Album IDs are encrypted on the backend before generating share URLs
+2. **Backend Proxy**: Frontend never has access to encryption keys or storage API credentials
+3. **Authorization via Code**: The encrypted code acts as a temporary "password" for that specific album
+4. **Pre-signed URLs**: S3 URLs are time-limited and can only be used once
+5. **No Frontend Secrets**: All sensitive keys (AES, API keys) remain on the backend server
+
+### Flow
+
+```
+User URL with code → Frontend → Rails Backend → Storage API → S3 Download
+                        ↓            ↓
+                    No secrets   Has all keys
+```
+
+### Benefits
+
+✅ **Secure**: API keys and encryption keys never exposed to users
+✅ **Simple**: Users just need the encrypted URL to access their album
+✅ **Controlled**: Backend can add rate limiting, logging, and access control
+✅ **Auditable**: All album downloads go through backend for tracking
 
 ## Architecture
 
@@ -147,6 +194,9 @@ modules/
 │   ├── VocabularyBuilder.js       # K-means clustering for vocabulary
 │   ├── VocabularyTreeQuery.js     # Fast candidate selection
 │   └── ZipDatabaseLoader.js       # Zip loading & database building
+├── utils/
+│   ├── AlbumManager.js            # Album code decryption & download
+│   └── PerformanceProfiler.js     # Performance monitoring
 ├── reference/
 │   └── ReferenceImageManager.js   # Target lifecycle management
 ├── detection/
@@ -169,10 +219,11 @@ modules/
 
 ### Loading Time
 
+- Album download: ~2-5 seconds (depending on network and album size)
 - Zip extraction: ~1-2 seconds
 - Feature extraction: ~0.5-1 second per image
 - Vocabulary building: ~5-10 seconds (10 images)
-- Total: ~5-15 seconds for typical album
+- Total: ~10-20 seconds for typical album
 
 ### Runtime Performance
 
@@ -193,9 +244,12 @@ modules/
 ### Album Not Loading
 
 - Check browser console for errors
-- Verify `album.zip` is in project root
-- Ensure zip structure matches expected format
-- Check that JSZip library loaded successfully
+- Verify the URL contains a valid `c` parameter with encoded album code
+- Ensure network connection is stable for downloading
+- Check that backend API (`https://pro.stories-ar.com`) is accessible
+- Verify the album exists in cloud storage
+- Check backend logs for decryption or API errors
+- Ensure JSZip library loaded successfully
 
 ### Tracking Not Working
 
@@ -242,25 +296,28 @@ modules/
 - Test under different lighting conditions
 - Test with various album sizes (5-20 images)
 
-## Differences from Main Branch
+## Recent Updates
 
-This branch (`feature/zip-based-targets`) introduces:
+This branch includes:
 
-1. **Zip-based loading** instead of pre-built database JSON
-2. **Frontend vocabulary building** using JavaScript k-means
-3. **Automatic image-to-video pairing** by filename matching
-4. **Removed DatabaseLoader.js** (replaced by ZipDatabaseLoader.js)
-5. **Dynamic database generation** instead of offline Python script
+1. **Secure Backend Proxy** - All sensitive operations moved to Rails backend
+2. **Cloud Storage Integration** - Albums downloaded from S3 via pre-signed URLs
+3. **URL Parameter Handling** - Automatic album loading from encrypted URL codes
+4. **Backend API** - Rails endpoint (`/api/v1/albums/download`) handles decryption and authorization
+5. **Zero Frontend Secrets** - No API keys or encryption keys exposed in frontend code
+6. **Progress Tracking** - Real-time download and processing progress
+7. **AlbumManager Module** - Simplified frontend module for album downloads
 
 ## Future Improvements
 
-- [ ] Add drag & drop zip upload in UI
-- [ ] Support remote zip URLs
-- [ ] Cache vocabulary tree in IndexedDB
-- [ ] Add album metadata (title, descriptions)
+- [ ] Cache downloaded albums in IndexedDB for offline use
+- [ ] Add drag & drop zip upload in UI for local testing
+- [ ] Cache vocabulary tree in IndexedDB to speed up repeated loads
+- [ ] Add album metadata (title, descriptions) in API response
 - [ ] Support image-to-multiple-videos mapping
 - [ ] Progressive loading for large albums
 - [ ] Album editing and management UI
+- [ ] Error recovery and retry logic for failed downloads
 
 ## License
 

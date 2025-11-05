@@ -79,10 +79,40 @@ class ReferenceImageManager {
      * Load targets from zip archive containing images and videos
      * @param {string|File} source - URL to zip file or File object
      */
-    async loadFromZip(source = 'album.zip') {
+    async loadFromZip(source = null) {
         this.updateStatus('Loading album archive...');
 
         try {
+            // Determine the source of the album
+            let albumSource = source;
+
+            // If no source provided, try to get from URL parameter
+            if (!albumSource) {
+                const albumManager = new AlbumManager();
+
+                // Check if there's an album code in the URL
+                const albumCode = albumManager.getAlbumCodeFromURL();
+
+                if (albumCode) {
+                    // Download from storage via backend
+                    console.log('Downloading album from cloud storage...');
+                    this.updateStatus('Downloading album from cloud storage...');
+
+                    const albumBlob = await albumManager.getAlbumFromURL((progress) => {
+                        if (progress.stage === 'api') {
+                            this.updateStatus(progress.message);
+                        } else if (progress.stage === 'download' && progress.progress) {
+                            this.updateStatus(`${progress.message}`);
+                        }
+                    });
+
+                    albumSource = albumBlob;
+                    console.log('Album downloaded successfully');
+                } else {
+                    throw new Error('No album source provided and no album code found in URL');
+                }
+            }
+
             // Create loader with progress callback (ZipDatabaseLoader is globally available)
             this.zipLoader = new ZipDatabaseLoader({
                 onProgress: (progress) => {
@@ -92,7 +122,7 @@ class ReferenceImageManager {
             });
 
             // Load and build database from zip
-            const database = await this.zipLoader.loadFromZip(source);
+            const database = await this.zipLoader.loadFromZip(albumSource);
 
             console.log(`Loading ${database.targets.length} targets from album...`);
 

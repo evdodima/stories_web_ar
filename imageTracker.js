@@ -8,6 +8,7 @@
 (function() {
     const scripts = [
         './modules/utils/PerformanceProfiler.js',
+        './modules/utils/AlbumManager.js',
         './modules/database/VocabularyTreeQuery.js',
         './modules/database/VocabularyBuilder.js',
         './modules/database/ZipDatabaseLoader.js',
