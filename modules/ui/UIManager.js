@@ -45,6 +45,8 @@ class UIManager {
 
         // New fullscreen UI elements
         this.loadingScreen = byId('loadingScreen');
+        this.loadingSpinner = byId('loadingSpinner');
+        this.loadingErrorIcon = byId('loadingErrorIcon');
         this.loadingProgressBar = byId('loadingProgressBar');
         this.loadingProgressText = byId('loadingProgressText');
         this.menuToggle = byId('menuToggle');
@@ -211,6 +213,35 @@ class UIManager {
         if (this.loadingProgressText && message) {
             this.loadingProgressText.textContent = message;
         }
+    }
+
+    showError(message) {
+        // Ensure loading screen is visible and not hidden
+        if (this.loadingScreen) {
+            this.loadingScreen.classList.remove('hidden');
+            this.loadingScreen.style.display = 'flex';
+        }
+
+        // Toggle spinner vs. error icon
+        if (this.loadingSpinner) {
+            this.loadingSpinner.style.display = 'none';
+        }
+        if (this.loadingErrorIcon) {
+            this.loadingErrorIcon.style.display = 'block';
+        }
+
+        // Make progress bar appear full and styled as error if possible
+        if (this.loadingProgressBar) {
+            this.loadingProgressBar.style.width = '100%';
+            this.loadingProgressBar.classList.add('error');
+        }
+
+        // Update both loading text and status panel
+        if (this.loadingProgressText) {
+            this.loadingProgressText.textContent = `Error: ${message}`;
+        }
+
+        this.updateStatus(`ERROR: ${message}`);
     }
 
     showTargetInfo(label) {

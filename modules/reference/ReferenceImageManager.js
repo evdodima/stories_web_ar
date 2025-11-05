@@ -180,6 +180,9 @@ class ReferenceImageManager {
         } catch (error) {
             console.error('Failed to load album:', error);
             this.updateStatus(`ERROR: Failed to load album: ${error.message}`);
+            if (this.uiManager && this.uiManager.showError) {
+                this.uiManager.showError(error.message || 'Failed to load album');
+            }
             throw error;
         }
     }

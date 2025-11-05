@@ -20,7 +20,14 @@
     <!-- Loading screen -->
     <div id="loadingScreen" class="loading-screen">
         <div class="loading-content">
-            <div class="spinner"></div>
+            <div class="spinner" id="loadingSpinner"></div>
+            <div id="loadingErrorIcon" style="display:none; width:48px; height:48px; margin: 0 auto 12px auto;">
+                <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" fill="#ef4444"></circle>
+                    <rect x="11" y="6" width="2" height="8" fill="#ffffff"></rect>
+                    <rect x="11" y="16" width="2" height="2" fill="#ffffff"></rect>
+                </svg>
+            </div>
             <h2>Stories Album AR</h2>
             <div class="loading-progress">
                 <div id="loadingProgressBar" class="loading-progress-bar" style="width:0%"></div>
