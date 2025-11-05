@@ -130,7 +130,7 @@ class ARRenderer {
     // Update background plane using ViewportManager's aspect-fill calculation
     this.updateBackgroundPlane();
 
-    console.log('[ARRenderer] Resized to:', width, 'x', height);
+    // Resized log removed
   }
 
   /**
@@ -165,12 +165,6 @@ class ARRenderer {
 
     this.backgroundPlane.position.set(scale.x, scale.y, -1);
     this.backgroundPlane.scale.set(scale.width, scale.height, 1);
-
-    console.log('[ARRenderer] Background scaled:', {
-      frame: `${frameWidth}x${frameHeight}`,
-      viewport: `${width}x${height}`,
-      background: `${scale.width.toFixed(0)}x${scale.height.toFixed(0)}`
-    });
   }
 
   /**
@@ -243,14 +237,7 @@ class ARRenderer {
       this.frameWidth = frame.cols;
       this.frameHeight = frame.rows;
 
-      console.log('[ARRenderer] DEBUG - updateCameraBackground:', {
-        frameType: frame.constructor.name,
-        frameCols: frame.cols,
-        frameRows: frame.rows,
-        frameChannels: frame.channels(),
-        frameDepth: frame.depth(),
-        frameData: frame.data ? `${frame.data.length} bytes` : 'no data'
-      });
+      // DEBUG logs removed
 
       // Ensure canvas is sized to viewport (only on first frame)
       if (this.cameraWidth === 0 || this.cameraHeight === 0) {
@@ -264,7 +251,6 @@ class ARRenderer {
           willReadFrequently: false,
           alpha: false
         });
-        console.log('[ARRenderer] DEBUG - Created background canvas');
       }
 
       // Check if canvas size changed (orientation change)
@@ -274,22 +260,7 @@ class ARRenderer {
       this._backgroundCanvas.width = frame.cols;
       this._backgroundCanvas.height = frame.rows;
 
-      console.log('[ARRenderer] DEBUG - Before cv.imshow:', {
-        canvasWidth: this._backgroundCanvas.width,
-        canvasHeight: this._backgroundCanvas.height,
-        sizeChanged
-      });
-
       cv.imshow(this._backgroundCanvas, frame);
-
-      console.log('[ARRenderer] DEBUG - After cv.imshow, checking canvas data');
-
-      // Check if canvas has actual image data
-      const imageData = this._backgroundContext.getImageData(0, 0,
-        Math.min(10, this._backgroundCanvas.width),
-        Math.min(10, this._backgroundCanvas.height));
-      console.log('[ARRenderer] DEBUG - Canvas pixel sample (first 40 bytes):',
-        Array.from(imageData.data.slice(0, 40)));
 
       // Update texture from canvas
       // If size changed, recreate texture to avoid WebGL dimension mismatch
@@ -310,21 +281,6 @@ class ARRenderer {
 
         // Update background plane scale with new frame dimensions
         this.updateBackgroundPlane();
-
-        console.log('[ARRenderer] DEBUG - Created texture:', {
-          textureWidth: this.backgroundTexture.image.width,
-          textureHeight: this.backgroundTexture.image.height,
-          materialMap: !!this.backgroundPlane.material.map,
-          planeScale: {
-            x: this.backgroundPlane.scale.x,
-            y: this.backgroundPlane.scale.y
-          },
-          planePosition: {
-            x: this.backgroundPlane.position.x,
-            y: this.backgroundPlane.position.y,
-            z: this.backgroundPlane.position.z
-          }
-        });
       } else {
         this.backgroundTexture.needsUpdate = true;
       }
@@ -381,19 +337,7 @@ class ARRenderer {
         };
       });
 
-      // Debug log for first detection
-      if (!this._loggedScaling) {
-        console.log('[ARRenderer] SCALING DEBUG:', {
-          originalCorner: result.corners[0],
-          opencvSpace: `${opencvWidth}x${opencvHeight}`,
-          viewportSpace: `${this.cameraWidth}x${this.cameraHeight}`,
-          backgroundPlane: `${bgScale.width.toFixed(0)}x${bgScale.height.toFixed(0)}`,
-          scaledCorner: scaledCorners[0],
-          scaleFactorX: bgScale.width / opencvWidth,
-          scaleFactorY: bgScale.height / opencvHeight
-        });
-        this._loggedScaling = true;
-      }
+      // Debug logs removed
 
       // Get or create target objects
       let targetObj = this.targetObjects.get(result.targetId);
@@ -561,26 +505,7 @@ class ARRenderer {
 
       positions.needsUpdate = true;
 
-      // Debug logging (once every 60 frames)
-      if (!this._debugFrameCount) this._debugFrameCount = 0;
-      this._debugFrameCount++;
-      if (this._debugFrameCount % 60 === 0) {
-        console.log('[ARRenderer] COORDINATE DEBUG:', {
-          corners: {
-            TL: `(${corners[0].x.toFixed(0)}, ${corners[0].y.toFixed(0)})`,
-            TR: `(${corners[1].x.toFixed(0)}, ${corners[1].y.toFixed(0)})`,
-            BR: `(${corners[2].x.toFixed(0)}, ${corners[2].y.toFixed(0)})`,
-            BL: `(${corners[3].x.toFixed(0)}, ${corners[3].y.toFixed(0)})`
-          },
-          viewport: `${this.cameraWidth}x${this.cameraHeight}`,
-          backgroundPlane: {
-            scale: `${this.backgroundPlane.scale.x.toFixed(0)}x${this.backgroundPlane.scale.y.toFixed(0)}`,
-            position: `${this.backgroundPlane.position.x.toFixed(0)}, ${this.backgroundPlane.position.y.toFixed(0)}`
-          },
-          opencvFrame: `${this.frameWidth}x${this.frameHeight}`,
-          cameraOrtho: `${this.camera.left},${this.camera.right},${this.camera.top},${this.camera.bottom}`
-        });
-      }
+      // Debug logs removed
     } catch (error) {
       console.error('[ARRenderer] Error updating tracking line:', error);
     }

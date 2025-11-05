@@ -1,6 +1,6 @@
 /**
  * Manages reference image loading and processing for multiple targets.
- * Supports both individual image uploads and pre-built database loading.
+ * Loads targets from zip archives containing images and videos.
  */
 class ReferenceImageManager {
     constructor() {
@@ -9,8 +9,8 @@ class ReferenceImageManager {
         this.targetOrder = [];
         this.listeners = new Set();
         this.nextId = 1;
-        this.databaseLoader = new DatabaseLoader();
-        this.usingDatabase = false;
+        this.zipLoader = null;
+        this.usingZipAlbum = false;
     }
 
     onChange(listener) {
@@ -76,40 +76,108 @@ class ReferenceImageManager {
     }
 
     /**
-     * Load targets from pre-built database (database-only mode)
-     * @param {string} databaseUrl - URL to database JSON file
+     * Load targets from zip archive containing images and videos
+     * @param {string|File} source - URL to zip file or File object
      */
-    async loadFromDatabase(databaseUrl = 'target_database.json') {
-        this.updateStatus('Loading target database...');
+    async loadFromZip(source = 'album.zip') {
+        this.updateStatus('Loading album archive...');
 
         try {
-            await this.databaseLoader.loadDatabase(databaseUrl);
-            const runtimeTargets = this.databaseLoader.getAllRuntimeTargets();
+            // Create loader with progress callback (ZipDatabaseLoader is globally available)
+            this.zipLoader = new ZipDatabaseLoader({
+                onProgress: (progress) => {
+                    const percent = Math.round(progress.progress || 0);
+                    this.updateStatus(`${progress.message} (${percent}%)`);
+                }
+            });
 
-            console.log(`Loading ${runtimeTargets.length} targets from database...`);
+            // Load and build database from zip
+            const database = await this.zipLoader.loadFromZip(source);
 
-            for (const target of runtimeTargets) {
+            console.log(`Loading ${database.targets.length} targets from album...`);
+
+            // Convert database format to runtime targets
+            for (const targetData of database.targets) {
+                const target = this._convertToRuntimeTarget(targetData, database);
                 this.targets.set(target.id, target);
                 this.targetOrder.push(target.id);
 
                 console.log(`Loaded target: ${target.id} (${target.numFeatures} features)`);
             }
 
-            this.usingDatabase = true;
-            this.updateStatus(`Loaded ${runtimeTargets.length} targets from database.`);
-            this.notifyChange({ type: 'database_loaded', targets: this.getTargetSummaries() });
+            this.usingZipAlbum = true;
+            this.updateStatus(`Loaded ${database.targets.length} targets from album.`);
+            this.notifyChange({ type: 'album_loaded', targets: this.getTargetSummaries() });
 
-            return runtimeTargets;
+            return this.getTargets();
         } catch (error) {
-            console.error('Failed to load database:', error);
-            this.updateStatus(`ERROR: Failed to load database: ${error.message}`);
+            console.error('Failed to load album:', error);
+            this.updateStatus(`ERROR: Failed to load album: ${error.message}`);
             throw error;
         }
     }
 
+    /**
+     * Convert database format to runtime target format
+     */
+    _convertToRuntimeTarget(targetData, database) {
+        // Convert keypoints to KeyPointVector
+        const keypoints = new cv.KeyPointVector();
+        for (const [x, y] of targetData.keypoints) {
+            // OpenCV.js doesn't expose KeyPoint constructor, create object manually
+            const kp = {
+                pt: { x, y },
+                size: 7,
+                angle: -1,
+                response: 0,
+                octave: 0,
+                class_id: -1
+            };
+            keypoints.push_back(kp);
+        }
+
+        // Convert descriptors to cv.Mat
+        const descriptorSize = database.metadata.descriptor_bytes;
+        const numDescriptors = targetData.descriptors.length;
+        const descriptors = new cv.Mat(numDescriptors, descriptorSize, cv.CV_8U);
+
+        for (let i = 0; i < numDescriptors; i++) {
+            for (let j = 0; j < descriptorSize; j++) {
+                descriptors.ucharPtr(i, j)[0] = targetData.descriptors[i][j];
+            }
+        }
+
+        // Create a mock image object with dimensions (needed for corner calculation)
+        const imageMeta = targetData.image_meta || { width: 640, height: 480 };
+        const mockImage = {
+            cols: imageMeta.width,
+            rows: imageMeta.height
+        };
+
+        return {
+            id: targetData.id,
+            filename: targetData.filename,
+            numFeatures: targetData.num_features,
+            videoUrl: targetData.videoUrl,
+            bow: targetData.bow,
+            bow_tfidf: targetData.bow_tfidf,
+            referenceData: {
+                keypoints,
+                descriptors,
+                image: mockImage  // Add mock image with dimensions
+            },
+            runtime: {
+                status: 'idle',
+                lastSeen: null,
+                roi: null,
+                score: null
+            }
+        };
+    }
+
     async loadDatabase() {
-        // Database-only mode: load targets from pre-built database
-        return await this.loadFromDatabase();
+        // Load from zip album
+        return await this.loadFromZip();
     }
 
     // Deprecated: kept for backwards compatibility
@@ -150,6 +218,13 @@ class ReferenceImageManager {
         }
         this.targets.clear();
         this.targetOrder = [];
+
+        // Clean up zip loader resources
+        if (this.zipLoader) {
+            this.zipLoader.cleanup();
+            this.zipLoader = null;
+        }
+
         this.notifyChange({ type: 'cleared', target: null });
     }
 
@@ -157,9 +232,15 @@ class ReferenceImageManager {
         if (!target || !target.referenceData) return;
 
         const { keypoints, descriptors, image } = target.referenceData;
-        if (keypoints) keypoints.delete();
-        if (descriptors) descriptors.delete();
-        if (image) image.delete();
+
+        // Clean up OpenCV objects
+        try {
+            if (keypoints && keypoints.delete) keypoints.delete();
+            if (descriptors && descriptors.delete) descriptors.delete();
+            if (image && image.delete) image.delete();
+        } catch (error) {
+            console.warn('Error cleaning up target resources:', error);
+        }
     }
 
     updateStatus(message) {

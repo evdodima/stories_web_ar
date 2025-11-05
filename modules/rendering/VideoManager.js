@@ -38,9 +38,15 @@ class VideoManager {
     // Check if already active
     const active = this.activeVideos.get(targetId);
     if (active) {
-      // Check if still loading
-      if (active.loading) {
-        console.log('[VideoManager] ⏳ Video still loading for target:', targetId);
+      // Check if still loading - wait for it to complete
+      if (active.loadPromise) {
+        await active.loadPromise;
+        // After waiting, get the updated active entry
+        const updatedActive = this.activeVideos.get(targetId);
+        if (updatedActive && updatedActive.video) {
+          updatedActive.lastSeen = Date.now();
+          return { video: updatedActive.video, isNew: false };
+        }
         return null;
       }
 
@@ -60,32 +66,38 @@ class VideoManager {
       }
     }
 
-    // Register immediately to prevent duplicate loads
-    const tempVideo = { loading: true };
-    this.activeVideos.set(targetId, tempVideo);
+    // Create a promise for this load operation
+    const loadPromise = (async () => {
+      // Get video from pool or create new
+      let video = this.videoPool.pop();
+      if (!video) {
+        console.log('[VideoManager] Creating new video element');
+        video = this.createVideoElement();
+      } else {
+        console.log('[VideoManager] Reusing video from pool');
+      }
 
-    // Get video from pool or create new
-    let video = this.videoPool.pop();
-    if (!video) {
-      console.log('[VideoManager] Creating new video element');
-      video = this.createVideoElement();
-    } else {
-      console.log('[VideoManager] Reusing video from pool');
-    }
+      // Load video
+      console.log('[VideoManager] Loading video from URL:', videoUrl);
+      await this.loadVideo(video, videoUrl);
 
-    // Load video
-    console.log('[VideoManager] Loading video from URL:', videoUrl);
-    await this.loadVideo(video, videoUrl);
+      // Update registration with actual video
+      this.activeVideos.set(targetId, {
+        video,
+        url: videoUrl,
+        lastSeen: Date.now(),
+        loadPromise: null,
+        preloaded: false // Mark as not preloaded (loaded on-demand)
+      });
 
-    // Update registration with actual video
-    this.activeVideos.set(targetId, {
-      video,
-      url: videoUrl,
-      lastSeen: Date.now()
-    });
+      console.log('[VideoManager] Video loaded and registered for target:', targetId);
+      return { video, isNew: true };
+    })();
 
-    console.log('[VideoManager] Video loaded and registered for target:', targetId);
-    return { video, isNew: true };
+    // Register immediately with the load promise to prevent duplicate loads
+    this.activeVideos.set(targetId, { loadPromise });
+
+    return loadPromise;
   }
 
   /**
@@ -194,9 +206,25 @@ class VideoManager {
    * Play video for target
    * @param {string} targetId
    */
-  playVideo(targetId) {
+  async playVideo(targetId) {
     const active = this.activeVideos.get(targetId);
-    if (active && active.video) {
+    if (!active) {
+      console.warn(`[VideoManager] ⚠️ No active video found for ${targetId}`);
+      return;
+    }
+
+    // Wait for loading if still in progress
+    if (active.loadPromise) {
+      await active.loadPromise;
+      return this.playVideo(targetId); // Retry after loading
+    }
+
+    if (active.video) {
+      // Mark as used (no longer preloaded) so it can be cleaned up normally
+      if (active.preloaded) {
+        active.preloaded = false;
+      }
+
       console.log(`[VideoManager] 🎬 Play request for ${targetId}:`, {
         paused: active.video.paused,
         readyState: active.video.readyState,
@@ -211,7 +239,7 @@ class VideoManager {
         });
       }
     } else {
-      console.warn(`[VideoManager] ⚠️ No active video found for ${targetId}`);
+      console.warn(`[VideoManager] ⚠️ Video not ready for ${targetId}`);
     }
   }
 
@@ -221,7 +249,7 @@ class VideoManager {
    */
   pauseVideo(targetId) {
     const active = this.activeVideos.get(targetId);
-    if (active && !active.video.paused) {
+    if (active && active.video && !active.video.paused) {
       active.video.pause();
     }
   }
@@ -232,8 +260,12 @@ class VideoManager {
    */
   updateTargetSeen(targetId) {
     const active = this.activeVideos.get(targetId);
-    if (active) {
+    if (active && !active.loadPromise && active.video) {
       active.lastSeen = Date.now();
+      // Mark preloaded videos as used when they're being tracked
+      if (active.preloaded) {
+        active.preloaded = false;
+      }
     }
   }
 
@@ -244,7 +276,9 @@ class VideoManager {
   setMuted(muted) {
     this.muted = muted;
     for (const [_, active] of this.activeVideos) {
-      active.video.muted = muted;
+      if (active.video) {
+        active.video.muted = muted;
+      }
     }
   }
 
@@ -259,6 +293,12 @@ class VideoManager {
       const toRemove = [];
 
       for (const [targetId, active] of this.activeVideos) {
+        // Skip entries that are still loading or don't have lastSeen
+        if (active.loadPromise || !active.lastSeen) continue;
+
+        // Skip preloaded videos - they should stay loaded until used
+        if (active.preloaded) continue;
+
         if (now - active.lastSeen > this.cleanupDelay) {
           toRemove.push(targetId);
         }
@@ -277,6 +317,11 @@ class VideoManager {
   releaseVideo(targetId) {
     const active = this.activeVideos.get(targetId);
     if (!active) return;
+
+    // Skip if still loading
+    if (active.loadPromise) return;
+
+    if (!active.video) return;
 
     // Pause and reset
     active.video.pause();
@@ -305,6 +350,35 @@ class VideoManager {
   getVideo(targetId) {
     const active = this.activeVideos.get(targetId);
     return active ? active.video : null;
+  }
+
+  /**
+   * Preload videos for all targets
+   * @param {Array} targets - Array of target objects with videoUrl
+   */
+  async preloadVideos(targets) {
+    const preloadPromises = targets.map(async (target) => {
+      if (!target.videoUrl) {
+        console.warn(`[VideoManager] Target ${target.id} has no videoUrl`);
+        return;
+      }
+
+      try {
+        // Use getVideoForTarget to handle loading properly
+        await this.getVideoForTarget(target.id, target.videoUrl);
+
+        // Mark as preloaded to prevent cleanup
+        const active = this.activeVideos.get(target.id);
+        if (active && active.video) {
+          active.preloaded = true;
+          active.lastSeen = Date.now();
+        }
+      } catch (error) {
+        console.error(`[VideoManager] Failed to preload video for target ${target.id}:`, error);
+      }
+    });
+
+    await Promise.all(preloadPromises);
   }
 
   /**

@@ -12,6 +12,8 @@
     <script src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js" async></script>
     <!-- Load Three.js for WebGL rendering -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <!-- Load JSZip for loading album archives -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="imageTracker.js" defer></script>
 </head>
 <body>
@@ -69,11 +71,11 @@
             <section class="panel-section" data-panel="reference">
                 <div class="section-heading">
                     <h2>Target Database</h2>
-                    <p>Targets loaded from pre-built database.</p>
+                    <p>Targets loaded from album archive.</p>
                 </div>
                 <div class="info-card">
-                    <span class="info-label">Database Mode</span>
-                    <p class="info-text">All targets are loaded from <code>target_database.json</code>. To add new targets, rebuild the database using the offline builder tool.</p>
+                    <span class="info-label">Album Mode</span>
+                    <p class="info-text">Targets are loaded from <code>album.zip</code> containing images and videos. The vocabulary tree is built dynamically in the browser.</p>
                 </div>
             </section>
 

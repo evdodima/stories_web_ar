@@ -69,12 +69,16 @@ class ImageTracker {
             this.ui.updateStatus('OpenCV loaded. Loading database...');
             this.initialize();
 
-            // Load database and update detector with vocabulary query when done
-            this.referenceManager.loadDatabase().then(() => {
-                const vocabularyQuery = this.referenceManager.databaseLoader?.getVocabularyQuery();
+            // Load album and update detector with vocabulary query when done
+            this.referenceManager.loadDatabase().then(async () => {
+                const vocabularyQuery = this.referenceManager.zipLoader?.getVocabularyQuery();
                 if (this.detector && vocabularyQuery) {
                     this.detector.setVocabularyQuery(vocabularyQuery);
                 }
+
+                // Create ARRenderer early so VideoManager exists
+                this.ui.updateStatus('Initializing AR renderer...');
+                await this.preloadARRenderer();
 
                 // Hide loading screen and autostart tracking
                 this.ui.hideLoadingScreen();
@@ -98,8 +102,8 @@ class ImageTracker {
             onMuteVideos: (muted) => this.setVideosMuted(muted)
         });
 
-        // Get vocabulary query from database loader
-        const vocabularyQuery = this.referenceManager.databaseLoader?.getVocabularyQuery();
+        // Get vocabulary query from zip loader (will be null initially, set after loading)
+        const vocabularyQuery = this.referenceManager.zipLoader?.getVocabularyQuery();
 
         // Initialize detector with vocabulary tree and optical flow tracker
         this.detector = new FeatureDetector(this.state, this.profiler, vocabularyQuery);
@@ -356,44 +360,23 @@ class ImageTracker {
 
         // Handle button click
         const handleClick = async () => {
-            console.log('[ImageTracker] 🎬 User interaction - unlocking video playback');
-
-            // CRITICAL: Create and play a dummy silent video to unlock autoplay policy
-            // This must happen synchronously during the user click event
-            const dummyVideo = document.createElement('video');
-            dummyVideo.muted = true;
-            dummyVideo.playsInline = true;
-
-            // Hide completely - use multiple methods for iOS compatibility
-            dummyVideo.style.cssText = `
-                position: fixed;
-                top: -9999px;
-                left: -9999px;
-                width: 1px;
-                height: 1px;
-                opacity: 0;
-                pointer-events: none;
-                z-index: -9999;
-            `;
-
-            // Use a tiny data URL video instead of loading from S3
-            // This is a 1-frame black video in base64
-            dummyVideo.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAu1tZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE1NSByMjkwMSA3ZDBmZjIyIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxOCAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTMgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAADdGVGWIQA///vB/m6VjQdL4iEAAA==';
-
-            document.body.appendChild(dummyVideo);
-
-            // Don't await - just fire and forget
-            dummyVideo.play().then(() => {
-                console.log('[ImageTracker] ✓ Video playback unlocked');
-                dummyVideo.pause();
-                setTimeout(() => dummyVideo.remove(), 50);
-            }).catch(e => {
-                console.warn('[ImageTracker] Could not unlock video:', e);
-                dummyVideo.remove();
-            });
-
             // Hide the prompt immediately
             permissionPrompt.style.display = 'none';
+
+            // Show loading status
+            this.ui.updateStatus('Preloading videos...');
+
+            // CRITICAL: Preload videos during user interaction to unlock autoplay
+            // This must happen synchronously during the user click event
+            if (this.arRenderer && this.arRenderer.videoManager) {
+                const targets = this.referenceManager.getTargets();
+
+                try {
+                    await this.arRenderer.videoManager.preloadVideos(targets);
+                } catch (error) {
+                    console.error('[ImageTracker] Error preloading videos:', error);
+                }
+            }
 
             // Start tracking (this will trigger camera permission)
             await this.startTrackingAfterPermission();

@@ -130,9 +130,13 @@ class VocabularyTreeQuery {
     const frameBow = this.computeBoW(frameDescriptors);
     const frameTfIdf = this.computeTfIdf(frameBow);
 
+    console.log('[VocabularyTreeQuery] Frame BoW:', Object.keys(frameBow).length, 'words');
+    console.log('[VocabularyTreeQuery] Frame TF-IDF:', Object.keys(frameTfIdf).length, 'words');
+
     // Score all targets
     const scores = targets.map(target => {
-      const targetTfIdf = target.bowTfidf || {};
+      // Handle both naming conventions
+      const targetTfIdf = target.bow_tfidf || target.bowTfidf || {};
       const similarity = this.cosineSimilarity(frameTfIdf, targetTfIdf);
 
       return {

@@ -37,6 +37,7 @@ class FeatureDetector {
         this.profiler?.endTimer('detect_frame_features');
 
         if (!frameFeatures) {
+            console.log('[FeatureDetector] No frame features extracted');
             return targets.map(target => ({
                 targetId: target.id,
                 targetLabel: target.label,
@@ -44,6 +45,8 @@ class FeatureDetector {
                 reason: 'Failed to extract frame features'
             }));
         }
+
+        console.log(`[FeatureDetector] Frame features: ${frameFeatures.keypoints.size()} keypoints`);
 
         // VOCABULARY TREE OPTIMIZATION: Select candidates using BoW similarity
         let targetsToMatch = targets;
@@ -57,11 +60,17 @@ class FeatureDetector {
             );
             this.profiler?.endTimer('vocabulary_candidate_selection');
 
+            console.log('[FeatureDetector] Vocabulary candidates:', candidates.map(c => ({
+                id: c.target.id,
+                score: c.score.toFixed(3)
+            })));
+
             // Extract just the target objects and filter by minimum score
             targetsToMatch = candidates
                 .filter(c => c.score > 0.05) // Minimum similarity threshold
                 .map(c => c.target);
 
+            console.log('[FeatureDetector] Checking targets:', targetsToMatch.map(t => t.id));
         }
 
         // Match frame features against selected targets only
@@ -70,6 +79,11 @@ class FeatureDetector {
             this.profiler?.startTimer(`detection_target_${target.id}`);
             const result = this.matchTarget(frameFeatures, target.referenceData);
             this.profiler?.endTimer(`detection_target_${target.id}`);
+
+            if (result.success) {
+                console.log(`[FeatureDetector] ✓ Target ${target.id} DETECTED - ${result.inliers} inliers`);
+            }
+
             results.push({
                 targetId: target.id,
                 targetLabel: target.label,
@@ -198,6 +212,12 @@ class FeatureDetector {
                 frameFeatures.descriptors.rows <= 0 || referenceData.descriptors.rows <= 0 ||
                 frameFeatures.descriptors.cols !== referenceData.descriptors.cols) {
 
+                console.log('[FeatureDetector] Matching failed:', {
+                    frameKP: frameFeatures.keypoints.size(),
+                    refKP: referenceData.keypoints.size(),
+                    frameDesc: frameFeatures.descriptors ? frameFeatures.descriptors.rows : 0,
+                    refDesc: referenceData.descriptors ? referenceData.descriptors.rows : 0
+                });
                 result.reason = 'Insufficient keypoints or descriptor mismatch';
                 return result;
             }
