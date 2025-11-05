@@ -3,8 +3,9 @@
  * Loads targets from zip archives containing images and videos.
  */
 class ReferenceImageManager {
-    constructor() {
+    constructor(uiManager = null) {
         this.ui = document.getElementById('statusMessage');
+        this.uiManager = uiManager || null;
         this.targets = new Map();
         this.targetOrder = [];
         this.listeners = new Set();
@@ -83,6 +84,16 @@ class ReferenceImageManager {
         this.updateStatus('Loading album archive...');
 
         try {
+            // Unified progress aggregator
+            const progressManager = typeof ProgressManager !== 'undefined' ? new ProgressManager() : null;
+            const updateUnifiedProgress = (stage, progressInput, message) => {
+                if (!progressManager) return;
+                const { totalPercent } = progressManager.report(stage, progressInput);
+                if (this.uiManager && this.uiManager.updateLoadingProgress) {
+                    this.uiManager.updateLoadingProgress(totalPercent, message);
+                }
+            };
+
             // Determine the source of the album
             let albumSource = source;
 
@@ -101,8 +112,15 @@ class ReferenceImageManager {
                     const albumBlob = await albumManager.getAlbumFromURL((progress) => {
                         if (progress.stage === 'api') {
                             this.updateStatus(progress.message);
-                        } else if (progress.stage === 'download' && progress.progress) {
-                            this.updateStatus(`${progress.message}`);
+                            updateUnifiedProgress('api', 100, progress.message || 'Getting album URL...');
+                        } else if (progress.stage === 'download') {
+                            const msg = progress.message || 'Downloading album...';
+                            if (typeof progress.progress === 'number') {
+                                updateUnifiedProgress('download', progress.progress, msg);
+                            } else if (typeof progress.loaded === 'number') {
+                                updateUnifiedProgress('download', { loaded: progress.loaded, total: progress.total || 0 }, msg);
+                            }
+                            this.updateStatus(msg);
                         }
                     });
 
@@ -116,8 +134,27 @@ class ReferenceImageManager {
             // Create loader with progress callback (ZipDatabaseLoader is globally available)
             this.zipLoader = new ZipDatabaseLoader({
                 onProgress: (progress) => {
-                    const percent = Math.round(progress.progress || 0);
-                    this.updateStatus(`${progress.message} (${percent}%)`);
+                    const stage = progress.stage;
+                    const percent = (typeof progress.progress === 'number') ? progress.progress : 0;
+                    const msg = progress.message || 'Processing...';
+
+                    // Map loader stages to unified stages
+                    const stageMap = {
+                        loading: 'zip',
+                        images: 'images',
+                        videos: 'videos',
+                        extracting: 'extracting',
+                        clustering: 'clustering',
+                        bow: 'bow',
+                        idf: 'idf',
+                        tfidf: 'tfidf',
+                        complete: 'tfidf'
+                    };
+
+                    const unified = stageMap[stage] || 'zip';
+                    updateUnifiedProgress(unified, percent, msg);
+
+                    this.updateStatus(`${msg} (${Math.round(percent)}%)`);
                 }
             });
 

@@ -45,6 +45,8 @@ class UIManager {
 
         // New fullscreen UI elements
         this.loadingScreen = byId('loadingScreen');
+        this.loadingProgressBar = byId('loadingProgressBar');
+        this.loadingProgressText = byId('loadingProgressText');
         this.menuToggle = byId('menuToggle');
         this.controlPanel = byId('controlPanel');
         this.closePanel = byId('closePanel');
@@ -198,6 +200,16 @@ class UIManager {
             setTimeout(() => {
                 this.loadingScreen.style.display = 'none';
             }, 500);
+        }
+    }
+
+    updateLoadingProgress(percent, message) {
+        if (this.loadingProgressBar) {
+            const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+            this.loadingProgressBar.style.width = clamped + '%';
+        }
+        if (this.loadingProgressText && message) {
+            this.loadingProgressText.textContent = message;
         }
     }
 

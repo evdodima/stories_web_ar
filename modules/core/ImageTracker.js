@@ -42,7 +42,7 @@ class ImageTracker {
         // Initialize sub-modules
         this.ui = new UIManager(this);
         this.camera = new CameraManager();
-        this.referenceManager = new ReferenceImageManager();
+        this.referenceManager = new ReferenceImageManager(this.ui);
         this.detector = null;
         this.opticalFlow = null;
         this.arRenderer = null; // Will be initialized after camera starts

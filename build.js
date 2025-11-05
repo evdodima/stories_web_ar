@@ -16,6 +16,7 @@ const MODULES_DIR = './modules';
 const MODULE_ORDER = [
   'modules/utils/PerformanceProfiler.js',
   'modules/utils/AlbumManager.js',
+  'modules/utils/ProgressManager.js',
   'modules/database/DatabaseLoader.js',
   'modules/database/VocabularyBuilder.js',
   'modules/database/VocabularyTreeQuery.js',
