@@ -218,24 +218,28 @@ class ARRenderer {
 
   /**
    * Update camera background from OpenCV frame
-   * @param {cv.Mat} frame - OpenCV frame to display as background
+   * @param {cv.Mat} processingFrame - Low-res frame for AR processing (determines coordinate space)
+   * @param {cv.Mat} displayFrame - Optional high-res frame for display (defaults to processingFrame)
    */
-  updateCameraBackground(frame) {
-    if (!frame || !this.backgroundPlane) {
+  updateCameraBackground(processingFrame, displayFrame = null) {
+    if (!processingFrame || !this.backgroundPlane) {
       console.warn('[ARRenderer] updateCameraBackground called but:', {
-        hasFrame: !!frame,
+        hasFrame: !!processingFrame,
         hasBackgroundPlane: !!this.backgroundPlane
       });
       return;
     }
 
     try {
-      // Store reference to current frame
-      this.lastCameraFrame = frame;
+      // Store reference to current processing frame (for coordinate space)
+      this.lastCameraFrame = processingFrame;
 
-      // Track OpenCV frame dimensions
-      this.frameWidth = frame.cols;
-      this.frameHeight = frame.rows;
+      // Track OpenCV processing frame dimensions (for coordinate mapping)
+      this.frameWidth = processingFrame.cols;
+      this.frameHeight = processingFrame.rows;
+
+      // Use high-res display frame if provided, otherwise use processing frame
+      const frameToDisplay = displayFrame || processingFrame;
 
       // DEBUG logs removed
 
@@ -244,7 +248,7 @@ class ARRenderer {
         this.updateSize();
       }
 
-      // Convert OpenCV Mat to canvas
+      // Convert OpenCV Mat to canvas (using high-res display frame)
       if (!this._backgroundCanvas) {
         this._backgroundCanvas = document.createElement('canvas');
         this._backgroundContext = this._backgroundCanvas.getContext('2d', {
@@ -253,14 +257,14 @@ class ARRenderer {
         });
       }
 
-      // Check if canvas size changed (orientation change)
-      const sizeChanged = this._backgroundCanvas.width !== frame.cols ||
-                          this._backgroundCanvas.height !== frame.rows;
+      // Check if canvas size changed (orientation change or resolution change)
+      const sizeChanged = this._backgroundCanvas.width !== frameToDisplay.cols ||
+                          this._backgroundCanvas.height !== frameToDisplay.rows;
 
-      this._backgroundCanvas.width = frame.cols;
-      this._backgroundCanvas.height = frame.rows;
+      this._backgroundCanvas.width = frameToDisplay.cols;
+      this._backgroundCanvas.height = frameToDisplay.rows;
 
-      cv.imshow(this._backgroundCanvas, frame);
+      cv.imshow(this._backgroundCanvas, frameToDisplay);
 
       // Update texture from canvas
       // If size changed, recreate texture to avoid WebGL dimension mismatch
@@ -272,8 +276,13 @@ class ARRenderer {
         }
 
         this.backgroundTexture = new THREE.CanvasTexture(this._backgroundCanvas);
-        this.backgroundTexture.minFilter = THREE.LinearFilter;
+        // High-quality texture filtering for better upscaling
+        this.backgroundTexture.minFilter = THREE.LinearMipmapLinearFilter;
         this.backgroundTexture.magFilter = THREE.LinearFilter;
+        this.backgroundTexture.generateMipmaps = true;
+        // Enable anisotropic filtering for sharper textures at angles
+        const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        this.backgroundTexture.anisotropy = Math.min(4, maxAnisotropy);
         this.backgroundTexture.flipY = false;
         this.backgroundTexture.colorSpace = THREE.SRGBColorSpace;
         this.backgroundPlane.material.map = this.backgroundTexture;
@@ -293,15 +302,17 @@ class ARRenderer {
   /**
    * Render frame with tracking and videos
    * @param {Array} trackingResults
-   * @param {cv.Mat} cameraFrame - Current camera frame to render as background
+   * @param {cv.Mat} processingFrame - Low-res frame used for AR processing (coordinate space)
    * @param {string} selectedTargetId - ID of target to show video for (single-video mode)
+   * @param {cv.Mat} displayFrame - Optional high-res frame for display background
    */
-  render(trackingResults = [], cameraFrame = null, selectedTargetId = null) {
+  render(trackingResults = [], processingFrame = null, selectedTargetId = null, displayFrame = null) {
     if (!this.enabled || !this.renderer || !this.scene) return;
 
     // Update background with current camera frame for perfect sync
-    if (cameraFrame) {
-      this.updateCameraBackground(cameraFrame);
+    // Use high-res display frame if provided, otherwise fall back to processing frame
+    if (processingFrame) {
+      this.updateCameraBackground(processingFrame, displayFrame);
     }
 
     // Get OpenCV processing resolution (from frame dimensions)

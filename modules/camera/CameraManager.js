@@ -63,7 +63,7 @@ class CameraManager {
         }
     }
 
-    getCameraConstraints(width = 1280, height = 960) {
+    getCameraConstraints(width = 1920, height = 1080) {
         return {
             video: {
                 width: { ideal: width },
@@ -210,6 +210,45 @@ class CameraManager {
             return frame;
         } catch (error) {
             console.error("Error capturing video frame:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Capture full-resolution frame for display purposes
+     * Returns OpenCV Mat at native camera resolution (no downscaling)
+     * Used for high-quality background rendering in ARRenderer
+     * @returns {cv.Mat|null} Full resolution frame or null if error
+     */
+    captureDisplayFrame() {
+        try {
+            // Verify video is ready
+            if (!this.video ||
+                !this.video.videoWidth ||
+                !this.video.videoHeight ||
+                this.video.videoWidth <= 0 ||
+                this.video.videoHeight <= 0) {
+                return null;
+            }
+
+            // Create a canvas to capture the video frame at full resolution
+            const captureCanvas = document.createElement('canvas');
+            const captureContext = captureCanvas.getContext('2d');
+
+            // Set dimensions to match full video resolution
+            captureCanvas.width = this.video.videoWidth;
+            captureCanvas.height = this.video.videoHeight;
+
+            // Draw the current video frame to the canvas
+            captureContext.drawImage(this.video, 0, 0,
+                                   captureCanvas.width, captureCanvas.height);
+
+            // Read the image data from the canvas into an OpenCV matrix
+            let frame = cv.imread(captureCanvas);
+
+            return frame;
+        } catch (error) {
+            console.error("Error capturing display frame:", error);
             return null;
         }
     }
