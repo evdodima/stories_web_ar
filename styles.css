@@ -208,7 +208,8 @@ body {
     border-radius: var(--radius-panel);
     padding: 60px 50px;
     box-shadow: var(--shadow-glass);
-    max-width: 420px;
+    width: 420px;
+    max-width: calc(100vw - 40px);
     margin: 0 20px;
 }
 
