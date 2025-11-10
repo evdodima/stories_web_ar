@@ -63,11 +63,19 @@ class UIManager {
     initializeInterfaceState() {
         const { state } = this.tracker;
 
-        this.stopButton.disabled = true;
-        this.startButton.disabled = false;
+        if (this.stopButton) {
+            this.stopButton.disabled = true;
+        }
+        if (this.startButton) {
+            this.startButton.disabled = false;
+        }
 
-        this.useOpticalFlowToggle.checked = state.useOpticalFlow;
-        this.visualizeFlowPointsToggle.checked = state.visualizeFlowPoints;
+        if (this.useOpticalFlowToggle) {
+            this.useOpticalFlowToggle.checked = state.useOpticalFlow;
+        }
+        if (this.visualizeFlowPointsToggle) {
+            this.visualizeFlowPointsToggle.checked = state.visualizeFlowPoints;
+        }
 
         if (this.detectionIntervalSlider) {
             this.detectionIntervalSlider.value = state.detectionInterval;
@@ -79,7 +87,9 @@ class UIManager {
             this.updateMaxFeaturesValue(state.maxFeatures);
         }
 
-        this.updateOpticalFlowBadge();
+        if (this.opticalFlowBadge) {
+            this.updateOpticalFlowBadge();
+        }
         this.updateFPS(0);
         this.updateTrackingMode('Waiting for reference image');
     }
@@ -87,41 +97,53 @@ class UIManager {
     setupEventListeners(handlers) {
         const { onStartTracking, onStopTracking, onShowTrackingRects, onVideoOverlayToggle, onMuteVideos } = handlers;
 
-        this.startButton.addEventListener('click', () => {
-            if (this.tracker.referenceManager?.hasTargets()) {
-                onStartTracking();
-            } else {
-                this.updateStatus('ERROR: Database not loaded. Check console.');
-            }
-        });
+        if (this.startButton) {
+            this.startButton.addEventListener('click', () => {
+                if (this.tracker.referenceManager?.hasTargets()) {
+                    onStartTracking();
+                } else {
+                    this.updateStatus('ERROR: Database not loaded. Check console.');
+                }
+            });
+        }
 
-        this.stopButton.addEventListener('click', () => {
-            onStopTracking();
-            this.updateOpticalFlowBadge();
-        });
+        if (this.stopButton) {
+            this.stopButton.addEventListener('click', () => {
+                onStopTracking();
+                this.updateOpticalFlowBadge();
+            });
+        }
 
-        this.useOpticalFlowToggle.addEventListener('change', () => {
-            this.tracker.state.useOpticalFlow = this.useOpticalFlowToggle.checked;
-            this.updateOpticalFlowBadge();
-            this.updateTrackingMode();
-        });
+        if (this.useOpticalFlowToggle) {
+            this.useOpticalFlowToggle.addEventListener('change', () => {
+                this.tracker.state.useOpticalFlow = this.useOpticalFlowToggle.checked;
+                this.updateOpticalFlowBadge();
+                this.updateTrackingMode();
+            });
+        }
 
-        this.visualizeFlowPointsToggle.addEventListener('change', () => {
-            this.tracker.state.visualizeFlowPoints = this.visualizeFlowPointsToggle.checked;
-        });
+        if (this.visualizeFlowPointsToggle) {
+            this.visualizeFlowPointsToggle.addEventListener('change', () => {
+                this.tracker.state.visualizeFlowPoints = this.visualizeFlowPointsToggle.checked;
+            });
+        }
 
-        this.detectionIntervalSlider.addEventListener('input', () => {
-            const value = parseInt(this.detectionIntervalSlider.value, 10);
-            this.tracker.state.detectionInterval = value;
-            this.updateDetectionIntervalValue(value);
-            this.updateTrackingMode();
-        });
+        if (this.detectionIntervalSlider) {
+            this.detectionIntervalSlider.addEventListener('input', () => {
+                const value = parseInt(this.detectionIntervalSlider.value, 10);
+                this.tracker.state.detectionInterval = value;
+                this.updateDetectionIntervalValue(value);
+                this.updateTrackingMode();
+            });
+        }
 
-        this.maxFeaturesSlider.addEventListener('input', () => {
-            const value = parseInt(this.maxFeaturesSlider.value, 10);
-            this.tracker.state.maxFeatures = value;
-            this.updateMaxFeaturesValue(value);
-        });
+        if (this.maxFeaturesSlider) {
+            this.maxFeaturesSlider.addEventListener('input', () => {
+                const value = parseInt(this.maxFeaturesSlider.value, 10);
+                this.tracker.state.maxFeatures = value;
+                this.updateMaxFeaturesValue(value);
+            });
+        }
 
         if (this.profileButton && this.tracker.profiler) {
             this.profileButton.addEventListener('click', () => {
@@ -191,6 +213,59 @@ class UIManager {
         if (this.muteVideosToggle && onMuteVideos) {
             this.muteVideosToggle.addEventListener('change', () => {
                 onMuteVideos(this.muteVideosToggle.checked);
+            });
+        }
+
+        // Menu item event listeners
+        const faqBtn = document.getElementById('faqBtn');
+        if (faqBtn) {
+            faqBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open('https://stories-ar.com/faq', '_blank');
+            });
+        }
+
+        const clearCacheBtn = document.getElementById('clearCacheBtn');
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (confirm('Clear all cached photos? This action cannot be undone.')) {
+                    try {
+                        // Clear IndexedDB
+                        const databases = await indexedDB.databases();
+                        for (const db of databases) {
+                            indexedDB.deleteDatabase(db.name);
+                        }
+
+                        // Clear localStorage
+                        localStorage.clear();
+
+                        // Clear sessionStorage
+                        sessionStorage.clear();
+
+                        alert('Cache cleared successfully! The page will now reload.');
+                        window.location.reload();
+                    } catch (err) {
+                        console.error('Failed to clear cache:', err);
+                        alert('Failed to clear cache. Please try again.');
+                    }
+                }
+            });
+        }
+
+        const supportBtn = document.getElementById('supportBtn');
+        if (supportBtn) {
+            supportBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open('mailto:support@stories-ar.com', '_blank');
+            });
+        }
+
+        const learnMoreBtn = document.getElementById('learnMoreBtn');
+        if (learnMoreBtn) {
+            learnMoreBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open('https://stories-ar.com', '_blank');
             });
         }
     }
@@ -267,8 +342,12 @@ class UIManager {
     }
 
     updateControlsForTracking(isTracking) {
-        this.startButton.disabled = isTracking;
-        this.stopButton.disabled = !isTracking;
+        if (this.startButton) {
+            this.startButton.disabled = isTracking;
+        }
+        if (this.stopButton) {
+            this.stopButton.disabled = !isTracking;
+        }
 
         if (isTracking) {
             this.updateTrackingMode('Initialising tracking...');
@@ -282,10 +361,14 @@ class UIManager {
     }
 
     updateStatus(message) {
-        this.statusMessage.textContent = message;
+        if (this.statusMessage) {
+            this.statusMessage.textContent = message;
+        }
     }
 
     updateTrackingMode(forcedMessage = null) {
+        if (!this.currentMode) return;
+
         if (forcedMessage) {
             this.currentMode.textContent = forcedMessage;
             return;

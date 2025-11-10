@@ -85,122 +85,83 @@
         <aside class="control-panel" id="controlPanel">
             <header class="panel-header">
                 <h1 class="panel-title">Stories AR</h1>
-                <p class="panel-subtitle">Real-time image tracking</p>
+                <p class="panel-subtitle">Augmented reality for photos</p>
                 <button id="closePanel" class="close-panel" aria-label="Close panel">×</button>
             </header>
 
-            <section class="panel-section" data-panel="reference">
-                <div class="section-heading">
-                    <h2>Target Database</h2>
-                    <p>Targets loaded from album archive.</p>
-                </div>
-                <div class="info-card">
-                    <span class="info-label">Album Mode</span>
-                    <p class="info-text">Targets are loaded from cloud storage containing images and videos. The vocabulary tree is built dynamically in the browser.</p>
-                </div>
-            </section>
-
-            <section class="panel-section" data-panel="tracking">
-                <div class="section-heading">
-                    <h2>Tracking session</h2>
-                    <p>Control when detection starts and stops.</p>
-                </div>
-                <div class="button-row">
-                    <button id="startTracking" class="btn btn-primary">Start tracking</button>
-                    <button id="stopTracking" class="btn btn-ghost">Stop</button>
-                </div>
-                <div class="session-badges">
-                    <span class="badge-label">Optical flow</span>
-                    <span id="opticalFlowBadge" class="badge badge-muted">Armed</span>
-                </div>
-            </section>
-
-            <section class="panel-section" data-panel="options">
-                <div class="section-heading">
-                    <h2>Fine tuning</h2>
-                    <p>Adjust the tracker to balance performance and stability.</p>
-                </div>
-                <label class="toggle-row">
-                    <input type="checkbox" id="useOpticalFlow" checked>
-                    <span class="toggle-label">Use optical flow between detections</span>
-                </label>
-                <label class="toggle-row">
-                    <input type="checkbox" id="visualizeFlowPoints">
-                    <span class="toggle-label">Show tracking feature points</span>
-                </label>
-                <label class="toggle-row">
-                    <input type="checkbox" id="showTrackingRects">
-                    <span class="toggle-label">Show tracking rectangles</span>
-                </label>
-                <label class="toggle-row">
-                    <input type="checkbox" id="enableVideoOverlay" checked>
-                    <span class="toggle-label">Enable video overlay</span>
-                </label>
-                <label class="toggle-row">
-                    <input type="checkbox" id="muteVideos">
-                    <span class="toggle-label">Mute videos</span>
-                </label>
-
-                <div class="slider-group" data-slider="detection">
-                    <div class="slider-header">
-                        <span>Detection interval</span>
-                        <span id="intervalValue" class="slider-value">15</span>
+            <section class="menu-section">
+                <button class="menu-item" id="faqBtn">
+                    <div class="menu-item-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
                     </div>
-                    <input type="range" id="detectionInterval" min="1" max="60" value="15">
-                    <p class="slider-hint">Lower values refresh more often but use more CPU.</p>
-                </div>
+                    <span class="menu-item-label">FAQ</span>
+                </button>
 
-                <div class="slider-group" data-slider="features">
-                    <div class="slider-header">
-                        <span>Max feature points</span>
-                        <span id="maxFeaturesValue" class="slider-value">800</span>
+                <button class="menu-item" id="clearCacheBtn">
+                    <div class="menu-item-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        </svg>
                     </div>
-                    <input type="range" id="maxFeatures" min="20" max="1000" value="800">
-                    <p class="slider-hint">Fewer points improve speed; more points aid stability.</p>
-                </div>
-            </section>
+                    <span class="menu-item-label">Clear photos</span>
+                </button>
 
-            <section class="panel-section" data-panel="status">
-                <div class="status-card">
-                    <span class="status-label">Status</span>
-                    <p id="statusMessage" class="status-text">Loading...</p>
-                </div>
-                <div class="status-card">
-                    <span class="status-label">Database</span>
-                    <p class="status-text"><span id="databaseInfo">Not loaded</span></p>
-                </div>
-                <div class="status-card">
-                    <span class="status-label">Tracking mode</span>
-                    <p class="status-text"><span id="currentMode">Initializing...</span></p>
-                </div>
-                <div class="status-card">
-                    <span class="status-label">Frame rate</span>
-                    <p class="status-text"><span id="fpsValue">0 fps</span></p>
-                </div>
-                <div class="status-card">
-                    <span class="status-label">Targets</span>
-                    <div id="targetStatusList" class="status-text"></div>
-                </div>
-            </section>
+                <button class="menu-item" id="supportBtn">
+                    <div class="menu-item-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </div>
+                    <span class="menu-item-label">Support</span>
+                </button>
 
-            <section class="panel-section" data-panel="profiling">
-                <div class="section-heading">
-                    <h2>Performance profiling</h2>
-                    <p>Analyze algorithm bottlenecks.</p>
-                </div>
-                <div class="button-row">
-                    <button id="profileButton" class="btn btn-ghost">Show profile</button>
-                    <button id="profileCopyButton" class="btn btn-ghost">Copy stats</button>
-                    <button id="profileResetButton" class="btn btn-ghost">Reset</button>
-                </div>
-                <pre id="profileOutput" style="display: none; font-size: 11px;
-                    background: #1a1a1a; padding: 12px; border-radius: 4px;
-                    color: #e0e0e0; overflow-x: auto; max-height: 400px;
-                    overflow-y: auto; margin-top: 8px;"></pre>
+                <button class="menu-item" id="learnMoreBtn">
+                    <div class="menu-item-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="12" cy="5" r="1"></circle>
+                            <circle cx="12" cy="19" r="1"></circle>
+                        </svg>
+                    </div>
+                    <span class="menu-item-label">Learn more</span>
+                </button>
             </section>
 
             <footer class="panel-footer">
-                <p class="footer-note">Feature colors: <span class="dot dot-blue"></span> all keypoints · <span class="dot dot-yellow"></span> matches · <span class="dot dot-green"></span> inliers</p>
+                <div class="social-links">
+                    <a href="https://instagram.com/storiesalbum" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Instagram">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                        </svg>
+                    </a>
+                    <a href="https://facebook.com/storiesalbum" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Facebook">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                    </a>
+                    <a href="https://wa.me/?text=Check%20out%20Stories%20AR" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="WhatsApp">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                        </svg>
+                    </a>
+                    <a href="https://youtube.com/@storiesalbum" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="YouTube">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                        </svg>
+                    </a>
+                    <a href="https://m.me/storiesalbum" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Messenger">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.373 0 0 4.975 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.975 18.627 0 12 0zm1.191 14.963l-3.055-3.26-5.963 3.26L10.732 8l3.131 3.259L19.752 8l-6.561 6.963z"/>
+                        </svg>
+                    </a>
+                </div>
+                <a href="https://stories-ar.com" target="_blank" rel="noopener noreferrer" class="website-link">stories-ar.com</a>
             </footer>
         </aside>
     </div>
