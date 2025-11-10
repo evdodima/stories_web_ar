@@ -1,4 +1,4 @@
-# Stories Album - WebAR Image Tracking
+# Stories AR - WebAR Image Tracking
 
 A WebAR application that brings photo albums to life by playing videos when you point your camera at printed photos. Uses advanced computer vision with BRISK features and vocabulary tree matching for fast, robust tracking.
 

@@ -2,12 +2,38 @@
  * AlbumManager.js
  *
  * Handles album code validation and downloading from storage via backend proxy
+ * Integrates IndexedDB caching for offline support and performance
  */
 
 class AlbumManager {
   constructor() {
     // Backend API endpoint
     this.backendURL = 'https://pro.stories-ar.com';
+
+    // Initialize cache manager
+    this.cacheManager = null;
+    this.initCacheManager();
+  }
+
+  /**
+   * Initialize cache manager
+   */
+  async initCacheManager() {
+    try {
+      // Dynamically import CacheManager
+      if (!window.CacheManager) {
+        console.warn('[AlbumManager] CacheManager not loaded yet');
+        return;
+      }
+
+      this.cacheManager = new window.CacheManager();
+      await this.cacheManager.init();
+      console.log('[AlbumManager] Cache manager initialized');
+    } catch (error) {
+      console.error('[AlbumManager] Failed to initialize cache:', error);
+      // Continue without caching
+      this.cacheManager = null;
+    }
   }
 
   /**
@@ -161,7 +187,7 @@ class AlbumManager {
 
   /**
    * Get album zip from URL parameter
-   * Downloads the album based on the encoded URL parameter
+   * Checks cache first, downloads if not cached
    * @param {Function} onProgress - Progress callback (optional)
    * @returns {Promise<Blob>} Album zip blob
    */
@@ -171,6 +197,37 @@ class AlbumManager {
       const encryptedCode = this.getAlbumCodeFromURL();
       if (!encryptedCode) {
         throw new Error('No valid album code in URL');
+      }
+
+      // Ensure cache manager is initialized
+      if (!this.cacheManager && window.CacheManager) {
+        await this.initCacheManager();
+      }
+
+      // Try to get from cache first
+      if (this.cacheManager) {
+        if (onProgress) {
+          onProgress({
+            stage: 'cache',
+            message: 'Checking cache...'
+          });
+        }
+
+        const cachedZip = await this.cacheManager.getAlbum(encryptedCode);
+        if (cachedZip) {
+          console.log('[AlbumManager] Using cached album');
+          if (onProgress) {
+            onProgress({
+              stage: 'cache',
+              progress: 100,
+              message: 'Loaded from cache',
+              cached: true
+            });
+          }
+          return cachedZip;
+        }
+
+        console.log('[AlbumManager] Album not in cache, downloading...');
       }
 
       // Get download URL from backend
@@ -201,6 +258,24 @@ class AlbumManager {
           });
         }
       });
+
+      // Store in cache for future use
+      if (this.cacheManager) {
+        if (onProgress) {
+          onProgress({
+            stage: 'caching',
+            message: 'Saving to cache...'
+          });
+        }
+
+        try {
+          await this.cacheManager.storeAlbum(encryptedCode, zipBlob);
+          console.log('[AlbumManager] Album saved to cache');
+        } catch (cacheError) {
+          console.error('[AlbumManager] Failed to cache album:', cacheError);
+          // Continue even if caching fails
+        }
+      }
 
       return zipBlob;
     } catch (error) {

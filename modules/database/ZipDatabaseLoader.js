@@ -8,6 +8,7 @@
 class ZipDatabaseLoader {
   constructor(options = {}) {
     this.onProgress = options.onProgress || (() => {});
+    this.albumCode = options.albumCode || null;
     this.vocabularyBuilder = null;
     this.database = null;
     this.vocabularyQuery = null;
@@ -190,6 +191,7 @@ class ZipDatabaseLoader {
       branchingFactor: 10,
       levels: 2,
       maxFeaturesPerTarget: 500,
+      albumCode: this.albumCode,
       onProgress: (progress) => {
         this.onProgress({
           stage: progress.stage,

@@ -8,12 +8,14 @@
 (function() {
     const scripts = [
         './modules/utils/PerformanceProfiler.js',
+        './modules/cache/CacheManager.js',
         './modules/utils/AlbumManager.js',
         './modules/utils/ProgressManager.js',
         './modules/database/VocabularyTreeQuery.js',
         './modules/database/VocabularyBuilder.js',
         './modules/database/ZipDatabaseLoader.js',
         './modules/ui/UIManager.js',
+        './modules/ui/OfflineManager.js',
         './modules/camera/CameraManager.js',
         './modules/reference/ReferenceImageManager.js',
         './modules/detection/FeatureDetector.js',

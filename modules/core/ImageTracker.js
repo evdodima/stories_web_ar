@@ -41,6 +41,7 @@ class ImageTracker {
 
         // Initialize sub-modules
         this.ui = new UIManager(this);
+        this.offlineManager = window.OfflineManager ? new OfflineManager() : null;
         this.camera = new CameraManager();
         this.referenceManager = new ReferenceImageManager(this.ui);
         this.detector = null;

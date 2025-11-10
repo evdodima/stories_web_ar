@@ -6,14 +6,47 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Stories Album AR</title>
+    <title>Stories AR</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a1a">
     <!-- Load OpenCV.js asynchronously with more reliable loading -->
     <script src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js" async></script>
     <!-- Load Three.js for WebGL rendering -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
     <!-- Load JSZip for loading album archives -->
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <!-- Service Worker Registration -->
+    <script>
+        // Register Service Worker for PWA functionality and caching
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('[PWA] Service Worker registered:', registration.scope);
+
+                        // Check for updates periodically
+                        setInterval(() => {
+                            registration.update();
+                        }, 60000); // Check every minute
+
+                        // Handle updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('[PWA] New version available, update on next reload');
+                                }
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        console.error('[PWA] Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
     <script src="imageTracker.js" defer></script>
 </head>
 <body>
@@ -28,7 +61,7 @@
                     <rect x="11" y="16" width="2" height="2" fill="#ffffff"></rect>
                 </svg>
             </div>
-            <h2>Stories Album AR</h2>
+            <h2>Stories AR</h2>
             <div class="loading-progress">
                 <div id="loadingProgressBar" class="loading-progress-bar" style="width:0%"></div>
             </div>
@@ -73,7 +106,7 @@
         <!-- Slide-out control panel -->
         <aside class="control-panel" id="controlPanel">
             <header class="panel-header">
-                <h1 class="panel-title">Stories Album AR</h1>
+                <h1 class="panel-title">Stories AR</h1>
                 <p class="panel-subtitle">Real-time image tracking</p>
                 <button id="closePanel" class="close-panel" aria-label="Close panel">×</button>
             </header>

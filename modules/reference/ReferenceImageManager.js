@@ -105,6 +105,9 @@ class ReferenceImageManager {
                 const albumCode = albumManager.getAlbumCodeFromURL();
 
                 if (albumCode) {
+                    // Store album code for caching
+                    this.albumCode = albumCode;
+
                     // Download from storage via backend
                     console.log('Downloading album from cloud storage...');
                     this.updateStatus('Downloading album from cloud storage...');
@@ -133,6 +136,7 @@ class ReferenceImageManager {
 
             // Create loader with progress callback (ZipDatabaseLoader is globally available)
             this.zipLoader = new ZipDatabaseLoader({
+                albumCode: this.albumCode,
                 onProgress: (progress) => {
                     const stage = progress.stage;
                     const percent = (typeof progress.progress === 'number') ? progress.progress : 0;

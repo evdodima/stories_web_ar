@@ -24,6 +24,29 @@ class VocabularyBuilder {
     };
 
     this.onProgress = options.onProgress || (() => {});
+
+    // Cache manager for storing vocabulary trees
+    this.cacheManager = null;
+    this.albumCode = options.albumCode || null;
+    this.initCacheManager();
+  }
+
+  /**
+   * Initialize cache manager
+   */
+  async initCacheManager() {
+    try {
+      if (!window.CacheManager) {
+        return;
+      }
+
+      this.cacheManager = new window.CacheManager();
+      await this.cacheManager.init();
+      console.log('[VocabularyBuilder] Cache manager initialized');
+    } catch (error) {
+      console.error('[VocabularyBuilder] Failed to init cache:', error);
+      this.cacheManager = null;
+    }
   }
 
   /**
@@ -452,10 +475,41 @@ class VocabularyBuilder {
 
   /**
    * Process all targets and build complete database
+   * Checks cache first, builds if not cached
    */
   async processTargets(targetData) {
     console.log(`Processing ${targetData.length} targets...`);
 
+    // Ensure cache manager is initialized
+    if (!this.cacheManager && window.CacheManager) {
+      await this.initCacheManager();
+    }
+
+    // Try to load from cache first
+    if (this.cacheManager && this.albumCode) {
+      this.onProgress({ stage: 'cache', progress: 0, message: 'Checking cache...' });
+
+      try {
+        const cachedData = await this.cacheManager.getVocabulary(this.albumCode);
+        if (cachedData) {
+          console.log('[VocabularyBuilder] Loading from cache');
+          this.importDatabase(cachedData);
+          this.onProgress({
+            stage: 'cache',
+            progress: 100,
+            message: 'Loaded from cache',
+            cached: true
+          });
+          return this.targets;
+        }
+
+        console.log('[VocabularyBuilder] Not in cache, building...');
+      } catch (error) {
+        console.error('[VocabularyBuilder] Cache lookup failed:', error);
+      }
+    }
+
+    // Build vocabulary tree from scratch
     this.onProgress({ stage: 'extracting', progress: 0 });
 
     // Step 1: Extract features from all targets
@@ -523,6 +577,21 @@ class VocabularyBuilder {
     }
 
     this.targets = targetFeatures;
+
+    // Cache the built vocabulary tree
+    if (this.cacheManager && this.albumCode) {
+      this.onProgress({ stage: 'caching', progress: 0, message: 'Saving to cache...' });
+
+      try {
+        const database = this.exportDatabase();
+        await this.cacheManager.storeVocabulary(this.albumCode, database);
+        console.log('[VocabularyBuilder] Vocabulary tree cached');
+        this.onProgress({ stage: 'caching', progress: 100 });
+      } catch (error) {
+        console.error('[VocabularyBuilder] Failed to cache vocabulary:', error);
+      }
+    }
+
     return targetFeatures;
   }
 
@@ -565,6 +634,54 @@ class VocabularyBuilder {
     };
 
     return database;
+  }
+
+  /**
+   * Import database from cached data
+   * Restores vocabulary tree and targets
+   */
+  importDatabase(database) {
+    console.log('[VocabularyBuilder] Importing cached database');
+
+    // Restore metadata
+    this.k = database.metadata.branching_factor;
+    this.levels = database.metadata.levels;
+    this.vocabularySize = database.metadata.vocabulary_size;
+
+    // Restore vocabulary (convert arrays back to Uint8Arrays)
+    this.vocabulary = database.vocabulary.words.map(word =>
+      new Uint8Array(word)
+    );
+    this.idfWeights = database.vocabulary.idf_weights;
+
+    // Restore targets
+    this.targets = database.targets.map(target => {
+      const descriptorSize = database.metadata.descriptor_bytes;
+
+      // Convert descriptors back to flat Uint8Array
+      const descriptorsFlat = new Uint8Array(
+        target.descriptors.length * descriptorSize
+      );
+      target.descriptors.forEach((desc, i) => {
+        descriptorsFlat.set(desc, i * descriptorSize);
+      });
+
+      return {
+        id: target.id,
+        numFeatures: target.num_features,
+        keypoints: target.keypoints.map(kp => ({ x: kp[0], y: kp[1] })),
+        descriptors: descriptorsFlat,
+        descriptorSize: descriptorSize,
+        bow: target.bow,
+        bow_tfidf: target.bow_tfidf,
+        imageSize: {
+          width: target.image_meta.width,
+          height: target.image_meta.height
+        }
+      };
+    });
+
+    console.log(`[VocabularyBuilder] Imported ${this.targets.length} targets`);
   }
 
   _sleep(ms) {
