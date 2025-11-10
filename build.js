@@ -15,6 +15,7 @@ const MODULES_DIR = './modules';
 // Module loading order (critical for dependencies)
 const MODULE_ORDER = [
   'modules/utils/PerformanceProfiler.js',
+  'modules/utils/DebugExporter.js',
   'modules/utils/AlbumManager.js',
   'modules/utils/ProgressManager.js',
   'modules/database/DatabaseLoader.js',
