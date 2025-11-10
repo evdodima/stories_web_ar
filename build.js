@@ -16,6 +16,7 @@ const MODULES_DIR = './modules';
 const MODULE_ORDER = [
   'modules/utils/PerformanceProfiler.js',
   'modules/utils/DebugExporter.js',
+  'modules/cache/CacheManager.js',
   'modules/utils/AlbumManager.js',
   'modules/utils/ProgressManager.js',
   'modules/database/DatabaseLoader.js',
@@ -23,6 +24,7 @@ const MODULE_ORDER = [
   'modules/database/VocabularyTreeQuery.js',
   'modules/database/ZipDatabaseLoader.js',
   'modules/ui/UIManager.js',
+  'modules/ui/OfflineManager.js',
   'modules/camera/CameraManager.js',
   'modules/reference/ReferenceImageManager.js',
   'modules/detection/FeatureDetector.js',
