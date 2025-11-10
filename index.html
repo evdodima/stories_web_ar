@@ -8,42 +8,20 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>Stories AR</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a1a1a">
     <!-- Load OpenCV.js asynchronously with more reliable loading -->
     <script src="https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js" async></script>
     <!-- Load Three.js for WebGL rendering -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
     <!-- Load JSZip for loading album archives -->
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <!-- Service Worker Registration -->
+    <!-- Cleanup: Unregister any existing service workers -->
     <script>
-        // Register Service Worker for PWA functionality and caching
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('[PWA] Service Worker registered:', registration.scope);
-
-                        // Check for updates periodically
-                        setInterval(() => {
-                            registration.update();
-                        }, 60000); // Check every minute
-
-                        // Handle updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    console.log('[PWA] New version available, update on next reload');
-                                }
-                            });
-                        });
-                    })
-                    .catch(error => {
-                        console.error('[PWA] Service Worker registration failed:', error);
-                    });
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => {
+                    registration.unregister();
+                    console.log('[Cleanup] Service worker unregistered');
+                });
             });
         }
     </script>
