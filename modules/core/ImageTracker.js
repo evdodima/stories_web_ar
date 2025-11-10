@@ -36,6 +36,9 @@ class ImageTracker {
         // Initialize profiler
         this.profiler = new PerformanceProfiler();
 
+        // Initialize debug exporter
+        this.debugExporter = new DebugExporter(this);
+
         // Initialize viewport manager (central dimension authority)
         this.viewportManager = new ViewportManager();
 
@@ -484,13 +487,8 @@ class ImageTracker {
         // Schedule next frame
         requestAnimationFrame(() => this.processVideo());
 
-        // Rate limiting: process at max 20 FPS (50ms between frames)
+        // Calculate FPS
         const now = performance.now();
-        const elapsed = now - this.state.lastProcessingTime;
-        const minFrameTime = 50; // 50ms = 20 FPS
-        if (elapsed < minFrameTime) return;
-        this.state.lastProcessingTime = now;
-
         if (this.state.lastFrameTimestamp) {
             const delta = now - this.state.lastFrameTimestamp;
             if (delta > 0) {

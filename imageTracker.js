@@ -8,6 +8,7 @@
 (function() {
     const scripts = [
         './modules/utils/PerformanceProfiler.js',
+        './modules/utils/DebugExporter.js',
         './modules/cache/CacheManager.js',
         './modules/utils/AlbumManager.js',
         './modules/utils/ProgressManager.js',

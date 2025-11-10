@@ -268,6 +268,185 @@ class UIManager {
                 window.open('https://stories-ar.com', '_blank');
             });
         }
+
+        const exportDebugBtn = document.getElementById('exportDebugBtn');
+        if (exportDebugBtn) {
+            exportDebugBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                this.handleDebugExport();
+            });
+        }
+    }
+
+    async handleDebugExport() {
+        if (!this.tracker.debugExporter) {
+            alert('Debug exporter not initialized');
+            return;
+        }
+
+        const exportDebugBtn = document.getElementById('exportDebugBtn');
+        const originalLabel = exportDebugBtn?.querySelector('.menu-item-label');
+        const originalText = originalLabel?.textContent;
+
+        try {
+            // Show export options to user
+            const choice = await this.showDebugExportDialog();
+
+            if (choice === 'cancel') {
+                return;
+            }
+
+            // Update button to show progress
+            if (originalLabel) {
+                originalLabel.textContent = 'Exporting...';
+            }
+
+            let success = false;
+            let message = '';
+
+            if (choice === 'copy') {
+                success = await this.tracker.debugExporter.copyToClipboard();
+                message = success
+                    ? 'Debug data copied to clipboard!'
+                    : 'Failed to copy. Try download instead.';
+            } else if (choice === 'text') {
+                const filename = this.tracker.debugExporter.downloadText();
+                success = true;
+                message = `Downloaded: ${filename}`;
+            } else if (choice === 'json') {
+                const filename = this.tracker.debugExporter.downloadJSON();
+                success = true;
+                message = `Downloaded: ${filename}`;
+            }
+
+            // Show success/error message
+            if (originalLabel) {
+                originalLabel.textContent = success ? 'Success!' : 'Failed';
+                setTimeout(() => {
+                    if (originalLabel) {
+                        originalLabel.textContent = originalText;
+                    }
+                }, 2000);
+            }
+
+            if (success) {
+                console.log('[DebugExport] ' + message);
+            } else {
+                console.error('[DebugExport] ' + message);
+            }
+
+        } catch (err) {
+            console.error('Debug export error:', err);
+            if (originalLabel) {
+                originalLabel.textContent = 'Error';
+                setTimeout(() => {
+                    if (originalLabel) {
+                        originalLabel.textContent = originalText;
+                    }
+                }, 2000);
+            }
+            alert('Failed to export debug data. Check console for details.');
+        }
+    }
+
+    showDebugExportDialog() {
+        return new Promise((resolve) => {
+            // Create a simple modal dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                padding: 20px;
+            `;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                max-width: 400px;
+                width: 100%;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            `;
+
+            content.innerHTML = `
+                <h3 style="margin: 0 0 12px 0; color: #1a1a1a;
+                           font-size: 20px; font-weight: 600;">
+                    Export Debug Data
+                </h3>
+                <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">
+                    Choose how to export logs and profiling data:
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button id="debugCopyBtn" style="padding: 12px;
+                        background: #3b82f6; color: white; border: none;
+                        border-radius: 8px; cursor: pointer; font-size: 15px;
+                        font-weight: 500;">
+                        Copy to Clipboard
+                    </button>
+                    <button id="debugTextBtn" style="padding: 12px;
+                        background: #10b981; color: white; border: none;
+                        border-radius: 8px; cursor: pointer; font-size: 15px;
+                        font-weight: 500;">
+                        Download as Text
+                    </button>
+                    <button id="debugJsonBtn" style="padding: 12px;
+                        background: #8b5cf6; color: white; border: none;
+                        border-radius: 8px; cursor: pointer; font-size: 15px;
+                        font-weight: 500;">
+                        Download as JSON
+                    </button>
+                    <button id="debugCancelBtn" style="padding: 12px;
+                        background: #f3f4f6; color: #1a1a1a; border: none;
+                        border-radius: 8px; cursor: pointer; font-size: 15px;
+                        font-weight: 500;">
+                        Cancel
+                    </button>
+                </div>
+            `;
+
+            dialog.appendChild(content);
+            document.body.appendChild(dialog);
+
+            const cleanup = () => {
+                document.body.removeChild(dialog);
+            };
+
+            document.getElementById('debugCopyBtn').onclick = () => {
+                cleanup();
+                resolve('copy');
+            };
+
+            document.getElementById('debugTextBtn').onclick = () => {
+                cleanup();
+                resolve('text');
+            };
+
+            document.getElementById('debugJsonBtn').onclick = () => {
+                cleanup();
+                resolve('json');
+            };
+
+            document.getElementById('debugCancelBtn').onclick = () => {
+                cleanup();
+                resolve('cancel');
+            };
+
+            dialog.onclick = (e) => {
+                if (e.target === dialog) {
+                    cleanup();
+                    resolve('cancel');
+                }
+            };
+        });
     }
 
     hideLoadingScreen() {
