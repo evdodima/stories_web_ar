@@ -17,6 +17,13 @@ class CameraManager {
         this.stream = null;
         this.state = CameraManager.STATE.STOPPED;
         this.currentConstraints = null;
+
+        // Reusable canvas for frame capture (avoids creating new canvas every frame)
+        this.captureCanvas = document.createElement('canvas');
+        this.captureContext = this.captureCanvas.getContext('2d', {
+            willReadFrequently: false,  // We read once per frame, not frequently
+            alpha: false  // No alpha channel needed for camera frames
+        });
     }
 
     async start(constraints = null) {
@@ -173,33 +180,33 @@ class CameraManager {
                 return null;
             }
 
-            // Create a canvas to capture the video frame
-            const captureCanvas = document.createElement('canvas');
-            const captureContext = captureCanvas.getContext('2d');
+            // Calculate target dimensions (apply maxDimension before drawing)
+            let drawWidth, drawHeight;
+            if (maxDimension && (this.video.videoWidth > maxDimension || this.video.videoHeight > maxDimension)) {
+                // Calculate scale factor to fit within maxDimension
+                const scaleFactor = Math.min(
+                    maxDimension / this.video.videoWidth,
+                    maxDimension / this.video.videoHeight
+                );
+                drawWidth = Math.round(this.video.videoWidth * scaleFactor);
+                drawHeight = Math.round(this.video.videoHeight * scaleFactor);
+            } else {
+                // Use original video dimensions
+                drawWidth = this.video.videoWidth;
+                drawHeight = this.video.videoHeight;
+            }
 
-            // Set dimensions to match video
-            captureCanvas.width = this.video.videoWidth;
-            captureCanvas.height = this.video.videoHeight;
+            // Resize canvas to target dimensions (reuse same canvas)
+            this.captureCanvas.width = drawWidth;
+            this.captureCanvas.height = drawHeight;
 
-            // Draw the current video frame to the canvas
-            captureContext.drawImage(this.video, 0, 0, captureCanvas.width, captureCanvas.height);
+            // Draw directly at target resolution (browser handles scaling efficiently)
+            // This is much faster than drawing Full HD then resizing with OpenCV
+            this.captureContext.drawImage(this.video, 0, 0, drawWidth, drawHeight);
 
             // Read the image data from the canvas into an OpenCV matrix
-            let frame = cv.imread(captureCanvas);
-
-            // Resize if larger than maximum dimension
-            if (maxDimension && (frame.cols > maxDimension || frame.rows > maxDimension)) {
-                let scaleFactor = Math.min(maxDimension / frame.cols, maxDimension / frame.rows);
-                let newSize = new cv.Size(
-                    Math.round(frame.cols * scaleFactor),
-                    Math.round(frame.rows * scaleFactor)
-                );
-                let resizedFrame = new cv.Mat();
-                cv.resize(frame, resizedFrame, newSize, 0, 0, cv.INTER_AREA);
-
-                frame.delete();
-                frame = resizedFrame;
-            }
+            // No resize needed since we already drew at the correct size
+            let frame = cv.imread(this.captureCanvas);
 
             // Set canvas to match processing resolution for perfect alignment
             if (this.canvas.width !== frame.cols || this.canvas.height !== frame.rows) {

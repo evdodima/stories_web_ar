@@ -508,7 +508,6 @@ class ImageTracker {
 
         // Track frames processed to detect memory leaks
         let frameToProcess = null;
-        let displayFrame = null;
 
         try {
             this.profiler.startTimer('frame_total');
@@ -518,15 +517,6 @@ class ImageTracker {
             frameToProcess = this.camera.captureFrame(this.state.maxDimension);
             this.profiler.endTimer('capture_frame');
             if (!frameToProcess) return;
-
-            // Capture display frame (high-res for visual quality)
-            this.profiler.startTimer('capture_display_frame');
-            displayFrame = this.camera.captureDisplayFrame();
-            this.profiler.endTimer('capture_display_frame');
-            // If display frame fails, fall back to processing frame
-            if (!displayFrame) {
-                displayFrame = null; // Renderer will use processing frame
-            }
 
             // Increment frame counter
             this.state.frameCount++;
@@ -726,9 +716,10 @@ class ImageTracker {
                 }
 
                 // Render everything (camera background + rectangles + videos)
-                // Pass processing frame for coordinate mapping, display frame for visual quality
+                // Pass processing frame for coordinate mapping
+                // Video element is used directly via VideoTexture (no display frame needed)
                 // Only render video for selected target
-                this.arRenderer.render(trackingResults, frameToProcess, selectedTargetId, displayFrame);
+                this.arRenderer.render(trackingResults, frameToProcess, selectedTargetId);
 
                 this.profiler.endTimer('ar_rendering');
             }
@@ -743,11 +734,6 @@ class ImageTracker {
             // Clean up resources
             if (frameToProcess && !this.state.lastFrame || (this.state.lastFrame && frameToProcess !== this.state.lastFrame)) {
                 frameToProcess.delete();
-            }
-
-            // Clean up display frame (separate from processing frame)
-            if (displayFrame) {
-                displayFrame.delete();
             }
 
             // Mark processing as complete

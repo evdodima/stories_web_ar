@@ -25,6 +25,10 @@ class ARRenderer {
     // Target objects: targetId -> {videoPlane, trackingLine}
     this.targetObjects = new Map();
 
+    // Corner cache to avoid object allocation every frame
+    // targetId -> [{x, y}, {x, y}, {x, y}, {x, y}]
+    this.cornerCache = new Map();
+
     // Video manager
     this.videoManager = new VideoManager({
       muted: options.muted !== false,
@@ -219,9 +223,8 @@ class ARRenderer {
   /**
    * Update camera background from OpenCV frame
    * @param {cv.Mat} processingFrame - Low-res frame for AR processing (determines coordinate space)
-   * @param {cv.Mat} displayFrame - Optional high-res frame for display (defaults to processingFrame)
    */
-  updateCameraBackground(processingFrame, displayFrame = null) {
+  updateCameraBackground(processingFrame) {
     if (!processingFrame || !this.backgroundPlane) {
       console.warn('[ARRenderer] updateCameraBackground called but:', {
         hasFrame: !!processingFrame,
@@ -238,44 +241,17 @@ class ARRenderer {
       this.frameWidth = processingFrame.cols;
       this.frameHeight = processingFrame.rows;
 
-      // Use high-res display frame if provided, otherwise use processing frame
-      const frameToDisplay = displayFrame || processingFrame;
-
-      // DEBUG logs removed
-
       // Ensure canvas is sized to viewport (only on first frame)
       if (this.cameraWidth === 0 || this.cameraHeight === 0) {
         this.updateSize();
       }
 
-      // Convert OpenCV Mat to canvas (using high-res display frame)
-      if (!this._backgroundCanvas) {
-        this._backgroundCanvas = document.createElement('canvas');
-        this._backgroundContext = this._backgroundCanvas.getContext('2d', {
-          willReadFrequently: false,
-          alpha: false
-        });
-      }
+      // Use video element directly as texture source (no OpenCV conversion needed!)
+      // VideoTexture updates automatically from the video stream
+      if (!this.backgroundTexture) {
+        console.log('[ARRenderer] Creating VideoTexture from camera video element');
 
-      // Check if canvas size changed (orientation change or resolution change)
-      const sizeChanged = this._backgroundCanvas.width !== frameToDisplay.cols ||
-                          this._backgroundCanvas.height !== frameToDisplay.rows;
-
-      this._backgroundCanvas.width = frameToDisplay.cols;
-      this._backgroundCanvas.height = frameToDisplay.rows;
-
-      cv.imshow(this._backgroundCanvas, frameToDisplay);
-
-      // Update texture from canvas
-      // If size changed, recreate texture to avoid WebGL dimension mismatch
-      if (!this.backgroundTexture || sizeChanged) {
-        // Dispose old texture if it exists
-        if (this.backgroundTexture) {
-          console.log('[ARRenderer] Frame dimensions changed, recreating texture');
-          this.backgroundTexture.dispose();
-        }
-
-        this.backgroundTexture = new THREE.CanvasTexture(this._backgroundCanvas);
+        this.backgroundTexture = new THREE.VideoTexture(this.cameraVideo);
         // High-quality texture filtering for better upscaling
         this.backgroundTexture.minFilter = THREE.LinearMipmapLinearFilter;
         this.backgroundTexture.magFilter = THREE.LinearFilter;
@@ -283,16 +259,15 @@ class ARRenderer {
         // Enable anisotropic filtering for sharper textures at angles
         const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
         this.backgroundTexture.anisotropy = Math.min(4, maxAnisotropy);
-        this.backgroundTexture.flipY = false;
+        this.backgroundTexture.flipY = false;  // Flip Y axis to correct video orientation
         this.backgroundTexture.colorSpace = THREE.SRGBColorSpace;
         this.backgroundPlane.material.map = this.backgroundTexture;
         this.backgroundPlane.material.needsUpdate = true;
 
-        // Update background plane scale with new frame dimensions
+        // Update background plane scale with video dimensions
         this.updateBackgroundPlane();
-      } else {
-        this.backgroundTexture.needsUpdate = true;
       }
+      // VideoTexture updates automatically - no needsUpdate required!
     } catch (error) {
       console.error('[ARRenderer] Error updating camera background:', error);
       console.error('[ARRenderer] Error stack:', error.stack);
@@ -304,15 +279,14 @@ class ARRenderer {
    * @param {Array} trackingResults
    * @param {cv.Mat} processingFrame - Low-res frame used for AR processing (coordinate space)
    * @param {string} selectedTargetId - ID of target to show video for (single-video mode)
-   * @param {cv.Mat} displayFrame - Optional high-res frame for display background
    */
-  render(trackingResults = [], processingFrame = null, selectedTargetId = null, displayFrame = null) {
+  render(trackingResults = [], processingFrame = null, selectedTargetId = null) {
     if (!this.enabled || !this.renderer || !this.scene) return;
 
     // Update background with current camera frame for perfect sync
-    // Use high-res display frame if provided, otherwise fall back to processing frame
+    // Video element is used directly via VideoTexture (no frame conversion needed)
     if (processingFrame) {
-      this.updateCameraBackground(processingFrame, displayFrame);
+      this.updateCameraBackground(processingFrame);
     }
 
     // Get OpenCV processing resolution (from frame dimensions)
@@ -339,14 +313,24 @@ class ARRenderer {
       // Convert corners from OpenCV pixel coordinates to background plane world coordinates
       // CRITICAL: Account for background plane position and size!
       // Background is centered and aspect-filled, may extend beyond viewport
-      const scaledCorners = result.corners.map(corner => {
-        const u = corner.x / opencvWidth;   // Normalized X (0-1)
-        const v = corner.y / opencvHeight;  // Normalized Y (0-1)
-        return {
-          x: bgScale.x - bgScale.width / 2 + u * bgScale.width,
-          y: bgScale.y - bgScale.height / 2 + v * bgScale.height
-        };
-      });
+
+      // Reuse cached corner objects to avoid allocation every frame
+      let scaledCorners = this.cornerCache.get(result.targetId);
+      if (!scaledCorners) {
+        // Create corner objects once
+        scaledCorners = [
+          {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}
+        ];
+        this.cornerCache.set(result.targetId, scaledCorners);
+      }
+
+      // Update corner positions in-place (no new object allocation)
+      for (let i = 0; i < 4; i++) {
+        const u = result.corners[i].x / opencvWidth;   // Normalized X (0-1)
+        const v = result.corners[i].y / opencvHeight;  // Normalized Y (0-1)
+        scaledCorners[i].x = bgScale.x - bgScale.width / 2 + u * bgScale.width;
+        scaledCorners[i].y = bgScale.y - bgScale.height / 2 + v * bgScale.height;
+      }
 
       // Debug logs removed
 
@@ -406,6 +390,16 @@ class ARRenderer {
       } else if (selectedTargetId && targetId !== selectedTargetId) {
         // Target is visible but not selected - pause its video
         this.videoManager.pauseVideo(targetId);
+      }
+    }
+
+    // Batch geometry updates for all active targets (performance optimization)
+    // Instead of setting needsUpdate per target, batch all updates at once
+    for (const targetId of activeTargets) {
+      const targetObj = this.targetObjects.get(targetId);
+      if (targetObj) {
+        targetObj.videoPlane.geometry.attributes.position.needsUpdate = true;
+        targetObj.trackingLine.geometry.attributes.position.needsUpdate = true;
       }
     }
 
@@ -494,7 +488,7 @@ class ARRenderer {
       positions.setXY(1, corners[1].x - centerX, corners[1].y - centerY); // Top-right
       positions.setXY(2, corners[3].x - centerX, corners[3].y - centerY); // Bottom-left
       positions.setXY(3, corners[2].x - centerX, corners[2].y - centerY); // Bottom-right
-      positions.needsUpdate = true;
+      // needsUpdate will be batched after all targets are processed
     } catch (error) {
       console.error('[ARRenderer] Error updating video plane:', error);
     }
@@ -514,7 +508,7 @@ class ARRenderer {
       positions.setXYZ(3, corners[3].x, corners[3].y, 0);
       positions.setXYZ(4, corners[0].x, corners[0].y, 0); // Close the loop
 
-      positions.needsUpdate = true;
+      // needsUpdate will be batched after all targets are processed
 
       // Debug logs removed
     } catch (error) {

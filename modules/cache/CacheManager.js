@@ -525,3 +525,8 @@ class CacheManager {
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   }
 }
+
+// Make available globally
+if (typeof window !== 'undefined') {
+  window.CacheManager = CacheManager;
+}
