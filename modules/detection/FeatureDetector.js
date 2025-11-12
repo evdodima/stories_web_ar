@@ -74,15 +74,14 @@ class FeatureDetector {
         }
 
         // Match frame features against selected targets only
+        console.log(`[FeatureDetector] 🎯 MATCHING AGAINST ${targetsToMatch.length} TARGETS`);
         const results = [];
         for (const target of targetsToMatch) {
+            console.log(`[FeatureDetector] ━━━━ Processing target: ${target.id} (${target.label}) ━━━━`);
+
             this.profiler?.startTimer(`detection_target_${target.id}`);
             const result = this.matchTarget(frameFeatures, target.referenceData);
             this.profiler?.endTimer(`detection_target_${target.id}`);
-
-            if (result.success) {
-                console.log(`[FeatureDetector] ✓ Target ${target.id} DETECTED - ${result.inliers} inliers`);
-            }
 
             results.push({
                 targetId: target.id,
@@ -103,6 +102,27 @@ class FeatureDetector {
                 });
             }
         }
+
+        // Log detection summary
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.filter(r => !r.success).length;
+        console.log('[FeatureDetector] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('[FeatureDetector] 📊 DETECTION CYCLE COMPLETE:', {
+            totalTargets: targets.length,
+            targetsChecked: targetsToMatch.length,
+            detected: successCount,
+            failed: failCount,
+            successRate: `${((successCount / results.length) * 100).toFixed(1)}%`
+        });
+        if (successCount > 0) {
+            const detectedTargets = results.filter(r => r.success).map(r => ({
+                id: r.targetId,
+                matches: r.goodMatchesCount,
+                score: r.score ? r.score.toFixed(3) : '0'
+            }));
+            console.log('[FeatureDetector] ✅ DETECTED TARGETS:', detectedTargets);
+        }
+        console.log('[FeatureDetector] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
         // Clean up frame features
         if (frameFeatures.keypoints) frameFeatures.keypoints.delete();
@@ -212,11 +232,13 @@ class FeatureDetector {
                 frameFeatures.descriptors.rows <= 0 || referenceData.descriptors.rows <= 0 ||
                 frameFeatures.descriptors.cols !== referenceData.descriptors.cols) {
 
-                console.log('[FeatureDetector] Matching failed:', {
-                    frameKP: frameFeatures.keypoints.size(),
-                    refKP: referenceData.keypoints.size(),
-                    frameDesc: frameFeatures.descriptors ? frameFeatures.descriptors.rows : 0,
-                    refDesc: referenceData.descriptors ? referenceData.descriptors.rows : 0
+                console.log('[FeatureDetector] ❌ PRE-MATCH CHECK FAILED:', {
+                    frameKeypoints: frameFeatures.keypoints.size(),
+                    refKeypoints: referenceData.keypoints.size(),
+                    frameDescriptors: frameFeatures.descriptors ? frameFeatures.descriptors.rows : 0,
+                    refDescriptors: referenceData.descriptors ? referenceData.descriptors.rows : 0,
+                    frameDescCols: frameFeatures.descriptors ? frameFeatures.descriptors.cols : 0,
+                    refDescCols: referenceData.descriptors ? referenceData.descriptors.cols : 0
                 });
                 result.reason = 'Insufficient keypoints or descriptor mismatch';
                 return result;
@@ -265,9 +287,45 @@ class FeatureDetector {
                 }
                 this.profiler?.endTimer('detect_filter_matches');
 
+                // Log match statistics
+                console.log('[FeatureDetector] 📊 MATCH STATISTICS:', {
+                    totalMatches: matches.size(),
+                    goodMatches: goodMatches.size(),
+                    ratioTestPassRate: matches.size() > 0
+                        ? `${((goodMatches.size() / matches.size()) * 100).toFixed(1)}%`
+                        : '0%',
+                    ratioThreshold: ratioThreshold
+                });
+
+                // Calculate distance statistics for good matches
+                if (goodMatches.size() > 0) {
+                    const distances = [];
+                    for (let i = 0; i < goodMatches.size(); i++) {
+                        const match = goodMatches.get(i);
+                        if (match && Number.isFinite(match.distance)) {
+                            distances.push(match.distance);
+                        }
+                    }
+
+                    if (distances.length > 0) {
+                        distances.sort((a, b) => a - b);
+                        const minDist = distances[0];
+                        const maxDist = distances[distances.length - 1];
+                        const avgDist = distances.reduce((a, b) => a + b, 0) / distances.length;
+                        const medianDist = distances[Math.floor(distances.length / 2)];
+
+                        console.log('[FeatureDetector] 📏 DISTANCE STATS:', {
+                            min: minDist.toFixed(2),
+                            max: maxDist.toFixed(2),
+                            avg: avgDist.toFixed(2),
+                            median: medianDist.toFixed(2)
+                        });
+                    }
+                }
+
                 knnMatches.delete();
             } catch (error) {
-                console.error('Error in KNN matching:', error);
+                console.error('[FeatureDetector] ❌ ERROR in KNN matching:', error);
 
                 matches = new cv.DMatchVector();
                 matcher.match(referenceData.descriptors, frameFeatures.descriptors, matches);
@@ -308,6 +366,12 @@ class FeatureDetector {
             result.matchesCount = matches ? matches.size() : 0;
             result.goodMatchesCount = goodMatches ? goodMatches.size() : 0;
 
+            console.log('[FeatureDetector] 🎯 MATCH COUNTS:', {
+                totalMatches: result.matchesCount,
+                goodMatches: result.goodMatchesCount,
+                minRequiredForHomography: 12
+            });
+
             if (goodMatches && goodMatches.size() >= 12) {
                 this.profiler?.startTimer('detect_homography');
                 const referencePoints = [];
@@ -343,12 +407,23 @@ class FeatureDetector {
                 }
 
                 if (referencePoints.length >= 16 && framePoints.length >= 16) {
+                    const numPointPairs = referencePoints.length / 2;
+                    console.log('[FeatureDetector] 🔷 HOMOGRAPHY INPUT:', {
+                        pointPairs: numPointPairs,
+                        refPoints: referencePoints.length / 2,
+                        framePoints: framePoints.length / 2
+                    });
+
                     refPointsMat = cv.matFromArray(referencePoints.length / 2, 1, cv.CV_32FC2, referencePoints);
                     framePointsMat = cv.matFromArray(framePoints.length / 2, 1, cv.CV_32FC2, framePoints);
 
                     homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC, 5.0);
 
                     if (homography && !homography.empty()) {
+                        console.log('[FeatureDetector] ✅ HOMOGRAPHY COMPUTED:', {
+                            matrixSize: `${homography.rows}x${homography.cols}`,
+                            isEmpty: homography.empty()
+                        });
                         cornerPoints = new cv.Mat(4, 1, cv.CV_32FC2);
 
                         if (cornerPoints.data32F && cornerPoints.data32F.length >= 8) {
@@ -368,14 +443,37 @@ class FeatureDetector {
 
                             const corners = this.extractCorners(transformedCorners);
                             if (corners) {
+                                console.log('[FeatureDetector] ✅ CORNERS EXTRACTED:', {
+                                    topLeft: `(${corners[0].x.toFixed(1)}, ${corners[0].y.toFixed(1)})`,
+                                    topRight: `(${corners[1].x.toFixed(1)}, ${corners[1].y.toFixed(1)})`,
+                                    bottomRight: `(${corners[2].x.toFixed(1)}, ${corners[2].y.toFixed(1)})`,
+                                    bottomLeft: `(${corners[3].x.toFixed(1)}, ${corners[3].y.toFixed(1)})`
+                                });
                                 result.corners = corners;
                                 result.success = true;
                                 result.homography = homography;
+                            } else {
+                                console.log('[FeatureDetector] ❌ CORNER EXTRACTION FAILED: Invalid corner coordinates');
                             }
                         }
+                    } else {
+                        console.log('[FeatureDetector] ❌ HOMOGRAPHY FAILED: Empty or invalid matrix');
                     }
+                } else {
+                    console.log('[FeatureDetector] ❌ HOMOGRAPHY SKIPPED:', {
+                        reason: 'Insufficient point pairs',
+                        refPoints: referencePoints.length / 2,
+                        framePoints: framePoints.length / 2,
+                        minRequired: 8
+                    });
                 }
                 this.profiler?.endTimer('detect_homography');
+            } else {
+                console.log('[FeatureDetector] ⚠️  HOMOGRAPHY SKIPPED:', {
+                    reason: 'Insufficient good matches',
+                    goodMatches: goodMatches ? goodMatches.size() : 0,
+                    minRequired: 12
+                });
             }
 
             if (referenceData.keypoints.size() > 0) {
@@ -385,6 +483,16 @@ class FeatureDetector {
             if (!result.success) {
                 result.reason = result.reason || 'Insufficient matches';
             }
+
+            // Log final detection result summary
+            console.log(`[FeatureDetector] ${result.success ? '✅ DETECTION SUCCESS' : '❌ DETECTION FAILED'}:`, {
+                success: result.success,
+                totalMatches: result.matchesCount,
+                goodMatches: result.goodMatchesCount,
+                score: result.score ? result.score.toFixed(3) : '0.000',
+                hasCorners: !!result.corners,
+                reason: result.reason || 'Success'
+            });
 
             return result;
         } catch (error) {
