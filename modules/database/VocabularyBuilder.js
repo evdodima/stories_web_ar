@@ -18,8 +18,8 @@ class VocabularyBuilder {
 
     // BRISK detector params (must match Python)
     this.briskParams = {
-      thresh: 50,
-      octaves: 3,
+      thresh: 30,
+      octaves: 6,
       patternScale: 1.0
     };
 

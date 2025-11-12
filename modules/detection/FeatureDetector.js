@@ -3,7 +3,7 @@
  */
 class FeatureDetector {
     constructor(state, profiler, vocabularyQuery = null) {
-        this.detector = new cv.BRISK(50, 3, 1.0);
+        this.detector = new cv.BRISK(30, 6, 1.0);
         this.state = state;
         this.profiler = profiler;
         this.vocabularyQuery = vocabularyQuery; // Vocabulary tree query for candidate selection
@@ -145,6 +145,22 @@ class FeatureDetector {
             cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
             this.profiler?.endTimer('detect_gray_conversion');
 
+            // Preprocessing pipeline for better feature quality (same as database)
+            this.profiler?.startTimer('detect_preprocessing');
+            const blurred = new cv.Mat();
+            cv.GaussianBlur(frameGray, blurred, new cv.Size(3, 3), 0.5);
+
+            const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+            const enhanced = new cv.Mat();
+            clahe.apply(blurred, enhanced);
+
+            // Replace frameGray with enhanced version
+            frameGray.delete();
+            frameGray = enhanced;
+            blurred.delete();
+            clahe.delete();
+            this.profiler?.endTimer('detect_preprocessing');
+
             frameKeypoints = new cv.KeyPointVector();
             frameDescriptors = new cv.Mat();
 
@@ -261,7 +277,7 @@ class FeatureDetector {
                 matches = new cv.DMatchVector();
                 goodMatches = new cv.DMatchVector();
 
-                const ratioThreshold = 0.7;
+                const ratioThreshold = 0.75;
 
                 for (let i = 0; i < knnMatches.size(); i++) {
                     try {
@@ -417,7 +433,7 @@ class FeatureDetector {
                     refPointsMat = cv.matFromArray(referencePoints.length / 2, 1, cv.CV_32FC2, referencePoints);
                     framePointsMat = cv.matFromArray(framePoints.length / 2, 1, cv.CV_32FC2, framePoints);
 
-                    homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC, 5.0);
+                    homography = cv.findHomography(refPointsMat, framePointsMat, cv.RANSAC, 4.0);
 
                     if (homography && !homography.empty()) {
                         console.log('[FeatureDetector] ✅ HOMOGRAPHY COMPUTED:', {

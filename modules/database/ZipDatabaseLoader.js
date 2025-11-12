@@ -286,9 +286,24 @@ class ZipDatabaseLoader {
           const gray = new cv.Mat();
           cv.cvtColor(imageMat, gray, cv.COLOR_RGBA2GRAY);
 
+          // Preprocessing pipeline for better feature quality
+          // 1. Gaussian blur to reduce noise
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0.5);
+
+          // 2. CLAHE for contrast enhancement
+          const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+          const enhanced = new cv.Mat();
+          clahe.apply(blurred, enhanced);
+
+          // Clean up
           imageMat.delete();
+          gray.delete();
+          blurred.delete();
+          clahe.delete();
+
           URL.revokeObjectURL(img.src);
-          resolve(gray);
+          resolve(enhanced);
         } catch (error) {
           reject(error);
         }
