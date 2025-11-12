@@ -23,5 +23,5 @@
 ## Project Organization
 - **Structure**: OpenCV.js from CDN, single-page application with modular JS
 - **Components**: ImageTracker (main), UIManager, CameraManager, OpticalFlowTracker
-- **Features**: Image detection with BRISK, tracking with Lucas-Kanade optical flow
+- **Features**: Image detection with ORB, tracking with Lucas-Kanade optical flow
 - **Files**: HTML (structure), CSS (styling), JS (logic), no build process

@@ -38,7 +38,7 @@ modules/
 - **ReferenceImageManager**: Loads and processes reference images for feature extraction
 
 ### Detection Module
-- **FeatureDetector**: Performs feature detection and matching using BRISK algorithm and homography estimation
+- **FeatureDetector**: Performs feature detection and matching using ORB algorithm and homography estimation
 
 ### Tracking Module
 - **OpticalFlowTracker**: Implements Lucas-Kanade sparse optical flow for efficient frame-to-frame tracking

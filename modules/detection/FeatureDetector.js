@@ -3,11 +3,21 @@
  */
 class FeatureDetector {
     constructor(state, profiler, vocabularyQuery = null) {
-        this.detector = new cv.BRISK(50, 3, 1.0);
+        // ORB with optimized parameters for better long-distance detection
+        // OpenCV.js uses setter pattern instead of constructor parameters
+        this.detector = new cv.ORB();
+        this.detector.setMaxFeatures(1500);     // 1500 vs default 500 for better matching
+        this.detector.setScaleFactor(1.2);      // Default pyramid decimation
+        this.detector.setNLevels(12);           // 12 vs default 8 for better scale invariance
+        this.detector.setEdgeThreshold(15);     // 15 vs default 31 for more edge features
+        this.detector.setFirstLevel(0);         // Default
+        this.detector.setWTA_K(2);              // Default
+        this.detector.setPatchSize(31);         // Default
+        // Note: setScoreType and setFastThreshold are not available in this OpenCV.js build
         this.state = state;
         this.profiler = profiler;
         this.vocabularyQuery = vocabularyQuery; // Vocabulary tree query for candidate selection
-        this.maxCandidates = 3; // Maximum number of candidates to verify
+        this.maxCandidates = 2; // Maximum number of candidates to verify
         this.useVocabularyTree = true; // Enable/disable vocabulary tree optimization
 
         // Reuse matcher across all targets to avoid recreation overhead

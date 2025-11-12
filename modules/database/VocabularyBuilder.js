@@ -1,7 +1,7 @@
 /**
  * VocabularyBuilder.js
  *
- * Builds vocabulary tree from BRISK descriptors using k-means clustering
+ * Builds vocabulary tree from ORB descriptors using k-means clustering
  * Ported from Python build_vocabulary_tree.py for frontend use
  */
 
@@ -10,17 +10,23 @@ class VocabularyBuilder {
     this.k = options.branchingFactor || 10;
     this.levels = options.levels || 2;
     this.vocabularySize = Math.pow(this.k, this.levels);
-    this.maxFeaturesPerTarget = options.maxFeaturesPerTarget || 500;
+    this.maxFeaturesPerTarget = options.maxFeaturesPerTarget || 1500;
 
     this.vocabulary = null;
     this.idfWeights = null;
     this.targets = [];
 
-    // BRISK detector params (must match Python)
-    this.briskParams = {
-      thresh: 50,
-      octaves: 3,
-      patternScale: 1.0
+    // ORB detector params (must match live detector in FeatureDetector.js)
+    // OpenCV.js uses setter pattern instead of constructor parameters
+    this.orbParams = {
+      maxFeatures: 1500,      // 1500 vs default 500 for better matching
+      scaleFactor: 1.2,       // Default pyramid decimation
+      nLevels: 12,            // 12 vs default 8 for better scale invariance
+      edgeThreshold: 15,      // 15 vs default 31 for more edge features
+      firstLevel: 0,          // Default
+      WTA_K: 2,               // Default
+      patchSize: 31           // Default
+      // Note: scoreType and fastThreshold are not available in this build
     };
 
     this.onProgress = options.onProgress || (() => {});
@@ -50,17 +56,20 @@ class VocabularyBuilder {
   }
 
   /**
-   * Extract BRISK features from an image
+   * Extract ORB features from an image
    * @param {cv.Mat} imageMat - OpenCV Mat in grayscale
    * @param {string} targetId - Identifier for this target
    * @returns {Object} Feature data
    */
   extractFeatures(imageMat, targetId) {
-    const detector = new cv.BRISK(
-      this.briskParams.thresh,
-      this.briskParams.octaves,
-      this.briskParams.patternScale
-    );
+    const detector = new cv.ORB();
+    detector.setMaxFeatures(this.orbParams.maxFeatures);
+    detector.setScaleFactor(this.orbParams.scaleFactor);
+    detector.setNLevels(this.orbParams.nLevels);
+    detector.setEdgeThreshold(this.orbParams.edgeThreshold);
+    detector.setFirstLevel(this.orbParams.firstLevel);
+    detector.setWTA_K(this.orbParams.WTA_K);
+    detector.setPatchSize(this.orbParams.patchSize);
 
     const keypoints = new cv.KeyPointVector();
     const descriptors = new cv.Mat();
@@ -605,8 +614,8 @@ class VocabularyBuilder {
         vocabulary_size: this.vocabularySize,
         branching_factor: this.k,
         levels: this.levels,
-        descriptor_type: 'BRISK',
-        descriptor_bytes: this.targets[0]?.descriptorSize || 64
+        descriptor_type: 'ORB',
+        descriptor_bytes: this.targets[0]?.descriptorSize || 32
       },
       vocabulary: {
         words: this.vocabulary.map(word => Array.from(word)),

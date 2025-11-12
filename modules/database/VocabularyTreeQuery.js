@@ -11,7 +11,7 @@ class VocabularyTreeQuery {
     // Convert vocabulary to OpenCV Mat for fast matching
     this.vocabularyMat = this.createVocabularyMat(vocabulary);
 
-    // Create BFMatcher for finding nearest visual words (Hamming distance for BRISK)
+    // Create BFMatcher for finding nearest visual words (Hamming distance for ORB)
     this.matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
   }
 
@@ -125,7 +125,7 @@ class VocabularyTreeQuery {
    * @param {number} maxCandidates - Maximum candidates to return
    * @returns {Array} Sorted array of {target, score}
    */
-  queryCandidates(frameDescriptors, targets, maxCandidates = 5) {
+  queryCandidates(frameDescriptors, targets, maxCandidates = 2) {
     // Compute BoW for current frame
     const frameBow = this.computeBoW(frameDescriptors);
     const frameTfIdf = this.computeTfIdf(frameBow);

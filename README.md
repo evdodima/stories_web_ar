@@ -1,11 +1,11 @@
 # Stories AR - WebAR Image Tracking
 
-A WebAR application that brings photo albums to life by playing videos when you point your camera at printed photos. Uses advanced computer vision with BRISK features and vocabulary tree matching for fast, robust tracking.
+A WebAR application that brings photo albums to life by playing videos when you point your camera at printed photos. Uses advanced computer vision with ORB features and vocabulary tree matching for fast, robust tracking.
 
 ## Features
 
 - **Album-Based Loading**: Load targets and videos from a single zip archive
-- **Real-time Image Tracking**: Uses OpenCV BRISK features with vocabulary tree optimization
+- **Real-time Image Tracking**: Uses OpenCV ORB features with vocabulary tree optimization
 - **Optical Flow Tracking**: Smooth tracking between detections for better performance
 - **Video Overlay**: Plays videos aligned to detected images using WebGL rendering
 - **Multi-Target Support**: Track multiple images simultaneously with smart selection
@@ -78,7 +78,7 @@ Navigate to `http://localhost:8000` in your browser.
 3. **Secure Processing**: Backend decrypts code, validates, and fetches pre-signed download URL
 4. **Album Download**: Downloads the album zip file with progress tracking
 5. **Zip Extraction**: Extracts images and videos from the downloaded archive
-6. **Feature Detection**: Extracts BRISK features from each image (up to 500 per image)
+6. **Feature Detection**: Extracts ORB features from each image (up to 500 per image)
 7. **Vocabulary Building**: Clusters features into a vocabulary tree using k-means
 8. **BoW & TF-IDF**: Computes Bag-of-Words and TF-IDF vectors for fast retrieval
 9. **Video Mapping**: Associates each image with its corresponding video file
@@ -87,7 +87,7 @@ Navigate to `http://localhost:8000` in your browser.
 
 1. **Frame Processing**: Captures video frames from camera
 2. **Vocabulary Query**: Quickly finds top candidate targets using TF-IDF similarity
-3. **Feature Matching**: Matches BRISK features between frame and candidates
+3. **Feature Matching**: Matches ORB features between frame and candidates
 4. **Geometric Verification**: Uses RANSAC to verify matches and compute homography
 5. **Optical Flow**: Tracks features between detections for smooth performance
 6. **Video Rendering**: Projects video onto detected target using WebGL
@@ -149,7 +149,7 @@ Adjust in the UI control panel:
 ## Technical Stack
 
 ### Frontend
-- **OpenCV.js**: Computer vision (BRISK, optical flow, homography)
+- **OpenCV.js**: Computer vision (ORB, optical flow, homography)
 - **Three.js**: WebGL rendering for video overlay
 - **JSZip**: Zip file extraction in browser
 - **Vanilla JavaScript**: No framework dependencies
@@ -200,7 +200,7 @@ modules/
 ├── reference/
 │   └── ReferenceImageManager.js   # Target lifecycle management
 ├── detection/
-│   └── FeatureDetector.js         # BRISK matching with vocabulary
+│   └── FeatureDetector.js         # ORB matching with vocabulary
 ├── tracking/
 │   └── OpticalFlowTracker.js      # Lucas-Kanade tracking
 ├── rendering/

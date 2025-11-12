@@ -16,7 +16,7 @@ class ImageTracker {
             fps: 0,
             drawKeypoints: false,
             visualizeFlowPoints: false, // Visualize optical flow tracking points
-            maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
+            maxDimension: 1280, // Maximum allowed dimension while preserving aspect ratio
             useOpticalFlow: true, // Enable optical flow for smooth tracking
             detectionInterval: 15, // Run full detection every 15 frames
             frameCount: 0, // Current frame counter
@@ -24,7 +24,7 @@ class ImageTracker {
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: 800, // Maximum number of feature points to extract per frame
+            maxFeatures: 1500, // Maximum number of feature points to extract per frame
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
 
             // Single-video mode with center-priority selection

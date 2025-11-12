@@ -4,8 +4,8 @@
     "vocabulary_size": 100,
     "branching_factor": 10,
     "levels": 3,
-    "descriptor_type": "BRISK",
-    "descriptor_bytes": 64
+    "descriptor_type": "ORB",
+    "descriptor_bytes": 32
   },
   "vocabulary": {
     "words": [
