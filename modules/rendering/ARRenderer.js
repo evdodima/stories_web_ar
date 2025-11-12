@@ -346,14 +346,6 @@ class ARRenderer {
       if (isSelectedTarget) {
         const video = this.videoManager.getVideo(result.targetId);
         if (video) {
-          console.log(`[ARRenderer] 📹 Video for ${result.targetId}:`, {
-            readyState: video.readyState,
-            paused: video.paused,
-            currentTime: video.currentTime.toFixed(2),
-            duration: video.duration,
-            networkState: video.networkState
-          });
-
           if (video.readyState >= 2) {
             this.updateVideoPlane(targetObj.videoPlane, video, scaledCorners);
             targetObj.videoPlane.visible = true;

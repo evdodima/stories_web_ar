@@ -33,8 +33,6 @@ class VideoManager {
    * @returns {Promise<{video: HTMLVideoElement, isNew: boolean}>}
    */
   async getVideoForTarget(targetId, videoUrl) {
-    console.log('[VideoManager] getVideoForTarget:', { targetId, videoUrl });
-
     // Check if already active
     const active = this.activeVideos.get(targetId);
     if (active) {
@@ -52,10 +50,6 @@ class VideoManager {
 
       active.lastSeen = Date.now();
       if (active.url === videoUrl) {
-        console.log('[VideoManager] ✓ Returning existing video for target:', targetId,
-          'readyState:', active.video.readyState,
-          'paused:', active.video.paused,
-          'currentTime:', active.video.currentTime);
         return { video: active.video, isNew: false };
       } else {
         // URL changed - need to reload
@@ -224,14 +218,6 @@ class VideoManager {
       if (active.preloaded) {
         active.preloaded = false;
       }
-
-      console.log(`[VideoManager] 🎬 Play request for ${targetId}:`, {
-        paused: active.video.paused,
-        readyState: active.video.readyState,
-        currentTime: active.video.currentTime,
-        duration: active.video.duration,
-        src: active.video.src ? active.video.src.substring(0, 50) + '...' : 'none'
-      });
 
       if (active.video.paused) {
         active.video.play().catch(e => {
