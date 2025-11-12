@@ -231,23 +231,18 @@ class UIManager {
                 e.stopPropagation();
                 if (confirm('Clear all cached photos? This action cannot be undone.')) {
                     try {
-                        // Clear IndexedDB
-                        const databases = await indexedDB.databases();
-                        for (const db of databases) {
-                            indexedDB.deleteDatabase(db.name);
-                        }
-
-                        // Clear localStorage
-                        localStorage.clear();
-
-                        // Clear sessionStorage
-                        sessionStorage.clear();
+                        // Hard clear: Close all open IndexedDB connections first
+                        // This is safe because we're reloading anyway
+                        await this.hardClearCache();
 
                         alert('Cache cleared successfully! The page will now reload.');
+                        // Force reload - the browser will clean up any remaining connections
                         window.location.reload();
                     } catch (err) {
                         console.error('Failed to clear cache:', err);
-                        alert('Failed to clear cache. Please try again.');
+                        // Even if there's an error, reload anyway since page will restart
+                        alert('Cache clear attempted. The page will now reload.');
+                        window.location.reload();
                     }
                 }
             });
@@ -729,6 +724,117 @@ class UIManager {
                 this.tracker.referenceManager.removeTarget(targetId);
             });
         });
+    }
+
+    /**
+     * Hard clear all caches - aggressively closes connections and clears all storage
+     * Safe to use since page will reload immediately after
+     */
+    async hardClearCache() {
+        console.log('[UIManager] Starting hard cache clear...');
+
+        // Step 1: Clear CacheManager database if available
+        // This will clear all stores (even if deletion is blocked later)
+        try {
+            if (window.CacheManager) {
+                const cacheManager = new window.CacheManager();
+                // Clear all stores - this clears data even if database can't be deleted
+                await Promise.race([
+                    cacheManager.clearAll(),
+                    new Promise(resolve => setTimeout(resolve, 500)) // Max 500ms wait
+                ]);
+                // Close the database connection we just opened
+                if (cacheManager.db) {
+                    cacheManager.db.close();
+                }
+                console.log('[UIManager] Cleared CacheManager database stores');
+            }
+        } catch (err) {
+            console.warn('[UIManager] Error clearing CacheManager:', err);
+            // Continue anyway - we'll delete the database directly
+        }
+
+        // Step 2: Delete all IndexedDB databases
+        // Since page reloads, blocked deletions will be cleaned up automatically
+        try {
+            if (indexedDB && indexedDB.databases) {
+                const databases = await indexedDB.databases();
+                console.log(`[UIManager] Attempting to delete ${databases.length} databases...`);
+                
+                // Delete each database - handle blocked deletions gracefully
+                // We don't wait for completion since reload will handle cleanup
+                for (const db of databases) {
+                    try {
+                        const deleteReq = indexedDB.deleteDatabase(db.name);
+                        // Set up handlers but don't block on them
+                        deleteReq.onsuccess = () => {
+                            console.log(`[UIManager] Successfully deleted database: ${db.name}`);
+                        };
+                        deleteReq.onerror = () => {
+                            console.warn(`[UIManager] Failed to delete database: ${db.name}`, deleteReq.error);
+                        };
+                        deleteReq.onblocked = () => {
+                            console.warn(`[UIManager] Database deletion blocked: ${db.name} (will be cleaned on reload)`);
+                            // Blocked deletions are fine - page reload will close connections
+                        };
+                    } catch (err) {
+                        console.warn(`[UIManager] Error initiating delete for ${db.name}:`, err);
+                    }
+                }
+                
+                // Give deletions a moment to start, but don't wait for completion
+                // The page reload will ensure cleanup happens
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } else {
+                // Fallback for browsers that don't support indexedDB.databases()
+                // Try to delete known database names
+                const knownDatabases = ['WebarAlbumCache'];
+                for (const dbName of knownDatabases) {
+                    try {
+                        indexedDB.deleteDatabase(dbName);
+                    } catch (err) {
+                        console.warn(`[UIManager] Could not delete database ${dbName}:`, err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[UIManager] Error during IndexedDB cleanup:', err);
+            // Continue anyway - reload will handle it
+        }
+
+        // Step 3: Clear localStorage
+        try {
+            localStorage.clear();
+            console.log('[UIManager] Cleared localStorage');
+        } catch (err) {
+            console.warn('[UIManager] Error clearing localStorage:', err);
+        }
+
+        // Step 4: Clear sessionStorage
+        try {
+            sessionStorage.clear();
+            console.log('[UIManager] Cleared sessionStorage');
+        } catch (err) {
+            console.warn('[UIManager] Error clearing sessionStorage:', err);
+        }
+
+        // Step 5: Clear Cache API (if available)
+        try {
+            if ('caches' in window && caches.keys) {
+                const cacheNames = await caches.keys();
+                await Promise.all(
+                    cacheNames.map(cacheName => {
+                        console.log(`[UIManager] Deleting cache: ${cacheName}`);
+                        return caches.delete(cacheName);
+                    })
+                );
+                console.log('[UIManager] Cleared Cache API');
+            }
+        } catch (err) {
+            console.warn('[UIManager] Error clearing Cache API:', err);
+        }
+
+        console.log('[UIManager] Hard cache clear completed - page will reload');
     }
 }
 
