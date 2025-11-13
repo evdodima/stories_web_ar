@@ -49,6 +49,7 @@ class UIManager {
         this.loadingErrorIcon = byId('loadingErrorIcon');
         this.loadingProgressBar = byId('loadingProgressBar');
         this.loadingProgressText = byId('loadingProgressText');
+        this.loadingClearCacheBtn = byId('loadingClearCacheBtn');
         this.menuToggle = byId('menuToggle');
         this.controlPanel = byId('controlPanel');
         this.closePanel = byId('closePanel');
@@ -271,6 +272,24 @@ class UIManager {
                 this.handleDebugExport();
             });
         }
+
+        // Loading screen Clear Caches button
+        if (this.loadingClearCacheBtn) {
+            this.loadingClearCacheBtn.addEventListener('click', async () => {
+                try {
+                    this.loadingClearCacheBtn.textContent = 'Clearing...';
+                    this.loadingClearCacheBtn.disabled = true;
+                    await this.hardClearCache();
+                    // Reload the page after clearing
+                    window.location.reload();
+                } catch (err) {
+                    console.error('Failed to clear cache:', err);
+                    this.loadingClearCacheBtn.textContent = 'Clear Failed - Reloading...';
+                    // Reload anyway even if clear failed
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            });
+        }
     }
 
     async handleDebugExport() {
@@ -488,6 +507,11 @@ class UIManager {
         // Update both loading text and status panel
         if (this.loadingProgressText) {
             this.loadingProgressText.textContent = `Error: ${message}`;
+        }
+
+        // Show the Clear Caches button
+        if (this.loadingClearCacheBtn) {
+            this.loadingClearCacheBtn.style.display = 'block';
         }
 
         this.updateStatus(`ERROR: ${message}`);
