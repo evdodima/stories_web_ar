@@ -8,13 +8,13 @@
  * For faster performance, try:
  * - Increase brisk.thresh (30-50) = fewer features detected
  * - Decrease brisk.octaves (3-4) = less multi-scale processing
- * - Decrease brisk.maxFeatures (300-400) = fewer features to process
+ * - Decrease brisk.maxFeaturesPerFrame (300-400) = fewer features to process
  * - Disable preprocessing.useBlur = skip blur step
  *
  * For better quality, try:
  * - Decrease brisk.thresh (15-25) = more features detected
  * - Increase brisk.octaves (6-8) = better scale invariance
- * - Increase brisk.maxFeatures (600-1000) = more features to match
+ * - Increase brisk.maxFeaturesPerFrame (600-1000) = more features to match
  */
 
 const AppConfig = {
@@ -25,7 +25,7 @@ const AppConfig = {
     // BRISK threshold for feature detection
     // Lower values = more features (noisier), higher values = fewer features (more robust)
     // Recommended range: 20-60 for performance tuning
-    thresh: 50,
+    thresh: 30,
 
     // Number of octaves for multi-scale detection
     // More octaves = more features at different scales but slower
@@ -38,7 +38,7 @@ const AppConfig = {
     // Maximum number of features to keep per frame (sorted by response strength)
     // Lower = faster processing, higher = better detection but slower
     // Recommended: 300-500 for performance, 500-1000 for quality
-    maxFeatures: 500
+    maxFeaturesPerFrame: 1500
   },
 
   // ======================================================================
@@ -69,8 +69,6 @@ const AppConfig = {
   detection: {
     // Maximum number of target candidates to verify per frame
     maxCandidates: 2,
-
-    maxFeatures: 500,
 
     // Minimum similarity threshold for vocabulary-based filtering
     minSimilarityThreshold: 0.7,
@@ -225,7 +223,7 @@ const AppConfig = {
   // ======================================================================
   frameProcessing: {
     // Maximum dimension for processed frames (width or height)
-    maxDimension: 1280
+    maxDimension: 640
   },
 
   // ======================================================================
@@ -254,11 +252,7 @@ const AppConfig = {
     levels: 2,
 
     // Maximum features per target image for vocabulary building
-    maxFeaturesPerTarget: 500,
-
-    // Maximum features per target for database storage
-    // (Lower than maxFeaturesPerTarget to reduce database size)
-    maxFeaturesPerTargetStorage: 500
+    maxFeaturesPerTarget: 500
   }
 };
 

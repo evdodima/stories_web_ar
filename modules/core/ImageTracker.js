@@ -29,7 +29,7 @@ class ImageTracker {
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: AppConfig.detection.maxFeatures,
+            maxFeatures: AppConfig.brisk.maxFeaturesPerFrame,
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
 
             // Single-video mode with center-priority selection
