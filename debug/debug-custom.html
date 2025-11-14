@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom Detection Tests - No Blur + Resolution + Scale</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      color: #00ff88;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 0.9em;
+    }
+
+    .section {
+      background: #1a1a1a;
+      border-radius: 10px;
+      padding: 30px;
+      margin-bottom: 20px;
+      border: 1px solid #333;
+    }
+
+    h2 {
+      color: #00ff88;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+    }
+
+    .config-display {
+      background: #252525;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #00ff88;
+      margin-bottom: 20px;
+    }
+
+    .config-display h3 {
+      color: #00ff88;
+      margin-bottom: 15px;
+    }
+
+    .config-display ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .config-display li {
+      padding: 8px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .config-display li:last-child {
+      border-bottom: none;
+    }
+
+    .config-display code {
+      background: #1a1a1a;
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: #00ff88;
+    }
+
+    .status {
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border-left: 4px solid;
+    }
+
+    .status.info {
+      background: rgba(52, 152, 219, 0.1);
+      border-left-color: #3498db;
+      color: #3498db;
+    }
+
+    .status.success {
+      background: rgba(0, 255, 136, 0.1);
+      border-left-color: #00ff88;
+      color: #00ff88;
+    }
+
+    .status.error {
+      background: rgba(255, 68, 68, 0.1);
+      border-left-color: #ff4444;
+      color: #ff4444;
+    }
+
+    .test-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .test-option {
+      background: #252525;
+      padding: 20px;
+      border-radius: 8px;
+      border: 2px solid #333;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .test-option:hover {
+      border-color: #00ff88;
+      transform: translateY(-2px);
+    }
+
+    .test-option.selected {
+      border-color: #00ff88;
+      background: rgba(0, 255, 136, 0.1);
+    }
+
+    .test-option input[type="radio"] {
+      margin-right: 10px;
+    }
+
+    .test-option-title {
+      font-size: 1.1em;
+      font-weight: 600;
+      color: #00ff88;
+      margin-bottom: 8px;
+    }
+
+    .test-option-count {
+      color: #888;
+      font-size: 0.9em;
+      margin-bottom: 8px;
+    }
+
+    .test-option-desc {
+      color: #aaa;
+      font-size: 0.85em;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00ff88, #00cc6a);
+      color: #000;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 255, 136, 0.3);
+    }
+
+    .btn-secondary {
+      background: #3498db;
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: #ff4444;
+      color: #fff;
+    }
+
+    .progress-section {
+      display: none;
+    }
+
+    .progress-section.active {
+      display: block;
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 30px;
+      background: #252525;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 20px 0;
+      border: 1px solid #333;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88, #00cc6a);
+      width: 0%;
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #000;
+      font-size: 0.9em;
+    }
+
+    .progress-message {
+      color: #aaa;
+      font-size: 0.95em;
+      margin-top: 10px;
+    }
+
+    .results-section {
+      display: none;
+    }
+
+    .results-section.active {
+      display: block;
+    }
+
+    .result-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .summary-card {
+      background: #252525;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      border: 2px solid #333;
+    }
+
+    .summary-value {
+      font-size: 2em;
+      font-weight: bold;
+      color: #00ff88;
+      margin-bottom: 5px;
+    }
+
+    .summary-label {
+      color: #888;
+      font-size: 0.9em;
+      text-transform: uppercase;
+    }
+
+    .log-container {
+      background: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 5px;
+      padding: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85em;
+      margin-top: 20px;
+    }
+
+    .log-entry {
+      padding: 5px 0;
+      border-bottom: 1px solid #222;
+    }
+
+    #opencv-status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
+    #opencv-status.loading {
+      background: #ffaa00;
+      color: #000;
+    }
+
+    #opencv-status.ready {
+      background: #00ff88;
+      color: #000;
+    }
+
+    #opencv-status.error {
+      background: #ff4444;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎯 Custom Detection Tests</h1>
+      <p class="subtitle">No Blur + Different Resolutions + Target Scaling</p>
+      <div>
+        <span id="opencv-status" class="loading">OpenCV Loading...</span>
+      </div>
+    </header>
+
+    <div class="section">
+      <h2>Test Configuration</h2>
+
+      <div class="config-display">
+        <h3>Fixed Parameters</h3>
+        <ul>
+          <li><strong>Preprocessing:</strong> <code>NO Blur</code>, <code>WITH CLAHE (clip=2.0)</code></li>
+          <li><strong>BRISK:</strong> <code>threshold=30</code>, <code>octaves=6</code>, <code>patternScale=1.0</code></li>
+          <li><strong>Max Features:</strong> <code>800</code></li>
+          <li><strong>Matching:</strong> <code>ratio=0.75</code>, <code>minMatches=12</code>, <code>ransac=4.0</code></li>
+        </ul>
+      </div>
+
+      <div class="status info">
+        <strong>Test Variables:</strong> Resolution (640/960/1280/1920px) and Target Scales (0.1x to 1.0x downscaling only)<br>
+        <strong>Note:</strong> Frame scale is FIXED at 1.0x - we scale the TARGET instead
+      </div>
+
+      <h3>Select Test Scope:</h3>
+      <div class="test-options">
+        <label class="test-option selected">
+          <input type="radio" name="test-scope" value="all" checked>
+          <div class="test-option-title">All Combinations</div>
+          <div class="test-option-count">40 experiments</div>
+          <div class="test-option-desc">Every combination: 4 resolutions × 10 target scales = 40 tests</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="baselines">
+          <div class="test-option-title">Baselines Only</div>
+          <div class="test-option-count">4 experiments</div>
+          <div class="test-option-desc">Full-size target at each resolution (targetScale=1.0)</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="res_640">
+          <div class="test-option-title">Resolution: 640px</div>
+          <div class="test-option-count">10 experiments</div>
+          <div class="test-option-desc">All target scales at 640px</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="res_960">
+          <div class="test-option-title">Resolution: 960px</div>
+          <div class="test-option-count">10 experiments</div>
+          <div class="test-option-desc">All target scales at 960px</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="res_1280">
+          <div class="test-option-title">Resolution: 1280px</div>
+          <div class="test-option-count">10 experiments</div>
+          <div class="test-option-desc">All target scales at 1280px</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="small_targets">
+          <div class="test-option-title">Small Targets Only</div>
+          <div class="test-option-count">12 experiments</div>
+          <div class="test-option-desc">Target scales ≤ 0.3 (simulating distant targets)</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="stratified">
+          <div class="test-option-title">Stratified Sample</div>
+          <div class="test-option-count">20 experiments</div>
+          <div class="test-option-desc">4 resolutions × 5 key scales (0.1, 0.3, 0.5, 0.7, 1.0)</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="random_10">
+          <div class="test-option-title">Random Sample (10)</div>
+          <div class="test-option-count">10 experiments</div>
+          <div class="test-option-desc">Random selection for quick testing</div>
+        </label>
+
+        <label class="test-option">
+          <input type="radio" name="test-scope" value="first_5">
+          <div class="test-option-title">First 5 (Debug)</div>
+          <div class="test-option-count">5 experiments</div>
+          <div class="test-option-desc">Just first 5 configs for debugging</div>
+        </label>
+      </div>
+
+      <div class="button-group">
+        <button id="btn-run" class="btn-primary" onclick="runExperiments()">
+          ▶ Run Tests
+        </button>
+        <button id="btn-cancel" class="btn-danger" onclick="cancelExperiments()" disabled>
+          ⏹ Cancel
+        </button>
+      </div>
+    </div>
+
+    <div class="section progress-section" id="progress-section">
+      <h2>Running Tests</h2>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progress-bar">0%</div>
+      </div>
+      <div class="progress-message" id="progress-message">Initializing...</div>
+
+      <div class="log-container" id="log-container"></div>
+    </div>
+
+    <div class="section results-section" id="results-section">
+      <h2>Results</h2>
+
+      <div class="result-summary">
+        <div class="summary-card">
+          <div class="summary-value" id="result-total">0</div>
+          <div class="summary-label">Tests Run</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value" id="result-successful">0</div>
+          <div class="summary-label">Successful</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value" id="result-best-matches">0</div>
+          <div class="summary-label">Best Matches</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value" id="result-time">0s</div>
+          <div class="summary-label">Total Time</div>
+        </div>
+      </div>
+
+      <div class="status success">
+        <strong>Tests completed!</strong><br>
+        View the detailed report to see visualizations and find the best configuration.
+      </div>
+
+      <div class="button-group">
+        <button class="btn-primary" onclick="viewReport()">
+          📊 View Report
+        </button>
+        <button class="btn-secondary" onclick="downloadReport()">
+          💾 Download Report
+        </button>
+        <button class="btn-secondary" onclick="downloadJSON()">
+          📄 Download JSON
+        </button>
+        <button class="btn-secondary" onclick="resetAndRunAgain()">
+          🔄 Run Again
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OpenCV.js -->
+  <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
+
+  <!-- Our modules -->
+  <script type="module">
+    import CustomExperimentConfigs from './CustomExperimentConfigs.js';
+    import { DebugExperimentRunner } from './DebugExperimentRunner.js';
+    import { DebugReportGenerator } from './DebugReportGenerator.js';
+
+    // Global state
+    window.debugState = {
+      runner: null,
+      results: null,
+      reportGenerator: null,
+      openCvReady: false,
+      isRunning: false,
+      startTime: null
+    };
+
+    // Make modules available globally
+    window.CustomExperimentConfigs = CustomExperimentConfigs;
+    window.DebugExperimentRunner = DebugExperimentRunner;
+    window.DebugReportGenerator = DebugReportGenerator;
+
+    // Print configuration summary
+    CustomExperimentConfigs.printSummary();
+
+    console.log('Custom debug modules loaded');
+  </script>
+
+  <script>
+    // Update test option styling
+    document.querySelectorAll('.test-option').forEach(option => {
+      option.addEventListener('click', function() {
+        document.querySelectorAll('.test-option').forEach(opt =>
+          opt.classList.remove('selected'));
+        this.classList.add('selected');
+        this.querySelector('input[type="radio"]').checked = true;
+      });
+    });
+
+    // OpenCV ready callback
+    function onOpenCvReady() {
+      cv['onRuntimeInitialized'] = () => {
+        console.log('OpenCV.js is ready');
+        window.debugState.openCvReady = true;
+        const status = document.getElementById('opencv-status');
+        status.textContent = 'OpenCV Ready';
+        status.className = 'ready';
+        document.getElementById('btn-run').disabled = false;
+      };
+    }
+
+    function onOpenCvError() {
+      console.error('Failed to load OpenCV.js');
+      const status = document.getElementById('opencv-status');
+      status.textContent = 'OpenCV Error';
+      status.className = 'error';
+      showError('Failed to load OpenCV.js. Please refresh.');
+    }
+
+    // Get selected configurations
+    function getSelectedConfigs() {
+      const scope = document.querySelector('input[name="test-scope"]:checked').value;
+      const C = window.CustomExperimentConfigs;
+
+      switch(scope) {
+        case 'all':
+          return C.getAllConfigs();
+        case 'baselines':
+          return C.getBaselines();
+        case 'res_640':
+          return C.getResolution(640);
+        case 'res_960':
+          return C.getResolution(960);
+        case 'res_1280':
+          return C.getResolution(1280);
+        case 'small_targets':
+          return C.getSmallTargets();
+        case 'stratified':
+          return C.getStratifiedSample();
+        case 'random_10':
+          return C.getRandomSample(10);
+        case 'first_5':
+          return C.getFirst(5);
+        default:
+          return C.getAllConfigs();
+      }
+    }
+
+    // Run experiments
+    async function runExperiments() {
+      if (!window.debugState.openCvReady) {
+        showError('OpenCV is not ready yet. Please wait...');
+        return;
+      }
+
+      const configs = getSelectedConfigs();
+      window.debugState.isRunning = true;
+      window.debugState.startTime = Date.now();
+
+      // Update UI
+      document.getElementById('btn-run').disabled = true;
+      document.getElementById('btn-cancel').disabled = false;
+      document.getElementById('progress-section').classList.add('active');
+      document.getElementById('results-section').classList.remove('active');
+
+      try {
+        log(`Starting ${configs.length} custom tests...`);
+        log('Config: NO blur, BRISK(30,6,1), testing TARGET scales at different resolutions');
+
+        // Create runner
+        const runner = new window.DebugExperimentRunner();
+        window.debugState.runner = runner;
+
+        // Set progress callback
+        runner.setProgressCallback((current, total, message) => {
+          updateProgress(current, total, message);
+        });
+
+        // Load images
+        log('Loading images from ../target.jpg and ../frame.jpg...');
+        await runner.loadImages('../target.jpg', '../frame.jpg');
+        log('Images loaded successfully');
+
+        // Run experiments
+        log(`Running ${configs.length} tests...`);
+        const results = await runner.runAllExperiments(configs);
+        window.debugState.results = results;
+
+        // Generate report
+        log('Generating report...');
+        const reportGenerator = new window.DebugReportGenerator(results);
+        window.debugState.reportGenerator = reportGenerator;
+
+        // Show results
+        showResults(results);
+        log('All tests completed!');
+
+      } catch (error) {
+        console.error('Test error:', error);
+        showError(`Error running tests: ${error.message}`);
+      } finally {
+        window.debugState.isRunning = false;
+        document.getElementById('btn-run').disabled = false;
+        document.getElementById('btn-cancel').disabled = true;
+      }
+    }
+
+    function cancelExperiments() {
+      if (window.debugState.isRunning) {
+        window.debugState.isRunning = false;
+        showError('Tests cancelled by user.');
+        document.getElementById('btn-run').disabled = false;
+        document.getElementById('btn-cancel').disabled = true;
+      }
+    }
+
+    function updateProgress(current, total, message) {
+      const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+      const progressBar = document.getElementById('progress-bar');
+      progressBar.style.width = percentage + '%';
+      progressBar.textContent = percentage + '%';
+      document.getElementById('progress-message').textContent = message;
+      log(message);
+    }
+
+    function showResults(results) {
+      const totalTime = (Date.now() - window.debugState.startTime) / 1000;
+      const successful = results.filter(r => r.success).length;
+      const bestMatches = Math.max(...results.map(r => r.metrics.goodMatches || 0));
+
+      document.getElementById('result-total').textContent = results.length;
+      document.getElementById('result-successful').textContent = successful;
+      document.getElementById('result-best-matches').textContent = bestMatches;
+      document.getElementById('result-time').textContent = totalTime.toFixed(1) + 's';
+
+      document.getElementById('results-section').classList.add('active');
+      document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function viewReport() {
+      if (window.debugState.reportGenerator) {
+        window.debugState.reportGenerator.openReportInNewWindow();
+      }
+    }
+
+    function downloadReport() {
+      if (window.debugState.reportGenerator) {
+        window.debugState.reportGenerator.downloadReport('custom-detection-report.html');
+      }
+    }
+
+    function downloadJSON() {
+      if (window.debugState.runner) {
+        const json = window.debugState.runner.exportResultsJSON();
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'custom-detection-results.json';
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function resetAndRunAgain() {
+      document.getElementById('progress-section').classList.remove('active');
+      document.getElementById('results-section').classList.remove('active');
+      document.getElementById('log-container').innerHTML = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function log(message) {
+      const logContainer = document.getElementById('log-container');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const timestamp = new Date().toLocaleTimeString();
+      entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span><span class="log-message">${message}</span>`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+      console.log(message);
+    }
+
+    function showError(message) {
+      const statusInfo = document.querySelector('.status.info');
+      if (statusInfo) {
+        statusInfo.className = 'status error';
+        statusInfo.innerHTML = `<strong>Error:</strong><br>${message}`;
+      }
+      log('ERROR: ' + message);
+    }
+
+    // Make functions globally available
+    window.runExperiments = runExperiments;
+    window.cancelExperiments = cancelExperiments;
+    window.viewReport = viewReport;
+    window.downloadReport = downloadReport;
+    window.downloadJSON = downloadJSON;
+    window.resetAndRunAgain = resetAndRunAgain;
+  </script>
+</body>
+</html>
