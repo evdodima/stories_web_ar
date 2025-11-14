@@ -58,7 +58,7 @@ const AppConfig = {
     minSimilarityThreshold: 0.05,
 
     // Lowe's ratio test threshold (lower = stricter matching)
-    ratioThreshold: 0.7,
+    ratioThreshold: 0.75,
 
     // Multiplier for distance threshold calculation
     distanceThresholdMultiplier: 3,
@@ -240,41 +240,9 @@ const AppConfig = {
 
     // Maximum features per target for database storage
     // (Lower than maxFeaturesPerTarget to reduce database size)
-    maxFeaturesPerTargetStorage: 500
+    maxFeaturesPerTargetStorage: 1500
   }
 };
-
-// ========================================================================
-// TROUBLESHOOTING: "PRE-MATCH CHECK FAILED" or Low Feature Detection
-// ========================================================================
-//
-// If you see errors like "PRE-MATCH CHECK FAILED" with very few features
-// detected (e.g., frameKeypoints: 2), try these solutions:
-//
-// 1. ENABLE HISTOGRAM EQUALIZATION (recommended first step):
-//    - Set preprocessing.useHistogramEqualization = true (default)
-//    - This improves feature detection in low-light/low-contrast scenes
-//
-// 2. ADJUST ORB EDGE THRESHOLD:
-//    - LOWER edgeThreshold (5-10) = more features, more permissive
-//    - HIGHER edgeThreshold (20-30) = fewer features, more strict
-//    - Default is 15, try 8 if getting very few features
-//
-// 3. CHECK CAMERA/LIGHTING:
-//    - Ensure adequate lighting
-//    - Avoid pointing camera at blank walls or uniform surfaces
-//    - Test with textured targets (books, posters, etc.)
-//
-// 4. VERIFY FRAME QUALITY:
-//    - Check console for diagnostic logs about frame size and brightness
-//    - Look for "Low feature count detected" warnings
-//    - grayMean should be 50-200 (too low = too dark, too high = overexposed)
-//
-// 5. ADJUST FRAME RESOLUTION:
-//    - Increase frameProcessing.maxDimension (try 1920 instead of 1280)
-//    - Higher resolution = more features but slower processing
-//
-// ========================================================================
 
 // Export for use in modules
 if (typeof module !== 'undefined' && module.exports) {
