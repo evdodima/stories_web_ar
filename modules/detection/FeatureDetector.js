@@ -206,7 +206,7 @@ class FeatureDetector {
 
             if (frameKeypoints.size() > 0) {
                 this.profiler?.startTimer('detect_limit_features');
-                const maxFeatures = this.state ? this.state.maxFeatures : 500;
+                const maxFeatures = this.state?.maxFeatures || AppConfig.brisk.maxFeatures;
                 const keypointsArray = [];
 
                 for (let i = 0; i < frameKeypoints.size(); i++) {

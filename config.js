@@ -3,6 +3,18 @@
  *
  * Central configuration file for BRISK detector parameters and other constants.
  * Modify these values to tune detection and tracking performance.
+ *
+ * PERFORMANCE TUNING:
+ * For faster performance, try:
+ * - Increase brisk.thresh (30-50) = fewer features detected
+ * - Decrease brisk.octaves (3-4) = less multi-scale processing
+ * - Decrease brisk.maxFeatures (300-400) = fewer features to process
+ * - Disable preprocessing.useBlur = skip blur step
+ *
+ * For better quality, try:
+ * - Decrease brisk.thresh (15-25) = more features detected
+ * - Increase brisk.octaves (6-8) = better scale invariance
+ * - Increase brisk.maxFeatures (600-1000) = more features to match
  */
 
 const AppConfig = {
@@ -12,13 +24,21 @@ const AppConfig = {
   brisk: {
     // BRISK threshold for feature detection
     // Lower values = more features (noisier), higher values = fewer features (more robust)
-    thresh: 15,
+    // Recommended range: 20-60 for performance tuning
+    thresh: 50,
 
     // Number of octaves for multi-scale detection
+    // More octaves = more features at different scales but slower
+    // Recommended range: 3-8
     octaves: 3,
 
     // Pattern scale factor
-    patternScale: 0.75
+    patternScale: 0.75,
+
+    // Maximum number of features to keep per frame (sorted by response strength)
+    // Lower = faster processing, higher = better detection but slower
+    // Recommended: 300-500 for performance, 500-1000 for quality
+    maxFeatures: 500
   },
 
   // ======================================================================
