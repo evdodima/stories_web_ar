@@ -188,9 +188,9 @@ class ZipDatabaseLoader {
 
     // Create vocabulary builder
     this.vocabularyBuilder = new VocabularyBuilder({
-      branchingFactor: 10,
-      levels: 2,
-      maxFeaturesPerTarget: 500,
+      branchingFactor: AppConfig.vocabulary.branchingFactor,
+      levels: AppConfig.vocabulary.levels,
+      maxFeaturesPerTarget: AppConfig.vocabulary.maxFeaturesPerTargetStorage,
       albumCode: this.albumCode,
       onProgress: (progress) => {
         this.onProgress({

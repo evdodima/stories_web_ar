@@ -3,11 +3,18 @@
  */
 class FeatureDetector {
     constructor(state, profiler, vocabularyQuery = null) {
-        this.detector = new cv.BRISK(30, 6, 1.0);
+        console.log('[FeatureDetector] BRISK Config:', AppConfig.brisk);
+
+        // BRISK with optimized parameters
+        this.detector = new cv.BRISK(
+            AppConfig.brisk.thresh,
+            AppConfig.brisk.octaves,
+            AppConfig.brisk.patternScale
+        );
         this.state = state;
         this.profiler = profiler;
         this.vocabularyQuery = vocabularyQuery; // Vocabulary tree query for candidate selection
-        this.maxCandidates = 3; // Maximum number of candidates to verify
+        this.maxCandidates = AppConfig.detection.maxCandidates;
         this.useVocabularyTree = true; // Enable/disable vocabulary tree optimization
 
         // Reuse matcher across all targets to avoid recreation overhead
@@ -67,7 +74,7 @@ class FeatureDetector {
 
             // Extract just the target objects and filter by minimum score
             targetsToMatch = candidates
-                .filter(c => c.score > 0.05) // Minimum similarity threshold
+                .filter(c => c.score > AppConfig.detection.minSimilarityThreshold)
                 .map(c => c.target);
 
             console.log('[FeatureDetector] Checking targets:', targetsToMatch.map(t => t.id));
@@ -146,20 +153,22 @@ class FeatureDetector {
             this.profiler?.endTimer('detect_gray_conversion');
 
             // Preprocessing pipeline for better feature quality (same as database)
-            this.profiler?.startTimer('detect_preprocessing');
-            const blurred = new cv.Mat();
-            cv.GaussianBlur(frameGray, blurred, new cv.Size(3, 3), 0.5);
+            if (AppConfig.preprocessing.useCLAHE) {
+                this.profiler?.startTimer('detect_preprocessing');
+                const blurred = new cv.Mat();
+                cv.GaussianBlur(frameGray, blurred, new cv.Size(3, 3), 0.5);
 
-            const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
-            const enhanced = new cv.Mat();
-            clahe.apply(blurred, enhanced);
+                const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+                const enhanced = new cv.Mat();
+                clahe.apply(blurred, enhanced);
 
-            // Replace frameGray with enhanced version
-            frameGray.delete();
-            frameGray = enhanced;
-            blurred.delete();
-            clahe.delete();
-            this.profiler?.endTimer('detect_preprocessing');
+                // Replace frameGray with enhanced version
+                frameGray.delete();
+                frameGray = enhanced;
+                blurred.delete();
+                clahe.delete();
+                this.profiler?.endTimer('detect_preprocessing');
+            }
 
             frameKeypoints = new cv.KeyPointVector();
             frameDescriptors = new cv.Mat();
@@ -167,6 +176,20 @@ class FeatureDetector {
             this.profiler?.startTimer('detect_keypoints');
             this.detector.detect(frameGray, frameKeypoints);
             this.profiler?.endTimer('detect_keypoints');
+
+            // Diagnostic logging for low feature detection
+            if (frameKeypoints.size() < 50) {
+                console.warn('[FeatureDetector] Low feature count detected:', {
+                    count: frameKeypoints.size(),
+                    frameSize: `${frame.cols}x${frame.rows}`,
+                    frameType: frame.type(),
+                    grayMean: cv.mean(frameGray)[0].toFixed(2),
+                    briskParams: {
+                        thresh: AppConfig.brisk.thresh,
+                        octaves: AppConfig.brisk.octaves
+                    }
+                });
+            }
 
             if (frameKeypoints.size() > 0) {
                 this.profiler?.startTimer('detect_limit_features');
@@ -277,7 +300,7 @@ class FeatureDetector {
                 matches = new cv.DMatchVector();
                 goodMatches = new cv.DMatchVector();
 
-                const ratioThreshold = 0.75;
+                const ratioThreshold = AppConfig.detection.ratioThreshold;
 
                 for (let i = 0; i < knnMatches.size(); i++) {
                     try {
@@ -360,7 +383,7 @@ class FeatureDetector {
 
                     if (distances.length > 0) {
                         distances.sort((a, b) => a - b);
-                        const threshold = Math.min(100, 3 * distances[0]);
+                        const threshold = Math.min(100, AppConfig.detection.distanceThresholdMultiplier * distances[0]);
 
                         for (let i = 0; i < matches.size(); i++) {
                             try {
@@ -385,10 +408,10 @@ class FeatureDetector {
             console.log('[FeatureDetector] 🎯 MATCH COUNTS:', {
                 totalMatches: result.matchesCount,
                 goodMatches: result.goodMatchesCount,
-                minRequiredForHomography: 12
+                minRequiredForHomography: AppConfig.detection.minMatchesForHomography
             });
 
-            if (goodMatches && goodMatches.size() >= 12) {
+            if (goodMatches && goodMatches.size() >= AppConfig.detection.minMatchesForHomography) {
                 this.profiler?.startTimer('detect_homography');
                 const referencePoints = [];
                 const framePoints = [];

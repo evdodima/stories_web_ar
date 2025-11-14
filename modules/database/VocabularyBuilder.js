@@ -1,26 +1,26 @@
 /**
  * VocabularyBuilder.js
  *
- * Builds vocabulary tree from BRISK descriptors using k-means clustering
+ * Builds vocabulary tree from ORB descriptors using k-means clustering
  * Ported from Python build_vocabulary_tree.py for frontend use
  */
 
 class VocabularyBuilder {
   constructor(options = {}) {
-    this.k = options.branchingFactor || 10;
-    this.levels = options.levels || 2;
+    this.k = options.branchingFactor || AppConfig.vocabulary.branchingFactor;
+    this.levels = options.levels || AppConfig.vocabulary.levels;
     this.vocabularySize = Math.pow(this.k, this.levels);
-    this.maxFeaturesPerTarget = options.maxFeaturesPerTarget || 500;
+    this.maxFeaturesPerTarget = options.maxFeaturesPerTarget || AppConfig.vocabulary.maxFeaturesPerTarget;
 
     this.vocabulary = null;
     this.idfWeights = null;
     this.targets = [];
 
-    // BRISK detector params (must match Python)
+    // BRISK detector params (must match live detector in FeatureDetector.js)
     this.briskParams = {
-      thresh: 30,
-      octaves: 6,
-      patternScale: 1.0
+      thresh: AppConfig.brisk.thresh,
+      octaves: AppConfig.brisk.octaves,
+      patternScale: AppConfig.brisk.patternScale
     };
 
     this.onProgress = options.onProgress || (() => {});

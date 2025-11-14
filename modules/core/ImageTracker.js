@@ -7,6 +7,11 @@
 // Main application coordinator
 class ImageTracker {
     constructor() {
+        console.log('[ImageTracker] Config:', {
+            maxDimension: AppConfig.frameProcessing.maxDimension,
+            detectionInterval: AppConfig.detection.detectionInterval
+        });
+
         // Initialize state
         this.state = {
             isProcessing: false,
@@ -16,21 +21,21 @@ class ImageTracker {
             fps: 0,
             drawKeypoints: false,
             visualizeFlowPoints: false, // Visualize optical flow tracking points
-            maxDimension: 640, // Maximum allowed dimension while preserving aspect ratio
+            maxDimension: AppConfig.frameProcessing.maxDimension,
             useOpticalFlow: true, // Enable optical flow for smooth tracking
-            detectionInterval: 15, // Run full detection every 15 frames
+            detectionInterval: AppConfig.detection.detectionInterval,
             frameCount: 0, // Current frame counter
             lastCorners: null, // Last detected corners for optical flow (legacy single target)
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: 800, // Maximum number of feature points to extract per frame
+            maxFeatures: AppConfig.detection.maxFeatures,
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
 
             // Single-video mode with center-priority selection
             activeVideoTarget: null, // Currently playing video target ID
             targetSelectionTime: 0, // When current target was selected
-            minSwitchDelay: 2000, // Minimum 2 seconds before switching to another target
+            minSwitchDelay: AppConfig.targetSwitching.minSwitchDelay
         };
 
         // Initialize profiler
@@ -459,8 +464,8 @@ class ImageTracker {
             const currentDistance = targetDistances.find(t => t.targetId === currentTarget)?.distance;
             const closestDistance = Math.min(...targetDistances.map(t => t.distance));
 
-            // Only switch if another target is significantly closer (30% threshold)
-            if (currentDistance && currentDistance < closestDistance * 1.3) {
+            // Only switch if another target is significantly closer
+            if (currentDistance && currentDistance < closestDistance * AppConfig.targetSwitching.switchHysteresis) {
                 return currentTarget;
             }
         }
@@ -517,6 +522,15 @@ class ImageTracker {
             frameToProcess = this.camera.captureFrame(this.state.maxDimension);
             this.profiler.endTimer('capture_frame');
             if (!frameToProcess) return;
+
+            // Log frame resolution on first frame
+            if (this.state.frameCount === 0) {
+                console.log('[ImageTracker] Processed frame resolution:', {
+                    width: frameToProcess.cols,
+                    height: frameToProcess.rows,
+                    maxDimension: this.state.maxDimension
+                });
+            }
 
             // Increment frame counter
             this.state.frameCount++;
