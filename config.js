@@ -12,13 +12,13 @@ const AppConfig = {
   brisk: {
     // BRISK threshold for feature detection
     // Lower values = more features (noisier), higher values = fewer features (more robust)
-    thresh: 30,
+    thresh: 15,
 
     // Number of octaves for multi-scale detection
-    octaves: 6,
+    octaves: 3,
 
     // Pattern scale factor
-    patternScale: 1.0
+    patternScale: 0.75
   },
 
   // ======================================================================
@@ -26,10 +26,21 @@ const AppConfig = {
   // ======================================================================
   preprocessing: {
     // Enable CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    // with Gaussian blur for better feature quality
-    // Helpful in low-light or low-contrast conditions
+    // for better feature quality in low-light or low-contrast conditions
     // May slightly increase processing time
-    useCLAHE: true
+    useCLAHE: true,
+
+    // Enable Gaussian blur before CLAHE
+    // Reduces noise but may slightly decrease sharpness
+    // Only applies when useCLAHE is true
+    useBlur: false,
+
+    // Gaussian blur kernel size (must be odd, e.g., 3, 5, 7)
+    blurKernelSize: 3,
+
+    // Gaussian blur sigma (standard deviation)
+    // 0 means auto-calculate from kernel size
+    blurSigma: 0.5
   },
 
   // ======================================================================
@@ -39,10 +50,10 @@ const AppConfig = {
     // Maximum number of target candidates to verify per frame
     maxCandidates: 2,
 
-    maxFeatures: 1500,
+    maxFeatures: 500,
 
     // Minimum similarity threshold for vocabulary-based filtering
-    minSimilarityThreshold: 0.05,
+    minSimilarityThreshold: 0.7,
 
     // Lowe's ratio test threshold (lower = stricter matching)
     ratioThreshold: 0.75,
@@ -51,7 +62,7 @@ const AppConfig = {
     distanceThresholdMultiplier: 3,
 
     // Minimum number of matches required for homography estimation
-    minMatchesForHomography: 12,
+    minMatchesForHomography: 10,
 
     // Run full detection every N frames (lower = more CPU, better detection)
     detectionInterval: 15
@@ -223,11 +234,11 @@ const AppConfig = {
     levels: 2,
 
     // Maximum features per target image for vocabulary building
-    maxFeaturesPerTarget: 1500,
+    maxFeaturesPerTarget: 500,
 
     // Maximum features per target for database storage
     // (Lower than maxFeaturesPerTarget to reduce database size)
-    maxFeaturesPerTargetStorage: 1500
+    maxFeaturesPerTargetStorage: 500
   }
 };
 

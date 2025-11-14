@@ -286,24 +286,38 @@ class ZipDatabaseLoader {
           const gray = new cv.Mat();
           cv.cvtColor(imageMat, gray, cv.COLOR_RGBA2GRAY);
 
-          // Preprocessing pipeline for better feature quality
-          // 1. Gaussian blur to reduce noise
-          const blurred = new cv.Mat();
-          cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0.5);
+          let processingMat = gray;
 
-          // 2. CLAHE for contrast enhancement
-          const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
-          const enhanced = new cv.Mat();
-          clahe.apply(blurred, enhanced);
+          // Preprocessing pipeline for better feature quality (matches FeatureDetector)
+          if (AppConfig.preprocessing.useCLAHE) {
+            // 1. Optional Gaussian blur to reduce noise
+            if (AppConfig.preprocessing.useBlur) {
+              const blurred = new cv.Mat();
+              const kernelSize = AppConfig.preprocessing.blurKernelSize || 3;
+              const sigma = AppConfig.preprocessing.blurSigma || 0.5;
+              cv.GaussianBlur(processingMat, blurred, new cv.Size(kernelSize, kernelSize), sigma);
+              processingMat = blurred;
+            }
+
+            // 2. CLAHE for contrast enhancement
+            const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+            const enhanced = new cv.Mat();
+            clahe.apply(processingMat, enhanced);
+
+            // Clean up intermediate results
+            if (AppConfig.preprocessing.useBlur) {
+              processingMat.delete(); // Delete blurred mat
+            }
+            gray.delete(); // Delete original
+            processingMat = enhanced; // Use enhanced version
+            clahe.delete();
+          }
 
           // Clean up
           imageMat.delete();
-          gray.delete();
-          blurred.delete();
-          clahe.delete();
 
           URL.revokeObjectURL(img.src);
-          resolve(enhanced);
+          resolve(processingMat);
         } catch (error) {
           reject(error);
         }
