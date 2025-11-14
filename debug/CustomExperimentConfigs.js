@@ -11,19 +11,20 @@ export class CustomExperimentConfigs {
   static searchSpace = {
     // Variable parameters - all combinations will be tested
     variables: {
-      maxDimension: [640, 960, 1280, 1920],
-      targetScale: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+      maxDimension: [960],
+      maxFeatures: [3000],
+      brisk: {
+        threshold: [5,10,15,20,25,30,35,40,45,50],
+        octaves: [2,3,4,5,6,7,8,9,10],
+        patternScale: [1.0]
+      },
     },
 
     // Fixed parameters - same for all tests
     fixed: {
+      targetScale: 1,
       frameScale: 1.0,
-      brisk: {
-        threshold: 30,
-        octaves: 6,
-        patternScale: 1.0
-      },
-      maxFeatures: 800,
+      maxFeatures: 300,
       matching: {
         ratioThreshold: 0.75,
         minGoodMatches: 12,
@@ -37,13 +38,47 @@ export class CustomExperimentConfigs {
   };
 
   /**
+   * Flatten nested objects in search space to key-value pairs
+   */
+  static flattenParams(obj, prefix = '') {
+    const result = [];
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (Array.isArray(value)) {
+        result.push({ key: fullKey, values: value });
+      } else if (typeof value === 'object' && value !== null) {
+        result.push(...this.flattenParams(value, fullKey));
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Set nested property on object using dot notation
+   */
+  static setNestedProperty(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!(keys[i] in current)) {
+        current[keys[i]] = {};
+      }
+      current = current[keys[i]];
+    }
+    current[keys[keys.length - 1]] = value;
+  }
+
+  /**
    * Generate Cartesian product of all variable parameters
    * This automatically creates all possible combinations
    */
   static generateAllCombinations() {
     const vars = this.searchSpace.variables;
-    const keys = Object.keys(vars);
-    const values = keys.map(k => vars[k]);
+
+    // Flatten nested objects
+    const flatParams = this.flattenParams(vars);
+    const keys = flatParams.map(p => p.key);
+    const valueLists = flatParams.map(p => p.values);
 
     // Generate Cartesian product
     const cartesian = (...arrays) => {
@@ -53,22 +88,27 @@ export class CustomExperimentConfigs {
       );
     };
 
-    const combinations = cartesian(...values);
+    const combinations = cartesian(...valueLists);
 
     // Convert to config objects
     return combinations.map((combo, index) => {
       const config = { ...this.searchSpace.fixed };
 
-      // Assign variable values
+      // Assign variable values (handle nested properties)
       keys.forEach((key, i) => {
-        config[key] = combo[i];
+        this.setNestedProperty(config, key, combo[i]);
       });
 
-      // Generate ID
-      const varStr = keys.map((k, i) => `${k}${combo[i]}`).join('_');
+      // Generate ID and description
+      const varPairs = keys.map((k, i) => {
+        const shortKey = k.replace(/\./g, '_');
+        return { key: k, shortKey, value: combo[i] };
+      });
+
+      const varStr = varPairs.map(p => `${p.shortKey}${p.value}`).join('_');
       config.id = `exp_${index}_${varStr}`;
       config.category = 'hyperparameter_search';
-      config.description = keys.map((k, i) => `${k}=${combo[i]}`).join(', ');
+      config.description = varPairs.map(p => `${p.key}=${p.value}`).join(', ');
 
       return config;
     });
@@ -173,15 +213,15 @@ export class CustomExperimentConfigs {
    * Get statistics about search space
    */
   static getStats() {
-    const vars = this.searchSpace.variables;
-    const total = Object.values(vars).reduce((acc, arr) => acc * arr.length, 1);
+    const flatParams = this.flattenParams(this.searchSpace.variables);
+    const total = flatParams.reduce((acc, p) => acc * p.values.length, 1);
 
     return {
       totalCombinations: total,
-      variableParameters: Object.keys(vars).map(key => ({
-        name: key,
-        values: vars[key].length,
-        range: `${Math.min(...vars[key])} to ${Math.max(...vars[key])}`
+      variableParameters: flatParams.map(p => ({
+        name: p.key,
+        values: p.values.length,
+        range: `${Math.min(...p.values)} to ${Math.max(...p.values)}`
       })),
       fixedParameters: Object.keys(this.searchSpace.fixed)
     };

@@ -159,9 +159,17 @@ export class DebugReportGenerator {
    * Generate a single top result card
    */
   _generateTopResultCard(result, rank) {
-    const imgData = DebugVisualizer.canvasToDataURL(
-      result.visualizations.composite, 'image/jpeg'
-    );
+    // Check if visualization exists
+    let imgData = null;
+    if (result.visualizations && result.visualizations.composite) {
+      try {
+        imgData = DebugVisualizer.canvasToDataURL(
+          result.visualizations.composite, 'image/jpeg'
+        );
+      } catch (error) {
+        console.warn(`Failed to convert canvas to data URL for ${result.config.id}:`, error);
+      }
+    }
 
     return `
     <div class="top-result-card">
@@ -208,9 +216,15 @@ export class DebugReportGenerator {
         </details>
       </div>
 
+      ${imgData ? `
       <div class="visualization">
         <img src="${imgData}" alt="Visualization for ${result.config.id}">
       </div>
+      ` : `
+      <div class="visualization">
+        <p class="no-visualization">No visualization available (experiment may have failed)</p>
+      </div>
+      `}
     </div>
     `;
   }
@@ -491,9 +505,17 @@ const RANSAC_THRESHOLD = ${best.config.matching.ransacThreshold};
    * Generate detailed result card
    */
   _generateDetailedResultCard(result) {
-    const imgData = DebugVisualizer.canvasToDataURL(
-      result.visualizations.composite, 'image/jpeg'
-    );
+    // Check if visualization exists
+    let imgData = null;
+    if (result.visualizations && result.visualizations.composite) {
+      try {
+        imgData = DebugVisualizer.canvasToDataURL(
+          result.visualizations.composite, 'image/jpeg'
+        );
+      } catch (error) {
+        console.warn(`Failed to convert canvas to data URL for ${result.config.id}:`, error);
+      }
+    }
 
     return `
     <details class="detail-card" id="detail-${result.config.id}">
@@ -510,9 +532,15 @@ const RANSAC_THRESHOLD = ${best.config.matching.ransacThreshold};
       </summary>
       <div class="detail-content">
         <p class="detail-desc">${result.config.description}</p>
+        ${imgData ? `
         <div class="detail-visualization">
           <img src="${imgData}" alt="${result.config.id}">
         </div>
+        ` : `
+        <div class="detail-visualization">
+          <p class="no-visualization">No visualization available (experiment may have failed)</p>
+        </div>
+        `}
         <div class="detail-metrics">
           <h4>Metrics</h4>
           <pre>${JSON.stringify(result.metrics, null, 2)}</pre>
