@@ -3,21 +3,23 @@
  */
 class FeatureDetector {
     constructor(state, profiler, vocabularyQuery = null) {
+        console.log('[FeatureDetector] ORB Config:', AppConfig.orb);
+
         // ORB with optimized parameters for better long-distance detection
         // OpenCV.js uses setter pattern instead of constructor parameters
         this.detector = new cv.ORB();
-        this.detector.setMaxFeatures(1500);     // 1500 vs default 500 for better matching
-        this.detector.setScaleFactor(1.2);      // Default pyramid decimation
-        this.detector.setNLevels(12);           // 12 vs default 8 for better scale invariance
-        this.detector.setEdgeThreshold(15);     // 15 vs default 31 for more edge features
-        this.detector.setFirstLevel(0);         // Default
-        this.detector.setWTA_K(2);              // Default
-        this.detector.setPatchSize(31);         // Default
+        this.detector.setMaxFeatures(AppConfig.orb.maxFeatures);
+        this.detector.setScaleFactor(AppConfig.orb.scaleFactor);
+        this.detector.setNLevels(AppConfig.orb.nLevels);
+        this.detector.setEdgeThreshold(AppConfig.orb.edgeThreshold);
+        this.detector.setFirstLevel(AppConfig.orb.firstLevel);
+        this.detector.setWTA_K(AppConfig.orb.WTA_K);
+        this.detector.setPatchSize(AppConfig.orb.patchSize);
         // Note: setScoreType and setFastThreshold are not available in this OpenCV.js build
         this.state = state;
         this.profiler = profiler;
         this.vocabularyQuery = vocabularyQuery; // Vocabulary tree query for candidate selection
-        this.maxCandidates = 2; // Maximum number of candidates to verify
+        this.maxCandidates = AppConfig.detection.maxCandidates;
         this.useVocabularyTree = true; // Enable/disable vocabulary tree optimization
 
         // Reuse matcher across all targets to avoid recreation overhead
@@ -77,7 +79,7 @@ class FeatureDetector {
 
             // Extract just the target objects and filter by minimum score
             targetsToMatch = candidates
-                .filter(c => c.score > 0.05) // Minimum similarity threshold
+                .filter(c => c.score > AppConfig.detection.minSimilarityThreshold)
                 .map(c => c.target);
 
             console.log('[FeatureDetector] Checking targets:', targetsToMatch.map(t => t.id));
@@ -155,12 +157,36 @@ class FeatureDetector {
             cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
             this.profiler?.endTimer('detect_gray_conversion');
 
+            // Apply histogram equalization to improve contrast and feature detection
+            if (AppConfig.preprocessing.useHistogramEqualization) {
+                this.profiler?.startTimer('detect_equalize');
+                const frameEqualized = new cv.Mat();
+                cv.equalizeHist(frameGray, frameEqualized);
+                frameGray.delete();
+                frameGray = frameEqualized;
+                this.profiler?.endTimer('detect_equalize');
+            }
+
             frameKeypoints = new cv.KeyPointVector();
             frameDescriptors = new cv.Mat();
 
             this.profiler?.startTimer('detect_keypoints');
             this.detector.detect(frameGray, frameKeypoints);
             this.profiler?.endTimer('detect_keypoints');
+
+            // Diagnostic logging for low feature detection
+            if (frameKeypoints.size() < 50) {
+                console.warn('[FeatureDetector] Low feature count detected:', {
+                    count: frameKeypoints.size(),
+                    frameSize: `${frame.cols}x${frame.rows}`,
+                    frameType: frame.type(),
+                    grayMean: cv.mean(frameGray)[0].toFixed(2),
+                    orbParams: {
+                        maxFeatures: AppConfig.orb.maxFeatures,
+                        edgeThreshold: AppConfig.orb.edgeThreshold
+                    }
+                });
+            }
 
             if (frameKeypoints.size() > 0) {
                 this.profiler?.startTimer('detect_limit_features');
@@ -271,7 +297,7 @@ class FeatureDetector {
                 matches = new cv.DMatchVector();
                 goodMatches = new cv.DMatchVector();
 
-                const ratioThreshold = 0.7;
+                const ratioThreshold = AppConfig.detection.ratioThreshold;
 
                 for (let i = 0; i < knnMatches.size(); i++) {
                     try {
@@ -354,7 +380,7 @@ class FeatureDetector {
 
                     if (distances.length > 0) {
                         distances.sort((a, b) => a - b);
-                        const threshold = Math.min(100, 3 * distances[0]);
+                        const threshold = Math.min(100, AppConfig.detection.distanceThresholdMultiplier * distances[0]);
 
                         for (let i = 0; i < matches.size(); i++) {
                             try {
@@ -379,10 +405,10 @@ class FeatureDetector {
             console.log('[FeatureDetector] 🎯 MATCH COUNTS:', {
                 totalMatches: result.matchesCount,
                 goodMatches: result.goodMatchesCount,
-                minRequiredForHomography: 12
+                minRequiredForHomography: AppConfig.detection.minMatchesForHomography
             });
 
-            if (goodMatches && goodMatches.size() >= 12) {
+            if (goodMatches && goodMatches.size() >= AppConfig.detection.minMatchesForHomography) {
                 this.profiler?.startTimer('detect_homography');
                 const referencePoints = [];
                 const framePoints = [];

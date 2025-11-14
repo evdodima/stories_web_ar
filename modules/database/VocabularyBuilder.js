@@ -7,10 +7,10 @@
 
 class VocabularyBuilder {
   constructor(options = {}) {
-    this.k = options.branchingFactor || 10;
-    this.levels = options.levels || 2;
+    this.k = options.branchingFactor || AppConfig.vocabulary.branchingFactor;
+    this.levels = options.levels || AppConfig.vocabulary.levels;
     this.vocabularySize = Math.pow(this.k, this.levels);
-    this.maxFeaturesPerTarget = options.maxFeaturesPerTarget || 1500;
+    this.maxFeaturesPerTarget = options.maxFeaturesPerTarget || AppConfig.vocabulary.maxFeaturesPerTarget;
 
     this.vocabulary = null;
     this.idfWeights = null;
@@ -19,13 +19,13 @@ class VocabularyBuilder {
     // ORB detector params (must match live detector in FeatureDetector.js)
     // OpenCV.js uses setter pattern instead of constructor parameters
     this.orbParams = {
-      maxFeatures: 1500,      // 1500 vs default 500 for better matching
-      scaleFactor: 1.2,       // Default pyramid decimation
-      nLevels: 12,            // 12 vs default 8 for better scale invariance
-      edgeThreshold: 15,      // 15 vs default 31 for more edge features
-      firstLevel: 0,          // Default
-      WTA_K: 2,               // Default
-      patchSize: 31           // Default
+      maxFeatures: AppConfig.orb.maxFeatures,
+      scaleFactor: AppConfig.orb.scaleFactor,
+      nLevels: AppConfig.orb.nLevels,
+      edgeThreshold: AppConfig.orb.edgeThreshold,
+      firstLevel: AppConfig.orb.firstLevel,
+      WTA_K: AppConfig.orb.WTA_K,
+      patchSize: AppConfig.orb.patchSize
       // Note: scoreType and fastThreshold are not available in this build
     };
 

@@ -70,7 +70,7 @@ class CameraManager {
         }
     }
 
-    getCameraConstraints(width = 1920, height = 1080) {
+    getCameraConstraints(width = AppConfig.camera.defaultWidth, height = AppConfig.camera.defaultHeight) {
         return {
             video: {
                 width: { ideal: width },
@@ -85,7 +85,8 @@ class CameraManager {
     async waitForVideoReady() {
         return new Promise((resolve, reject) => {
             let attempts = 0;
-            const maxAttempts = 50; // 5 seconds max wait
+            const maxAttempts = AppConfig.camera.maxReadyAttempts;
+            const checkInterval = AppConfig.camera.readyCheckInterval;
 
             const checkVideo = () => {
                 attempts++;
@@ -97,13 +98,13 @@ class CameraManager {
                     this.video.videoHeight > 0) {
 
                     console.log(`CameraManager: Video ready after ` +
-                                `${attempts * 100}ms`);
+                                `${attempts * checkInterval}ms`);
                     resolve();
                 } else if (attempts >= maxAttempts) {
-                    reject(new Error('Video failed to initialize after 5s'));
+                    reject(new Error(`Video failed to initialize after ${maxAttempts * checkInterval / 1000}s`));
                 } else {
-                    // Check again in 100ms
-                    setTimeout(checkVideo, 100);
+                    // Check again after interval
+                    setTimeout(checkVideo, checkInterval);
                 }
             };
 

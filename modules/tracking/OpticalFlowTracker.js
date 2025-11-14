@@ -12,37 +12,37 @@ class OpticalFlowTracker {
 
         // Base parameters for optical flow
         this.params = {
-            winSize: new cv.Size(21, 21), // Window size for optical flow
-            maxLevel: 4, // More pyramid levels for scale changes (was 3)
+            winSize: new cv.Size(AppConfig.opticalFlow.winSize.width, AppConfig.opticalFlow.winSize.height),
+            maxLevel: AppConfig.opticalFlow.maxLevel,
             criteria: new cv.TermCriteria(
                 cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT,
-                30, // More iterations for accuracy
-                0.01 // Tighter epsilon
+                AppConfig.opticalFlow.criteria.maxIterations,
+                AppConfig.opticalFlow.criteria.epsilon
             ),
-            minEigThreshold: 0.001,
-            featureQualityLevel: 0.005, // Lower for more features (was 0.01)
-            featureMinDistance: 10, // Closer features for dense tracking (was 15)
-            ransacReprojThreshold: 3.0, // More tolerant RANSAC (was 2.0)
+            minEigThreshold: AppConfig.opticalFlow.minEigThreshold,
+            featureQualityLevel: AppConfig.opticalFlow.featureQualityLevel,
+            featureMinDistance: AppConfig.opticalFlow.featureMinDistance,
+            ransacReprojThreshold: AppConfig.opticalFlow.ransacReprojThreshold,
 
-            // Adaptive thresholds (relaxed for robustness)
-            fbErrorThreshold: 1.5, // Base forward-backward error threshold (was 1.0)
-            fbErrorThresholdMax: 4.0, // Max FB error when tracking is good (was 3.0)
-            minInliers: 15, // Minimum inliers for good tracking (was 20)
-            minInliersStrict: 25, // Strict threshold for high quality (was 30)
-            trackingQualityThreshold: 0.6, // Min ratio of good points (was 0.7)
+            // Adaptive thresholds
+            fbErrorThreshold: AppConfig.tracking.fbErrorThreshold,
+            fbErrorThresholdMax: AppConfig.tracking.fbErrorThresholdMax,
+            minInliers: AppConfig.tracking.minInliers,
+            minInliersStrict: AppConfig.tracking.minInliersStrict,
+            trackingQualityThreshold: 0.6, // Not in config - internal threshold
 
-            // Geometric constraints (relaxed for robustness)
-            maxScaleChange: 0.5, // Max 50% scale change per frame (was 0.3)
-            maxRotationChange: 0.5, // Max ~29 degrees rotation per frame (was 0.3)
-            maxAspectRatioChange: 0.25, // Max 25% aspect ratio change (was 0.15)
+            // Geometric constraints
+            maxScaleChange: AppConfig.geometry.maxScaleChange,
+            maxRotationChange: AppConfig.geometry.maxRotationChange,
+            maxAspectRatioChange: AppConfig.geometry.maxAspectRatioChange,
 
-            // Re-detection triggers (more aggressive for robustness)
-            qualityDegradationFrames: 3, // Frames of poor quality before re-detect (was 5)
-            minQualityForContinuation: 0.4, // Below this, force re-detection (was 0.5)
+            // Re-detection triggers
+            qualityDegradationFrames: AppConfig.quality.qualityDegradationFrames,
+            minQualityForContinuation: AppConfig.quality.minQualityForContinuation,
 
             // Feature management
-            featureRefreshInterval: 10, // Re-detect features every N frames (was 15)
-            spatialGridSize: 4 // Enforce feature distribution in 4x4 grid
+            featureRefreshInterval: AppConfig.tracking.featureRefreshInterval,
+            spatialGridSize: AppConfig.tracking.spatialGridSize
         };
 
         // Per-target tracking state (maps targetId -> state)
@@ -169,7 +169,7 @@ class OpticalFlowTracker {
 
         // Detect good features inside the quadrilateral
         // Use much fewer features for optical flow (speed over accuracy)
-        const maxFlowFeatures = 100; // Fixed low number for fast tracking
+        const maxFlowFeatures = AppConfig.opticalFlow.maxFlowFeatures;
         let featurePoints = new cv.Mat();
         cv.goodFeaturesToTrack(
             prevGray,
@@ -259,8 +259,8 @@ class OpticalFlowTracker {
                 let flowDy = nextPoints.data32F[i*2+1] - prevPoints.data32F[i*2+1];
                 let flowMagnitude = Math.sqrt(flowDx*flowDx + flowDy*flowDy);
 
-                // Reject if FB error is high or flow is unreasonably large (>150 pixels)
-                if (fbError <= fbThreshold && flowMagnitude < 150) {
+                // Reject if FB error is high or flow is unreasonably large
+                if (fbError <= fbThreshold && flowMagnitude < AppConfig.tracking.maxFlowMagnitude) {
                     prevPtsFiltered.push(prevPoints.data32F[i*2], prevPoints.data32F[i*2+1]);
                     nextPtsFiltered.push(nextPoints.data32F[i*2], nextPoints.data32F[i*2+1]);
                     fbErrors.push(fbError);
@@ -321,8 +321,8 @@ class OpticalFlowTracker {
             cv.RANSAC,
             this.params.ransacReprojThreshold,
             inlierMask,
-            2000, // max iterations
-            0.995  // confidence
+            AppConfig.opticalFlow.maxRansacIterations,
+            AppConfig.opticalFlow.ransacConfidence
         );
 
         // Count RANSAC inliers
@@ -384,9 +384,9 @@ class OpticalFlowTracker {
 
                         // Update quality history
                         const overallQuality = (
-                            inlierRatio * 0.4 +
-                            (1 - fbErrorMean / 10) * 0.3 +
-                            geometricValidation.score * 0.3
+                            inlierRatio * AppConfig.quality.weights.inlierRatio +
+                            (1 - fbErrorMean / 10) * AppConfig.quality.weights.fbError +
+                            geometricValidation.score * AppConfig.quality.weights.geometric
                         );
                         result.qualityMetrics.overallScore = overallQuality;
 
@@ -548,8 +548,7 @@ class OpticalFlowTracker {
         while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 
         // Apply exponential moving average to rotation
-        // Alpha = 0.3 means 30% new, 70% old (smooth but responsive)
-        const alpha = 0.3;
+        const alpha = AppConfig.quality.smoothingAlpha;
         const smoothedAngleDiff = angleDiff * alpha;
         const smoothedAngle = prevAngle + smoothedAngleDiff;
 
@@ -775,13 +774,13 @@ class OpticalFlowTracker {
         area = Math.abs(area) / 2;
 
         // Check if area is reasonable (not too small)
-        if (area < 100) return false;
+        if (area < AppConfig.geometry.minAreaThreshold) return false;
 
         // Check compactness (circle has value 1, lower values are less compact)
         const compactness = (4 * Math.PI * area) / (perimeter * perimeter);
 
         // Reject extremely distorted quadrilaterals
-        if (compactness <= 0.05) return false;
+        if (compactness <= AppConfig.geometry.minCompactnessThreshold) return false;
 
         // Check convexity (all cross products should have same sign)
         let crossProductSign = null;
@@ -809,7 +808,7 @@ class OpticalFlowTracker {
         // 1. Check opposite edges are roughly parallel
         // Edges 0-1 and 2-3 are opposite (top and bottom)
         // Edges 1-2 and 3-0 are opposite (right and left)
-        const parallelThreshold = 0.5; // Max angle difference (radians, ~29 degrees, was 0.3)
+        const parallelThreshold = AppConfig.geometry.parallelThreshold;
 
         const angle01 = Math.atan2(edgeVectors[0].dy, edgeVectors[0].dx);
         const angle23 = Math.atan2(edgeVectors[2].dy, edgeVectors[2].dx);
@@ -830,8 +829,7 @@ class OpticalFlowTracker {
         }
 
         // 2. Check opposite edges have similar lengths (accounting for perspective)
-        // Allow up to 5x ratio for extreme perspective and distance changes
-        const maxLengthRatio = 5.0; // Was 3.0
+        const maxLengthRatio = AppConfig.geometry.maxEdgeLengthRatio;
 
         const ratio1 = Math.max(edges[0], edges[2]) / Math.min(edges[0], edges[2]);
         const ratio2 = Math.max(edges[1], edges[3]) / Math.min(edges[1], edges[3]);
@@ -842,8 +840,8 @@ class OpticalFlowTracker {
 
         // 3. Check corner angles are not too far from 90 degrees
         // For a rectangle, all angles should be close to 90° (accounting for perspective)
-        const minAngle = 20 * Math.PI / 180; // 20 degrees (was 30)
-        const maxAngle = 160 * Math.PI / 180; // 160 degrees (was 150)
+        const minAngle = AppConfig.geometry.minCornerAngle;
+        const maxAngle = AppConfig.geometry.maxCornerAngle;
 
         for (let i = 0; i < 4; i++) {
             const prev = (i + 3) % 4;
@@ -875,7 +873,7 @@ class OpticalFlowTracker {
         const width2 = (edges[1] + edges[3]) / 2;
         const aspectRatio = Math.max(width1, width2) / Math.min(width1, width2);
 
-        if (aspectRatio > 15.0) { // Was 10.0, more permissive for perspective
+        if (aspectRatio > AppConfig.geometry.maxAspectRatio) {
             return false; // Aspect ratio too extreme (too thin/elongated)
         }
 
