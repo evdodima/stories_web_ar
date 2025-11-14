@@ -14,6 +14,7 @@ const MODULES_DIR = './modules';
 
 // Module loading order (critical for dependencies)
 const MODULE_ORDER = [
+  'config.js', // Configuration must be loaded first
   'modules/utils/PerformanceProfiler.js',
   'modules/utils/DebugExporter.js',
   'modules/cache/CacheManager.js',

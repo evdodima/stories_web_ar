@@ -30,7 +30,7 @@ const AppConfig = {
     // Number of octaves for multi-scale detection
     // More octaves = more features at different scales but slower
     // Recommended range: 3-8
-    octaves: 9,
+    octaves: 3,
 
     // Pattern scale factor
     patternScale: 1,
@@ -101,7 +101,7 @@ const AppConfig = {
     distanceThresholdMultiplier: 3,
 
     // Minimum number of matches required for homography estimation
-    minMatchesForHomography: 8,
+    minMatchesForHomography: 10,
 
     // Run full detection every N frames (lower = more CPU, better detection)
     detectionInterval: 30
