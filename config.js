@@ -9,7 +9,7 @@
  * - Increase brisk.thresh (30-50) = fewer features detected
  * - Decrease brisk.octaves (3-4) = less multi-scale processing
  * - Decrease brisk.maxFeaturesPerFrame (300-400) = fewer features to process
- * - Disable preprocessing.useBlur = skip blur step
+ * - Disable framePreprocessing.useBlur = skip blur step in live frames
  *
  * For better quality, try:
  * - Decrease brisk.thresh (15-25) = more features detected
@@ -25,32 +25,53 @@ const AppConfig = {
     // BRISK threshold for feature detection
     // Lower values = more features (noisier), higher values = fewer features (more robust)
     // Recommended range: 20-60 for performance tuning
-    thresh: 30,
+    thresh: 60,
 
     // Number of octaves for multi-scale detection
     // More octaves = more features at different scales but slower
     // Recommended range: 3-8
-    octaves: 3,
+    octaves: 9,
 
     // Pattern scale factor
-    patternScale: 0.75,
+    patternScale: 1,
 
     // Maximum number of features to keep per frame (sorted by response strength)
     // Lower = faster processing, higher = better detection but slower
     // Recommended: 300-500 for performance, 500-1000 for quality
-    maxFeaturesPerFrame: 1500
+    maxFeaturesPerFrame: 500
   },
 
   // ======================================================================
-  // IMAGE PREPROCESSING
+  // IMAGE PREPROCESSING - TARGET IMAGES (DATABASE CREATION)
   // ======================================================================
-  preprocessing: {
+  targetPreprocessing: {
     // Enable CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    // for better feature quality in low-light or low-contrast conditions
+    // for better feature quality in target images during database creation
+    useCLAHE: true,
+
+    // Enable Gaussian blur before CLAHE for target images
+    // Reduces noise but may slightly decrease sharpness
+    // Only applies when useCLAHE is true
+    useBlur: true,
+
+    // Gaussian blur kernel size (must be odd, e.g., 3, 5, 7)
+    blurKernelSize: 3,
+
+    // Gaussian blur sigma (standard deviation)
+    // 0 means auto-calculate from kernel size
+    blurSigma: 0.5
+  },
+
+  // ======================================================================
+  // IMAGE PREPROCESSING - LIVE FRAMES (CAMERA PROCESSING)
+  // ======================================================================
+  framePreprocessing: {
+    // Enable CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    // for better feature quality in live camera frames
     // May slightly increase processing time
     useCLAHE: true,
 
-    // Enable Gaussian blur before CLAHE
+    // Enable Gaussian blur before CLAHE for live frames
     // Reduces noise but may slightly decrease sharpness
     // Only applies when useCLAHE is true
     useBlur: false,
@@ -71,7 +92,7 @@ const AppConfig = {
     maxCandidates: 2,
 
     // Minimum similarity threshold for vocabulary-based filtering
-    minSimilarityThreshold: 0.7,
+    minSimilarityThreshold: 0.75,
 
     // Lowe's ratio test threshold (lower = stricter matching)
     ratioThreshold: 0.75,
@@ -80,10 +101,10 @@ const AppConfig = {
     distanceThresholdMultiplier: 3,
 
     // Minimum number of matches required for homography estimation
-    minMatchesForHomography: 10,
+    minMatchesForHomography: 8,
 
     // Run full detection every N frames (lower = more CPU, better detection)
-    detectionInterval: 15
+    detectionInterval: 30
   },
 
   // ======================================================================
@@ -212,7 +233,7 @@ const AppConfig = {
   // ======================================================================
   targetSwitching: {
     // Minimum delay before switching targets (milliseconds)
-    minSwitchDelay: 2000,
+    minSwitchDelay: 1000,
 
     // Hysteresis threshold for switching (1.3 = new target must be 30% closer)
     switchHysteresis: 1.3
@@ -223,7 +244,7 @@ const AppConfig = {
   // ======================================================================
   frameProcessing: {
     // Maximum dimension for processed frames (width or height)
-    maxDimension: 640
+    maxDimension: 960
   },
 
   // ======================================================================

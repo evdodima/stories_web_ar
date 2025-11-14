@@ -288,13 +288,13 @@ class ZipDatabaseLoader {
 
           let processingMat = gray;
 
-          // Preprocessing pipeline for better feature quality (matches FeatureDetector)
-          if (AppConfig.preprocessing.useCLAHE) {
+          // Preprocessing pipeline for target images during database creation
+          if (AppConfig.targetPreprocessing.useCLAHE) {
             // 1. Optional Gaussian blur to reduce noise
-            if (AppConfig.preprocessing.useBlur) {
+            if (AppConfig.targetPreprocessing.useBlur) {
               const blurred = new cv.Mat();
-              const kernelSize = AppConfig.preprocessing.blurKernelSize || 3;
-              const sigma = AppConfig.preprocessing.blurSigma || 0.5;
+              const kernelSize = AppConfig.targetPreprocessing.blurKernelSize || 3;
+              const sigma = AppConfig.targetPreprocessing.blurSigma || 0.5;
               cv.GaussianBlur(processingMat, blurred, new cv.Size(kernelSize, kernelSize), sigma);
               processingMat = blurred;
             }
@@ -305,7 +305,7 @@ class ZipDatabaseLoader {
             clahe.apply(processingMat, enhanced);
 
             // Clean up intermediate results
-            if (AppConfig.preprocessing.useBlur) {
+            if (AppConfig.targetPreprocessing.useBlur) {
               processingMat.delete(); // Delete blurred mat
             }
             gray.delete(); // Delete original

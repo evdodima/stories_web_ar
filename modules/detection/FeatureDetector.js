@@ -152,17 +152,17 @@ class FeatureDetector {
             cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
             this.profiler?.endTimer('detect_gray_conversion');
 
-            // Preprocessing pipeline for better feature quality (same as database)
-            if (AppConfig.preprocessing.useCLAHE) {
+            // Preprocessing pipeline for better feature quality
+            if (AppConfig.framePreprocessing.useCLAHE) {
                 this.profiler?.startTimer('detect_preprocessing');
 
                 let processingMat = frameGray;
 
                 // Optional Gaussian blur to reduce noise
-                if (AppConfig.preprocessing.useBlur) {
+                if (AppConfig.framePreprocessing.useBlur) {
                     const blurred = new cv.Mat();
-                    const kernelSize = AppConfig.preprocessing.blurKernelSize || 3;
-                    const sigma = AppConfig.preprocessing.blurSigma || 0.5;
+                    const kernelSize = AppConfig.framePreprocessing.blurKernelSize || 3;
+                    const sigma = AppConfig.framePreprocessing.blurSigma || 0.5;
                     cv.GaussianBlur(processingMat, blurred, new cv.Size(kernelSize, kernelSize), sigma);
                     processingMat = blurred;
                 }
@@ -173,7 +173,7 @@ class FeatureDetector {
                 clahe.apply(processingMat, enhanced);
 
                 // Clean up intermediate results
-                if (AppConfig.preprocessing.useBlur) {
+                if (AppConfig.framePreprocessing.useBlur) {
                     processingMat.delete(); // Delete blurred mat
                 }
                 frameGray.delete(); // Delete original
