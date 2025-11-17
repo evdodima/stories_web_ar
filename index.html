@@ -76,17 +76,6 @@
             waitForCv();
         });
     </script>
-    <!-- Cleanup: Unregister any existing service workers -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                registrations.forEach(registration => {
-                    registration.unregister();
-                    console.log('[Cleanup] Service worker unregistered');
-                });
-            });
-        }
-    </script>
     <!-- Load configuration before other scripts -->
     <script src="imageTracker.js" defer></script>
 </head>

@@ -209,22 +209,6 @@ class OfflineManager {
       // Clear IndexedDB
       await this.cacheManager.clearAll();
 
-      // Clear Service Worker caches
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const channel = new MessageChannel();
-
-        channel.port1.onmessage = (event) => {
-          if (event.data.success) {
-            console.log('[OfflineManager] Service Worker caches cleared');
-          }
-        };
-
-        navigator.serviceWorker.controller.postMessage(
-          { type: 'CLEAR_CACHE' },
-          [channel.port2]
-        );
-      }
-
       // Update stats
       await this.updateCacheStats();
 
