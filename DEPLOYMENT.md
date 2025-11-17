@@ -2,12 +2,15 @@
 
 This document explains how to deploy the WebAR Image Tracking application with JavaScript obfuscation using Capistrano.
 
+> **⚡ Important:** For optimal OpenCV performance (3-4x faster), configure Cross-Origin Isolation headers on your server. See **[OPENCV_SETUP.md](OPENCV_SETUP.md)** for detailed instructions.
+
 ## Overview
 
 The deployment process includes:
 1. **Obfuscation**: All JavaScript files are obfuscated to protect the AR engine code
 2. **Build**: Static files are copied to a distribution directory
 3. **Deploy**: Capistrano deploys the obfuscated build to the server
+4. **Server Config**: Configure headers for optimal OpenCV performance (see OPENCV_SETUP.md)
 
 ## Prerequisites
 
