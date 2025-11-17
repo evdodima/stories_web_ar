@@ -25,7 +25,7 @@ const AppConfig = {
     // BRISK threshold for feature detection
     // Lower values = more features (noisier), higher values = fewer features (more robust)
     // Recommended range: 20-60 for performance tuning
-    thresh: 60,
+    thresh: 30,
 
     // Number of octaves for multi-scale detection
     // More octaves = more features at different scales but slower
@@ -38,7 +38,7 @@ const AppConfig = {
     // Maximum number of features to keep per frame (sorted by response strength)
     // Lower = faster processing, higher = better detection but slower
     // Recommended: 300-500 for performance, 500-1000 for quality
-    maxFeaturesPerFrame: 500
+    maxFeaturesPerFrame: 800
   },
 
   // ======================================================================
