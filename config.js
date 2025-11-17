@@ -133,7 +133,7 @@ const AppConfig = {
     maxCandidates: 2,
 
     // Minimum similarity threshold for vocabulary-based filtering
-    minSimilarityThreshold: 0.75,
+    minSimilarityThreshold: 0.4,
 
     // Lowe's ratio test threshold (lower = stricter matching)
     ratioThreshold: 0.75,
@@ -308,13 +308,19 @@ const AppConfig = {
   // ======================================================================
   vocabulary: {
     // Branching factor for vocabulary tree
-    branchingFactor: 10,
+    // Vocabulary size = branchingFactor^levels
+    // Current: 100^2 = 10,000 words (good balance for 3000 features)
+    // Previous: 10^2 = 100 words (too small, caused inverted scoring)
+    branchingFactor: 20,
 
     // Number of levels in vocabulary tree
+    // Higher = more specific vocabulary but slower clustering
     levels: 2,
 
     // Maximum features per target image for vocabulary building
-    maxFeaturesPerTarget: 5000
+    // Reduced from 5000 to 2000 for faster processing
+    // Note: Actual clustering uses max 10000 sampled descriptors total
+    maxFeaturesPerTarget: 500
   }
 };
 

@@ -254,13 +254,25 @@ class VocabularyBuilder {
 
     this.onProgress({ stage: 'clustering', progress: 0 });
 
+    // CONSTANT COMPLEXITY OPTIMIZATION:
+    // Sample a fixed number of descriptors for clustering to ensure
+    // constant build time regardless of total descriptor count
+    const maxSamplesForClustering = 10000; // Fixed sample size
+    const sampledDescriptors = this._sampleDescriptors(
+      allDescriptors,
+      descriptorSize,
+      maxSamplesForClustering
+    );
+
+    console.log(`  Sampled descriptors for clustering: ${sampledDescriptors.length}`);
+
     // Convert binary descriptors to bit arrays for k-means
     const descriptorsBits = this._descriptorsToBitArrays(
-      allDescriptors,
+      [sampledDescriptors],
       descriptorSize
     );
 
-    // Run k-means clustering
+    // Run k-means clustering on sampled data
     const kmeans = await this._kMeansClustering(
       descriptorsBits,
       this.vocabularySize
@@ -276,6 +288,71 @@ class VocabularyBuilder {
     this.onProgress({ stage: 'clustering', progress: 100 });
 
     return kmeans;
+  }
+
+  /**
+   * Sample descriptors for clustering (constant complexity)
+   * Ensures vocabulary building time is predictable
+   */
+  _sampleDescriptors(allDescriptors, descriptorSize, maxSamples) {
+    // Calculate total number of descriptors
+    const totalDescriptors = allDescriptors.reduce(
+      (sum, desc) => sum + desc.length / descriptorSize,
+      0
+    );
+
+    // If we have fewer descriptors than maxSamples, use all
+    if (totalDescriptors <= maxSamples) {
+      const combined = new Uint8Array(totalDescriptors * descriptorSize);
+      let offset = 0;
+      for (const desc of allDescriptors) {
+        combined.set(desc, offset);
+        offset += desc.length;
+      }
+      return combined;
+    }
+
+    // Otherwise, randomly sample descriptors
+    const sampled = new Uint8Array(maxSamples * descriptorSize);
+    const sampleIndices = new Set();
+
+    // Generate random unique indices
+    while (sampleIndices.size < maxSamples) {
+      sampleIndices.add(Math.floor(Math.random() * totalDescriptors));
+    }
+
+    // Extract sampled descriptors
+    const indices = Array.from(sampleIndices).sort((a, b) => a - b);
+    let sampledIdx = 0;
+
+    for (let i = 0; i < indices.length; i++) {
+      const globalIdx = indices[i];
+
+      // Find which descriptor array this index belongs to
+      let currentIdx = globalIdx;
+      let descriptorArray = null;
+
+      for (const desc of allDescriptors) {
+        const numDesc = desc.length / descriptorSize;
+        if (currentIdx < numDesc) {
+          descriptorArray = desc;
+          break;
+        }
+        currentIdx -= numDesc;
+      }
+
+      if (descriptorArray) {
+        const srcOffset = currentIdx * descriptorSize;
+        const dstOffset = sampledIdx * descriptorSize;
+        sampled.set(
+          descriptorArray.slice(srcOffset, srcOffset + descriptorSize),
+          dstOffset
+        );
+        sampledIdx++;
+      }
+    }
+
+    return sampled;
   }
 
   /**
@@ -326,9 +403,9 @@ class VocabularyBuilder {
   }
 
   /**
-   * K-means clustering implementation
+   * K-means clustering implementation with early termination
    */
-  async _kMeansClustering(data, k, maxIterations = 50) {
+  async _kMeansClustering(data, k, maxIterations = 30) {
     const n = data.length;
     const dims = data[0].length;
 
@@ -342,10 +419,12 @@ class VocabularyBuilder {
     let assignments = new Array(n).fill(0);
     let changed = true;
     let iteration = 0;
+    let prevChangedCount = n;
+    const earlyStopThreshold = Math.max(1, Math.floor(n * 0.001)); // 0.1% change threshold
 
     while (changed && iteration < maxIterations) {
-      changed = false;
       iteration++;
+      let changedCount = 0;
 
       // Assignment step: assign each point to nearest center
       for (let i = 0; i < n; i++) {
@@ -362,9 +441,25 @@ class VocabularyBuilder {
 
         if (assignments[i] !== bestCluster) {
           assignments[i] = bestCluster;
-          changed = true;
+          changedCount++;
         }
       }
+
+      // Early termination: stop if very few points changed
+      if (changedCount < earlyStopThreshold) {
+        console.log(`K-means early stop: only ${changedCount} points changed`);
+        changed = false;
+        break;
+      }
+
+      // Check if we're making progress (diminishing returns)
+      if (changedCount >= prevChangedCount * 0.95 && iteration > 5) {
+        console.log(`K-means early stop: minimal progress (${changedCount} changes)`);
+        changed = false;
+        break;
+      }
+
+      prevChangedCount = changedCount;
 
       // Update step: recalculate centers
       const newCenters = Array(k).fill(0).map(() => new Array(dims).fill(0));
@@ -388,10 +483,10 @@ class VocabularyBuilder {
       }
 
       // Progress update
-      if (iteration % 5 === 0) {
+      if (iteration % 3 === 0) {
         this.onProgress({
           stage: 'clustering',
-          progress: (iteration / maxIterations) * 100
+          progress: Math.min(95, (iteration / maxIterations) * 100)
         });
         await this._sleep(0); // Allow UI updates
       }
