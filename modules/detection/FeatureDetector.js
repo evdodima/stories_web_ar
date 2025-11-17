@@ -1,16 +1,53 @@
 /**
  * Handles feature detection and matching
+ * Uses ORB detector for keypoint detection and TEBLID descriptor for feature description
  */
 class FeatureDetector {
     constructor(state, profiler, vocabularyQuery = null) {
-        console.log('[FeatureDetector] BRISK Config:', AppConfig.brisk);
+        console.log('[FeatureDetector] ORB Detector Config:', AppConfig.orb);
+        console.log('[FeatureDetector] TEBLID Descriptor Config:', AppConfig.teblid);
 
-        // BRISK with optimized parameters
-        this.detector = new cv.BRISK(
-            AppConfig.brisk.thresh,
-            AppConfig.brisk.octaves,
-            AppConfig.brisk.patternScale
+        // Check if required OpenCV functions exist
+        console.log('[FeatureDetector] OpenCV function check:', {
+            hasORB: typeof cv.ORB,
+            hasXfeatures2d_TEBLID: typeof cv.xfeatures2d_TEBLID,
+            hasTEBLID_SIZE_512_BITS: typeof cv.TEBLID_SIZE_512_BITS,
+            hasTEBLID_SIZE_256_BITS: typeof cv.TEBLID_SIZE_256_BITS
+        });
+
+        // ORB detector for keypoint detection
+        console.log('[FeatureDetector] Creating ORB detector...');
+        this.detector = new cv.ORB(
+            AppConfig.orb.nfeatures,
+            AppConfig.orb.scaleFactor,
+            AppConfig.orb.nlevels,
+            AppConfig.orb.edgeThreshold,
+            AppConfig.orb.firstLevel,
+            AppConfig.orb.WTA_K,
+            AppConfig.orb.scoreType,
+            AppConfig.orb.patchSize,
+            AppConfig.orb.fastThreshold
         );
+        console.log('[FeatureDetector] ✅ ORB detector created');
+
+        // TEBLID descriptor for feature description
+        // SIZE_512_BITS provides better matching quality than SIZE_256_BITS
+        console.log('[FeatureDetector] Creating TEBLID descriptor...');
+        const teblidSizeConstant = AppConfig.teblid.size === 512
+            ? cv.TEBLID_SIZE_512_BITS
+            : cv.TEBLID_SIZE_256_BITS;
+        console.log('[FeatureDetector] TEBLID size constant:', teblidSizeConstant);
+
+        this.descriptor = new cv.xfeatures2d_TEBLID(
+            AppConfig.teblid.scaleFactor,
+            teblidSizeConstant
+        );
+
+        console.log('[FeatureDetector] ✅ TEBLID descriptor initialized:', {
+            scaleFactor: AppConfig.teblid.scaleFactor,
+            size: AppConfig.teblid.size + '-bit'
+        });
+
         this.state = state;
         this.profiler = profiler;
         this.vocabularyQuery = vocabularyQuery; // Vocabulary tree query for candidate selection
@@ -18,6 +55,7 @@ class FeatureDetector {
         this.useVocabularyTree = true; // Enable/disable vocabulary tree optimization
 
         // Reuse matcher across all targets to avoid recreation overhead
+        // TEBLID uses binary descriptors, so NORM_HAMMING is correct
         this.matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
     }
 
@@ -197,16 +235,17 @@ class FeatureDetector {
                     frameSize: `${frame.cols}x${frame.rows}`,
                     frameType: frame.type(),
                     grayMean: cv.mean(frameGray)[0].toFixed(2),
-                    briskParams: {
-                        thresh: AppConfig.brisk.thresh,
-                        octaves: AppConfig.brisk.octaves
+                    orbParams: {
+                        nfeatures: AppConfig.orb.nfeatures,
+                        fastThreshold: AppConfig.orb.fastThreshold,
+                        nlevels: AppConfig.orb.nlevels
                     }
                 });
             }
 
             if (frameKeypoints.size() > 0) {
                 this.profiler?.startTimer('detect_limit_features');
-                const maxFeatures = this.state?.maxFeatures || AppConfig.brisk.maxFeaturesPerFrame;
+                const maxFeatures = this.state?.maxFeatures || AppConfig.orb.nfeatures;
                 const keypointsArray = [];
 
                 for (let i = 0; i < frameKeypoints.size(); i++) {
@@ -225,7 +264,7 @@ class FeatureDetector {
                 this.profiler?.endTimer('detect_limit_features');
 
                 this.profiler?.startTimer('detect_compute_descriptors');
-                this.detector.compute(frameGray, frameKeypoints, frameDescriptors);
+                this.descriptor.compute(frameGray, frameKeypoints, frameDescriptors);
                 this.profiler?.endTimer('detect_compute_descriptors');
             }
 
@@ -607,6 +646,25 @@ class FeatureDetector {
             corners.push({ x, y });
         }
         return corners;
+    }
+
+    /**
+     * Cleanup OpenCV resources
+     */
+    cleanup() {
+        if (this.detector) {
+            this.detector.delete();
+            this.detector = null;
+        }
+        if (this.descriptor) {
+            this.descriptor.delete();
+            this.descriptor = null;
+        }
+        if (this.matcher) {
+            this.matcher.delete();
+            this.matcher = null;
+        }
+        console.log('[FeatureDetector] Resources cleaned up');
     }
 }
 

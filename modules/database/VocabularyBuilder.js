@@ -1,7 +1,8 @@
 /**
  * VocabularyBuilder.js
  *
- * Builds vocabulary tree from ORB descriptors using k-means clustering
+ * Builds vocabulary tree from TEBLID descriptors using k-means clustering
+ * Uses ORB detector for keypoint detection and TEBLID for feature description
  * Ported from Python build_vocabulary_tree.py for frontend use
  */
 
@@ -16,11 +17,23 @@ class VocabularyBuilder {
     this.idfWeights = null;
     this.targets = [];
 
-    // BRISK detector params (must match live detector in FeatureDetector.js)
-    this.briskParams = {
-      thresh: AppConfig.brisk.thresh,
-      octaves: AppConfig.brisk.octaves,
-      patternScale: AppConfig.brisk.patternScale
+    // ORB detector params (must match live detector in FeatureDetector.js)
+    this.orbParams = {
+      nfeatures: AppConfig.orb.nfeatures,
+      scaleFactor: AppConfig.orb.scaleFactor,
+      nlevels: AppConfig.orb.nlevels,
+      edgeThreshold: AppConfig.orb.edgeThreshold,
+      firstLevel: AppConfig.orb.firstLevel,
+      WTA_K: AppConfig.orb.WTA_K,
+      scoreType: AppConfig.orb.scoreType,
+      patchSize: AppConfig.orb.patchSize,
+      fastThreshold: AppConfig.orb.fastThreshold
+    };
+
+    // TEBLID descriptor params (must match live descriptor in FeatureDetector.js)
+    this.teblidParams = {
+      scaleFactor: AppConfig.teblid.scaleFactor,
+      size: AppConfig.teblid.size
     };
 
     this.onProgress = options.onProgress || (() => {});
@@ -50,26 +63,45 @@ class VocabularyBuilder {
   }
 
   /**
-   * Extract BRISK features from an image
+   * Extract features from an image using ORB detector and TEBLID descriptor
    * @param {cv.Mat} imageMat - OpenCV Mat in grayscale
    * @param {string} targetId - Identifier for this target
    * @returns {Object} Feature data
    */
   extractFeatures(imageMat, targetId) {
-    const detector = new cv.BRISK(
-      this.briskParams.thresh,
-      this.briskParams.octaves,
-      this.briskParams.patternScale
+    // ORB detector for keypoint detection
+    const detector = new cv.ORB(
+      this.orbParams.nfeatures,
+      this.orbParams.scaleFactor,
+      this.orbParams.nlevels,
+      this.orbParams.edgeThreshold,
+      this.orbParams.firstLevel,
+      this.orbParams.WTA_K,
+      this.orbParams.scoreType,
+      this.orbParams.patchSize,
+      this.orbParams.fastThreshold
+    );
+
+    // TEBLID descriptor for feature description
+    const teblidSizeConstant = this.teblidParams.size === 512
+      ? cv.TEBLID_SIZE_512_BITS
+      : cv.TEBLID_SIZE_256_BITS;
+    const descriptor = new cv.xfeatures2d_TEBLID(
+      this.teblidParams.scaleFactor,
+      teblidSizeConstant
     );
 
     const keypoints = new cv.KeyPointVector();
     const descriptors = new cv.Mat();
 
-    detector.detectAndCompute(imageMat, new cv.Mat(), keypoints, descriptors);
+    // Detect keypoints with ORB, compute descriptors with TEBLID
+    detector.detect(imageMat, keypoints);
+    descriptor.compute(imageMat, keypoints, descriptors);
 
     if (descriptors.rows === 0) {
       console.warn(`No features found for ${targetId}`);
       detector.delete();
+      descriptor.delete();
       keypoints.delete();
       descriptors.delete();
       return null;
@@ -112,6 +144,7 @@ class VocabularyBuilder {
 
     // Clean up OpenCV objects
     detector.delete();
+    descriptor.delete();
     keypoints.delete();
     descriptors.delete();
 
@@ -605,7 +638,7 @@ class VocabularyBuilder {
         vocabulary_size: this.vocabularySize,
         branching_factor: this.k,
         levels: this.levels,
-        descriptor_type: 'BRISK',
+        descriptor_type: 'TEBLID',
         descriptor_bytes: this.targets[0]?.descriptorSize || 64
       },
       vocabulary: {

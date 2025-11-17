@@ -1,44 +1,85 @@
 /**
  * WebAR Image Tracking Configuration
  *
- * Central configuration file for BRISK detector parameters and other constants.
+ * Central configuration file for feature detection and tracking parameters.
+ * Uses ORB detector for keypoint detection and TEBLID descriptor for feature description.
  * Modify these values to tune detection and tracking performance.
  *
  * PERFORMANCE TUNING:
  * For faster performance, try:
- * - Increase brisk.thresh (30-50) = fewer features detected
- * - Decrease brisk.octaves (3-4) = less multi-scale processing
- * - Decrease brisk.maxFeaturesPerFrame (300-400) = fewer features to process
+ * - Decrease orb.nfeatures (1000-2000) = fewer features to process
+ * - Increase orb.fastThreshold (15-25) = fewer features detected
+ * - Decrease orb.nlevels (4-6) = less multi-scale processing
  * - Disable framePreprocessing.useBlur = skip blur step in live frames
  *
  * For better quality, try:
- * - Decrease brisk.thresh (15-25) = more features detected
- * - Increase brisk.octaves (6-8) = better scale invariance
- * - Increase brisk.maxFeaturesPerFrame (600-1000) = more features to match
+ * - Increase orb.nfeatures (5000-10000) = more features to match
+ * - Decrease orb.fastThreshold (5-10) = more features detected
+ * - Increase orb.nlevels (10-12) = better scale invariance
+ * - Decrease orb.scaleFactor (1.1-1.15) = finer scale steps
  */
 
 const AppConfig = {
   // ======================================================================
-  // BRISK DETECTOR PARAMETERS
+  // ORB DETECTOR PARAMETERS (Keypoint Detection Only)
   // ======================================================================
-  brisk: {
-    // BRISK threshold for feature detection
-    // Lower values = more features (noisier), higher values = fewer features (more robust)
-    // Recommended range: 20-60 for performance tuning
-    thresh: 30,
+  orb: {
+    // Maximum number of features to retain
+    // More features = better detection but slower
+    // Recommended: 2000-5000 for performance, 5000-10000 for quality
+    nfeatures: 3000,
 
-    // Number of octaves for multi-scale detection
-    // More octaves = more features at different scales but slower
-    // Recommended range: 3-8
-    octaves: 3,
+    // Pyramid decimation ratio (must be greater than 1)
+    // Lower values = finer scale steps but slower
+    // Recommended: 1.2 (standard), 1.1-1.15 (quality), 1.3-1.5 (performance)
+    scaleFactor: 1.2,
 
-    // Pattern scale factor
-    patternScale: 1,
+    // Number of pyramid levels for multi-scale detection
+    // More levels = better scale invariance but slower
+    // Recommended: 8 (standard), 10-12 (quality), 4-6 (performance)
+    nlevels: 8,
 
-    // Maximum number of features to keep per frame (sorted by response strength)
-    // Lower = faster processing, higher = better detection but slower
-    // Recommended: 300-500 for performance, 500-1000 for quality
-    maxFeaturesPerFrame: 800
+    // Size of border where features are not detected (in pixels)
+    // Lower values improve repeatability but may detect unstable edge features
+    // Recommended: 20-31
+    edgeThreshold: 20,
+
+    // Level of pyramid to put source image (usually 0)
+    firstLevel: 0,
+
+    // Number of points producing each element of oriented BRIEF descriptor
+    // 2 = more stable, 3 or 4 = faster but less stable
+    WTA_K: 2,
+
+    // Score type for ranking features
+    // 0 = HARRIS_SCORE (more robust), 1 = FAST_SCORE (faster)
+    scoreType: 0,
+
+    // Size of patch used by oriented BRIEF descriptor
+    // Recommended: 31 (standard)
+    patchSize: 31,
+
+    // FAST threshold for corner detection
+    // Lower values = more features detected (noisier), higher = fewer features (more robust)
+    // Recommended: 10-15 (quality), 20-30 (performance)
+    fastThreshold: 10
+  },
+
+  // ======================================================================
+  // TEBLID DESCRIPTOR PARAMETERS (Feature Description)
+  // ======================================================================
+  teblid: {
+    // Scale factor for TEBLID descriptor
+    // Adjusts the sampling window around detected keypoints
+    // 1.00 is the recommended scale for ORB keypoints
+    // 5.00 for BRISK, 6.25 for KAZE, 6.75 for SIFT
+    // Reference: https://docs.opencv.org/4.x/javadoc/org/opencv/xfeatures2d/TEBLID.html
+    scaleFactor: 1.0,
+
+    // Descriptor size in bits (256 or 512)
+    // 256: Faster matching, less memory
+    // 512: Better matching quality, more distinctive features
+    size: 512
   },
 
   // ======================================================================
@@ -273,7 +314,7 @@ const AppConfig = {
     levels: 2,
 
     // Maximum features per target image for vocabulary building
-    maxFeaturesPerTarget: 500
+    maxFeaturesPerTarget: 5000
   }
 };
 

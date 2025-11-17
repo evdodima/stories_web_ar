@@ -29,7 +29,7 @@ class ImageTracker {
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: AppConfig.brisk.maxFeaturesPerFrame,
+            maxFeatures: AppConfig.orb.nfeatures,
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
 
             // Single-video mode with center-priority selection
@@ -70,14 +70,28 @@ class ImageTracker {
         try {
             this.ui.updateStatus('Loading OpenCV...');
 
+            // Diagnostic logging - check if cv exists globally first
+            const cvExists = typeof window.cv !== 'undefined';
+            console.log('[OpenCV] Checking initialization...', {
+                cvExists: cvExists,
+                cvType: cvExists ? typeof window.cv : 'undefined',
+                isFunction: cvExists ? typeof window.cv === 'function' : false,
+                hasBFMatcher: cvExists ? typeof window.cv.BFMatcher : 'N/A',
+                hasORB: cvExists ? typeof window.cv.ORB : 'N/A',
+                hasDMatchVector: cvExists ? typeof window.cv.DMatchVector : 'N/A',
+                hasXfeatures2d_TEBLID: cvExists ? typeof window.cv.xfeatures2d_TEBLID : 'N/A',
+                cvKeys: (cvExists && typeof window.cv === 'object') ? Object.keys(window.cv).slice(0, 20) : []
+            });
+
             // Wait for cv to be initialized (Promise resolution handled in index.html)
             // cv should be an object with functions, not a Promise or function
-            if (typeof cv === 'undefined' ||
-                typeof cv === 'function' ||
-                typeof cv.BFMatcher !== 'function' ||
-                typeof cv.BRISK !== 'function' ||
-                typeof cv.DMatchVector !== 'function') {
+            if (typeof window.cv === 'undefined' ||
+                typeof window.cv === 'function' ||
+                typeof window.cv.BFMatcher !== 'function' ||
+                typeof window.cv.ORB !== 'function' ||
+                typeof window.cv.DMatchVector !== 'function') {
 
+                console.warn('[OpenCV] Not fully loaded yet, retrying in 500ms...');
                 // Still loading/initializing, retry
                 setTimeout(() => this.waitForOpenCV(), 500);
                 return;
@@ -292,18 +306,18 @@ class ImageTracker {
 
     ensureOpenCVReady() {
         // Check if cv is fully initialized (should be object with functions, not async function)
-        if (typeof cv === 'undefined' ||
-            typeof cv === 'function' ||
-            typeof cv.BFMatcher !== 'function' ||
-            typeof cv.BRISK !== 'function' ||
-            typeof cv.DMatchVector !== 'function') {
+        if (typeof window.cv === 'undefined' ||
+            typeof window.cv === 'function' ||
+            typeof window.cv.BFMatcher !== 'function' ||
+            typeof window.cv.ORB !== 'function' ||
+            typeof window.cv.DMatchVector !== 'function') {
 
             this.ui.updateStatus('Waiting for OpenCV to fully initialize...');
 
             setTimeout(() => {
-                if (typeof cv !== 'undefined' &&
-                    typeof cv !== 'function' &&
-                    typeof cv.BFMatcher === 'function') {
+                if (typeof window.cv !== 'undefined' &&
+                    typeof window.cv !== 'function' &&
+                    typeof window.cv.BFMatcher === 'function') {
                     this.ui.updateStatus('Starting tracking...');
                     this.processVideo();
                 } else {

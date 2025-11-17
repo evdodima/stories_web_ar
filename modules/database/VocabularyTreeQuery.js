@@ -11,7 +11,7 @@ class VocabularyTreeQuery {
     // Convert vocabulary to OpenCV Mat for fast matching
     this.vocabularyMat = this.createVocabularyMat(vocabulary);
 
-    // Create BFMatcher for finding nearest visual words (Hamming distance for ORB)
+    // Create BFMatcher for finding nearest visual words (Hamming distance for TEBLID)
     this.matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
   }
 
