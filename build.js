@@ -154,12 +154,6 @@ async function copyStaticFiles() {
     if (file.endsWith('.html')) {
       let htmlContent = await fs.readFile(path.join(SOURCE_DIR, file), 'utf8');
       
-      // Optimize HTML
-      htmlContent = htmlContent
-        .replace(/\s+/g, ' ')
-        .replace(/>\s+</g, '><')
-        .trim();
-      
       await fs.writeFile(path.join(BUILD_DIR, file), htmlContent);
       console.log(`Copied and optimized: ${file}`);
     }
