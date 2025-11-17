@@ -1,5 +1,7 @@
 async function loadOpenCV(paths, onloadCallback) {
     let OPENCV_URL = "";
+    let selectedVariant = "unknown";
+    let selectedPathKey = "unknown";
     let asmPath = "";
     let wasmPath = "";
     let simdPath = "";
@@ -33,6 +35,8 @@ async function loadOpenCV(paths, onloadCallback) {
     let wasmSupported = !(typeof WebAssembly === 'undefined');
     if (!wasmSupported && OPENCV_URL === "" && asmPath != "") {
         OPENCV_URL = asmPath;
+        selectedVariant = "asm";
+        selectedPathKey = "asm";
         console.log("The OpenCV.js for Asm.js is loaded now");
     } else if (!wasmSupported && asmPath == ""){
         throw new Error("The browser supports the Asm.js only, but the path of OpenCV.js for Asm.js is empty");
@@ -43,18 +47,24 @@ async function loadOpenCV(paths, onloadCallback) {
 
     if (simdSupported && threadsSupported && threadsSimdPath != "") {
         OPENCV_URL = threadsSimdPath;
+        selectedVariant = "threads+simd";
+        selectedPathKey = "threadsSimd";
         console.log("The OpenCV.js with simd and threads optimization is loaded now");
     } else if (simdSupported && simdPath != "") {
         if (threadsSupported && threadsSimdPath === "") {
             console.log("The browser supports simd and threads, but the path of OpenCV.js with simd and threads optimization is empty");
         }
         OPENCV_URL = simdPath;
+        selectedVariant = "simd";
+        selectedPathKey = "simd";
         console.log("The OpenCV.js with simd optimization is loaded now.");
     } else if (threadsSupported && threadsPath != "") {
         if (simdSupported && threadsSimdPath === "") {
             console.log("The browser supports simd and threads, but the path of OpenCV.js with simd and threads optimization is empty");
         }
         OPENCV_URL = threadsPath;
+        selectedVariant = "threads";
+        selectedPathKey = "threads";
         console.log("The OpenCV.js with threads optimization is loaded now");
     } else if (wasmSupported && wasmPath != "") {
         if(simdSupported && threadsSupported) {
@@ -70,18 +80,46 @@ async function loadOpenCV(paths, onloadCallback) {
         }
 
         OPENCV_URL = wasmPath;
+        selectedVariant = "wasm";
+        selectedPathKey = "wasm";
         console.log("The OpenCV.js for wasm is loaded now");
     } else if (wasmSupported) {
         console.log("The browser supports wasm, but the path of OpenCV.js for wasm is empty");
 
         if (asmPath != "") {
             OPENCV_URL = asmPath;
+            selectedVariant = "asm-fallback";
+            selectedPathKey = "asm";
             console.log("The OpenCV.js for Asm.js is loaded as fallback.");
         }
     }
 
     if (OPENCV_URL === "") {
         throw new Error("No available OpenCV.js, please check your paths");
+    }
+
+    const buildsAvailable = {
+        asm: asmPath !== "",
+        wasm: wasmPath !== "",
+        simd: simdPath !== "",
+        threads: threadsPath !== "",
+        threadsSimd: threadsSimdPath !== ""
+    };
+
+    const buildDetails = {
+        variant: selectedVariant,
+        pathKey: selectedPathKey,
+        url: OPENCV_URL,
+        wasmSupported,
+        simdSupported,
+        threadsSupported,
+        buildsAvailable,
+        timestamp: new Date().toISOString()
+    };
+
+    const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+    if (globalScope) {
+        globalScope.__opencvBuildInfo = buildDetails;
     }
 
     let script = document.createElement('script');

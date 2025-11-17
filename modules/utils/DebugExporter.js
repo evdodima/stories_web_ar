@@ -178,6 +178,37 @@ class DebugExporter {
   }
 
   /**
+   * Collect OpenCV build information
+   */
+  getOpenCVInfo() {
+    const globalScope = typeof window !== 'undefined'
+      ? window
+      : (typeof globalThis !== 'undefined' ? globalThis : {});
+
+    const buildInfo = globalScope.__opencvBuildInfo || {};
+    const cvModule = globalScope.cv;
+
+    const cvVersion =
+      cvModule?.VERSION ||
+      cvModule?.version ||
+      cvModule?.versionString ||
+      (cvModule ? 'available' : 'unavailable');
+
+    return {
+      variant: buildInfo.variant || 'unknown',
+      pathKey: buildInfo.pathKey || 'unknown',
+      url: buildInfo.url || 'unknown',
+      wasmSupported: buildInfo.wasmSupported ?? null,
+      simdSupported: buildInfo.simdSupported ?? null,
+      threadsSupported: buildInfo.threadsSupported ?? null,
+      buildsAvailable: buildInfo.buildsAvailable || null,
+      selectedAt: buildInfo.timestamp || null,
+      cvReady: Boolean(cvModule),
+      cvVersion
+    };
+  }
+
+  /**
    * Generate complete debug report
    */
   generateDebugReport() {
@@ -188,6 +219,7 @@ class DebugExporter {
         sessionDuration: Math.round((Date.now() - this.startTime) / 1000)
       },
       systemInfo: this.getSystemInfo(),
+      opencvInfo: this.getOpenCVInfo(),
       trackerState: this.getTrackerState(),
       cameraInfo: this.getCameraInfo(),
       referenceInfo: this.getReferenceInfo(),
@@ -223,6 +255,25 @@ class DebugExporter {
     text += `Device Memory: ${sys.deviceMemory}GB\n`;
     text += `Max Touch Points: ${sys.maxTouchPoints}\n`;
     text += `Online: ${sys.onLine}\n\n`;
+
+    text += '# OPENCV BUILD\n';
+    const ocv = report.opencvInfo || {};
+    text += `Variant: ${ocv.variant}\n`;
+    text += `Path Key: ${ocv.pathKey}\n`;
+    text += `URL: ${ocv.url}\n`;
+    text += `Version: ${ocv.cvVersion}\n`;
+    text += `cv Ready: ${ocv.cvReady}\n`;
+    text += `SIMD Supported: ${ocv.simdSupported}\n`;
+    text += `Threads Supported: ${ocv.threadsSupported}\n`;
+    text += `WASM Supported: ${ocv.wasmSupported}\n`;
+    text += `Selected At: ${ocv.selectedAt}\n`;
+    if (ocv.buildsAvailable) {
+      text += 'Available Builds:\n';
+      Object.entries(ocv.buildsAvailable).forEach(([key, available]) => {
+        text += `  - ${key}: ${available ? 'yes' : 'no'}\n`;
+      });
+    }
+    text += '\n';
 
     text += '# TRACKER STATE\n';
     const state = report.trackerState;
