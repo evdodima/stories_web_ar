@@ -66,15 +66,24 @@ class ImageTracker {
         });
     }
 
-    waitForOpenCV() {
-        if (typeof cv === 'undefined' ||
-            typeof cv.BFMatcher !== 'function' ||
-            typeof cv.ORB !== 'function' ||
-            typeof cv.DMatchVector !== 'function') {
-
+    async waitForOpenCV() {
+        try {
             this.ui.updateStatus('Loading OpenCV...');
-            setTimeout(() => this.waitForOpenCV(), 500);
-        } else {
+
+            // Wait for cv to be initialized (Promise resolution handled in index.html)
+            // cv should be an object with functions, not a Promise or function
+            if (typeof cv === 'undefined' ||
+                typeof cv === 'function' ||
+                typeof cv.BFMatcher !== 'function' ||
+                typeof cv.BRISK !== 'function' ||
+                typeof cv.DMatchVector !== 'function') {
+
+                // Still loading/initializing, retry
+                setTimeout(() => this.waitForOpenCV(), 500);
+                return;
+            }
+
+            console.log('[OpenCV] Initialization complete, critical functions verified');
             this.ui.updateStatus('OpenCV loaded. Loading database...');
             this.initialize();
 
@@ -98,6 +107,10 @@ class ImageTracker {
                     this.startTracking();
                 }, 500);
             });
+        } catch (error) {
+            console.error('[OpenCV] Initialization failed:', error);
+            this.ui.updateStatus('Error loading OpenCV. Please refresh the page.');
+            this.ui.showLoadingError();
         }
     }
 
@@ -278,15 +291,19 @@ class ImageTracker {
     }
 
     ensureOpenCVReady() {
+        // Check if cv is fully initialized (should be object with functions, not async function)
         if (typeof cv === 'undefined' ||
+            typeof cv === 'function' ||
             typeof cv.BFMatcher !== 'function' ||
-            typeof cv.ORB !== 'function' ||
+            typeof cv.BRISK !== 'function' ||
             typeof cv.DMatchVector !== 'function') {
 
             this.ui.updateStatus('Waiting for OpenCV to fully initialize...');
 
             setTimeout(() => {
-                if (typeof cv !== 'undefined' && typeof cv.BFMatcher === 'function') {
+                if (typeof cv !== 'undefined' &&
+                    typeof cv !== 'function' &&
+                    typeof cv.BFMatcher === 'function') {
                     this.ui.updateStatus('Starting tracking...');
                     this.processVideo();
                 } else {
