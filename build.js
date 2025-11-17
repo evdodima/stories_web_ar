@@ -190,7 +190,7 @@ async function copyStaticFiles() {
   }
 
   // Copy assets directories
-  const assetDirs = ['images', 'assets', 'videos', 'targets', 'fonts'];
+  const assetDirs = ['images', 'assets', 'videos', 'targets', 'fonts', 'opencv_builds'];
   for (const dir of assetDirs) {
     if (await fs.pathExists(`./${dir}`)) {
       await fs.copy(`./${dir}`, path.join(BUILD_DIR, dir));
@@ -239,9 +239,17 @@ const CACHE_NAMES = {
 
 // CDN resources to cache on install
 const CDN_RESOURCES = [
-  'https://cdn.jsdelivr.net/npm/opencv.js-webassembly@4.2.0/opencv.js',
   'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
   'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+];
+
+// Local OpenCV builds to cache (large files, cache strategically)
+const OPENCV_RESOURCES = [
+  '/opencv_builds/loader.js',
+  '/opencv_builds/wasm-feature-detect.js',
+  '/opencv_builds/wasm/opencv.js',
+  '/opencv_builds/simd/opencv.js',
+  '/opencv_builds/threadsSimd/opencv.js'
 ];
 
 // Static app resources to cache on install
@@ -254,7 +262,7 @@ const STATIC_RESOURCES = [
 ];
 
 /**
- * Install event - cache static resources and CDN libraries
+ * Install event - cache static resources, CDN libraries, and OpenCV builds
  */
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing Service Worker...');
@@ -270,6 +278,20 @@ self.addEventListener('install', (event) => {
       caches.open(CACHE_NAMES.cdn).then((cache) => {
         console.log('[SW] Caching CDN resources');
         return cache.addAll(CDN_RESOURCES);
+      }),
+      // Cache OpenCV builds (large files - 11-13MB each)
+      caches.open(CACHE_NAMES.static).then((cache) => {
+        console.log('[SW] Caching OpenCV builds (this may take a while)');
+        // Cache OpenCV files one by one to handle large file sizes
+        return OPENCV_RESOURCES.reduce((promise, resource) => {
+          return promise.then(() => {
+            console.log('[SW] Caching:', resource);
+            return cache.add(resource).catch(err => {
+              console.warn('[SW] Failed to cache:', resource, err);
+              // Continue even if one fails
+            });
+          });
+        }, Promise.resolve());
       })
     ]).then(() => {
       console.log('[SW] Installation complete');
@@ -335,12 +357,17 @@ async function handleFetch(request) {
     return cacheFirst(request, CACHE_NAMES.cdn);
   }
 
-  // Strategy 2: Network First for static app resources
+  // Strategy 2: Cache First for OpenCV builds (large files, don't change)
+  if (OPENCV_RESOURCES.includes(url.pathname)) {
+    return cacheFirst(request, CACHE_NAMES.static);
+  }
+
+  // Strategy 3: Network First for static app resources
   if (STATIC_RESOURCES.includes(url.pathname)) {
     return networkFirst(request, CACHE_NAMES.static);
   }
 
-  // Strategy 3: Network First with runtime cache for everything else
+  // Strategy 4: Network First with runtime cache for everything else
   return networkFirst(request, CACHE_NAMES.runtime);
 }
 
