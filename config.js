@@ -305,6 +305,45 @@ const AppConfig = {
   },
 
   // ======================================================================
+  // DATABASE VERSIONING
+  // ======================================================================
+  database: {
+    // Schema version for vocabulary tree database
+    // Increment this when making incompatible changes to:
+    // - Vocabulary tree structure
+    // - Metadata format
+    // - Descriptor format
+    // - Storage schema
+    // Format: MAJOR.MINOR.PATCH
+    version: '1.0.0',
+
+    // Configuration signature (auto-generated hash of critical params)
+    // Used to detect when config changes require vocabulary rebuild
+    // Critical params: ORB/TEBLID settings, vocabulary structure
+    getConfigSignature() {
+      const criticalParams = {
+        orb: AppConfig.orb,
+        teblid: AppConfig.teblid,
+        vocabulary: {
+          branchingFactor: AppConfig.vocabulary.branchingFactor,
+          levels: AppConfig.vocabulary.levels,
+          maxFeaturesPerTarget: AppConfig.vocabulary.maxFeaturesPerTarget,
+          weightingScheme: AppConfig.vocabulary.weightingScheme
+        }
+      };
+      // Simple hash function for config signature
+      const str = JSON.stringify(criticalParams);
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return hash.toString(16);
+    }
+  },
+
+  // ======================================================================
   // VOCABULARY TREE CONFIGURATION
   // ======================================================================
   vocabulary: {

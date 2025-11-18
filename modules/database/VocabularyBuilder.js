@@ -1187,15 +1187,23 @@ class VocabularyBuilder {
       try {
         const cachedData = await this.cacheManager.getVocabulary(this.albumCode);
         if (cachedData) {
-          console.log('[VocabularyBuilder] Loading from cache');
-          this.importDatabase(cachedData);
-          this.onProgress({
-            stage: 'cache',
-            progress: 100,
-            message: 'Loaded from cache',
-            cached: true
-          });
-          return this.targets;
+          console.log('[VocabularyBuilder] Found cached vocabulary, checking version...');
+          const importSuccess = this.importDatabase(cachedData);
+
+          if (importSuccess) {
+            console.log('[VocabularyBuilder] Loaded from cache successfully');
+            this.onProgress({
+              stage: 'cache',
+              progress: 100,
+              message: 'Loaded from cache',
+              cached: true
+            });
+            return this.targets;
+          } else {
+            console.log('[VocabularyBuilder] Version mismatch - clearing cache and rebuilding');
+            // Clear incompatible cache
+            await this.cacheManager.deleteVocabulary(this.albumCode);
+          }
         }
 
         console.log('[VocabularyBuilder] Not in cache, building...');
@@ -1330,7 +1338,11 @@ class VocabularyBuilder {
         levels: this.levels,
         descriptor_type: 'TEBLID',
         descriptor_bytes: this.targets[0]?.descriptorSize || 64,
-        has_hierarchical_tree: this.vocabularyTree !== null
+        has_hierarchical_tree: this.vocabularyTree !== null,
+        // Database versioning
+        database_version: AppConfig.database.version,
+        config_signature: AppConfig.database.getConfigSignature(),
+        created_at: new Date().toISOString()
       },
       vocabulary: {
         words: this.vocabulary.map(word => Array.from(word)),
@@ -1378,9 +1390,41 @@ class VocabularyBuilder {
   /**
    * Import database from cached data
    * Restores vocabulary tree and targets
+   * @returns {boolean} True if import successful, false if version mismatch
    */
   importDatabase(database) {
     console.log('[VocabularyBuilder] Importing cached database');
+
+    // Validate database version
+    const currentVersion = AppConfig.database.version;
+    const currentSignature = AppConfig.database.getConfigSignature();
+    const dbVersion = database.metadata.database_version;
+    const dbSignature = database.metadata.config_signature;
+
+    if (!dbVersion || !dbSignature) {
+      console.warn('[VocabularyBuilder] Legacy database without version info - will rebuild');
+      return false;
+    }
+
+    // Check schema version compatibility
+    if (dbVersion !== currentVersion) {
+      console.warn(`[VocabularyBuilder] Database version mismatch:`);
+      console.warn(`  Current: ${currentVersion}`);
+      console.warn(`  Cached:  ${dbVersion}`);
+      console.warn(`  Action:  Rebuilding vocabulary tree`);
+      return false;
+    }
+
+    // Check configuration signature
+    if (dbSignature !== currentSignature) {
+      console.warn(`[VocabularyBuilder] Configuration changed - vocabulary rebuild required`);
+      console.warn(`  Current signature: ${currentSignature}`);
+      console.warn(`  Cached signature:  ${dbSignature}`);
+      console.warn(`  This means ORB/TEBLID parameters or vocabulary settings changed`);
+      return false;
+    }
+
+    console.log(`[VocabularyBuilder] Version check passed (v${dbVersion})`);
 
     // Restore metadata
     this.k = database.metadata.branching_factor;
@@ -1430,6 +1474,7 @@ class VocabularyBuilder {
     });
 
     console.log(`[VocabularyBuilder] Imported ${this.targets.length} targets`);
+    return true;
   }
 
   /**

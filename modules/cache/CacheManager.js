@@ -269,7 +269,7 @@ class CacheManager {
   }
 
   /**
-   * Store vocabulary tree
+   * Store vocabulary tree with version metadata
    */
   async storeVocabulary(albumCode, vocabularyData) {
     if (!this.db) await this.init();
@@ -279,16 +279,25 @@ class CacheManager {
         'readwrite');
       const store = transaction.objectStore(this.stores.vocabulary);
 
+      // Extract version info from vocabulary metadata
+      const dbVersion = vocabularyData?.metadata?.database_version || 'unknown';
+      const configSignature = vocabularyData?.metadata?.config_signature || 'unknown';
+
       const data = {
         albumCode,
         vocabularyData,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        // Store version metadata for quick validation
+        version: {
+          database_version: dbVersion,
+          config_signature: configSignature
+        }
       };
 
       const request = store.put(data);
 
       request.onsuccess = () => {
-        console.log(`[Cache] Vocabulary for ${albumCode} stored`);
+        console.log(`[Cache] Vocabulary for ${albumCode} stored (v${dbVersion})`);
         resolve();
       };
 
@@ -300,7 +309,7 @@ class CacheManager {
   }
 
   /**
-   * Retrieve vocabulary tree
+   * Retrieve vocabulary tree with version validation
    */
   async getVocabulary(albumCode) {
     if (!this.db) await this.init();
@@ -329,7 +338,15 @@ class CacheManager {
           return;
         }
 
-        console.log(`[Cache] Vocabulary for ${albumCode} found`);
+        // Log version information (detailed validation happens in VocabularyBuilder)
+        if (result.version) {
+          const dbVersion = result.version.database_version;
+          const cacheAge = Math.floor(age / (24 * 60 * 60 * 1000));
+          console.log(`[Cache] Vocabulary for ${albumCode} found (v${dbVersion}, ${cacheAge} days old)`);
+        } else {
+          console.log(`[Cache] Vocabulary for ${albumCode} found (legacy, no version info)`);
+        }
+
         resolve(result.vocabularyData);
       };
 
