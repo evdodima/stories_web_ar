@@ -250,10 +250,11 @@ class ZipDatabaseLoader {
       // VocabularyTreeQuery expects vocabulary as array of arrays (not Mats)
       const vocabulary = this.database.vocabulary.words;
       const idf = this.database.vocabulary.idf_weights;
+      const vocabularyTree = this.database.vocabulary.tree || null;
 
       // Create vocabulary query (assumes VocabularyTreeQuery is globally available)
       if (typeof VocabularyTreeQuery !== 'undefined') {
-        this.vocabularyQuery = new VocabularyTreeQuery(vocabulary, idf);
+        this.vocabularyQuery = new VocabularyTreeQuery(vocabulary, idf, vocabularyTree);
         console.log('Vocabulary tree query initialized');
       } else {
         console.warn('VocabularyTreeQuery not available');

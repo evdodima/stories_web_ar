@@ -239,7 +239,7 @@ export class DebugExperimentRunner {
    */
   _matchFeatures(targetDesc, frameDesc, matchingParams) {
     // Create matcher (Hamming distance for binary descriptors)
-    const matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
+    const matcher = new cv.BFMatcher(cv.NORM_HAMMING2, false);
 
     // KNN match with k=2
     const matches = new cv.DMatchVectorVector();

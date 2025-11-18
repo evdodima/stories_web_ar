@@ -19,8 +19,8 @@ class ImageTracker {
             lastProcessingTime: 0,
             lastFrameTimestamp: 0,
             fps: 0,
-            drawKeypoints: false,
-            visualizeFlowPoints: false, // Visualize optical flow tracking points
+            drawKeypoints: true,
+            visualizeFlowPoints: true, // Visualize optical flow tracking points
             maxDimension: AppConfig.frameProcessing.maxDimension,
             useOpticalFlow: true, // Enable optical flow for smooth tracking
             detectionInterval: AppConfig.detection.detectionInterval,

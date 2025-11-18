@@ -27,17 +27,17 @@ const AppConfig = {
     // Maximum number of features to retain
     // More features = better detection but slower
     // Recommended: 2000-5000 for performance, 5000-10000 for quality
-    nfeatures: 3000,
+    nfeatures: 2000,
 
     // Pyramid decimation ratio (must be greater than 1)
     // Lower values = finer scale steps but slower
     // Recommended: 1.2 (standard), 1.1-1.15 (quality), 1.3-1.5 (performance)
-    scaleFactor: 1.2,
+    scaleFactor: 1.1,
 
     // Number of pyramid levels for multi-scale detection
     // More levels = better scale invariance but slower
     // Recommended: 8 (standard), 10-12 (quality), 4-6 (performance)
-    nlevels: 8,
+    nlevels: 12,
 
     // Size of border where features are not detected (in pixels)
     // Lower values improve repeatability but may detect unstable edge features
@@ -62,7 +62,7 @@ const AppConfig = {
     // FAST threshold for corner detection
     // Lower values = more features detected (noisier), higher = fewer features (more robust)
     // Recommended: 10-15 (quality), 20-30 (performance)
-    fastThreshold: 10
+    fastThreshold: 30
   },
 
   // ======================================================================
@@ -133,7 +133,7 @@ const AppConfig = {
     maxCandidates: 2,
 
     // Minimum similarity threshold for vocabulary-based filtering
-    minSimilarityThreshold: 0.4,
+    minSimilarityThreshold: 0,
 
     // Lowe's ratio test threshold (lower = stricter matching)
     ratioThreshold: 0.75,
@@ -142,7 +142,7 @@ const AppConfig = {
     distanceThresholdMultiplier: 3,
 
     // Minimum number of matches required for homography estimation
-    minMatchesForHomography: 10,
+    minMatchesForHomography: 4,
 
     // Run full detection every N frames (lower = more CPU, better detection)
     detectionInterval: 30
@@ -307,20 +307,60 @@ const AppConfig = {
   // VOCABULARY TREE CONFIGURATION
   // ======================================================================
   vocabulary: {
-    // Branching factor for vocabulary tree
-    // Vocabulary size = branchingFactor^levels
-    // Current: 100^2 = 10,000 words (good balance for 3000 features)
-    // Previous: 10^2 = 100 words (too small, caused inverted scoring)
-    branchingFactor: 20,
+    // ADAPTIVE VOCABULARY SIZING (RECOMMENDED)
+    // Automatically adjusts vocabulary size based on TOTAL DESCRIPTORS (not just target count)
+    // Rule: Aims for 8-12 features per vocabulary word for optimal clustering
+    // When true, automatically selects optimal vocabulary parameters:
+    //   <3k descriptors:     64-256 words (capped at 15% of descriptors)
+    //   3k-10k descriptors:  256-512 words
+    //   10k-50k descriptors: 1,000 words
+    //   50k-200k descriptors: 4,000-8,000 words
+    //   >200k descriptors:   10,000 words
+    // When false, uses fixed branchingFactor and levels below
+    adaptive: false,
 
+    // BRANCHING FACTOR (used when adaptive=false)
+    // Number of clusters at each level of the tree
+    // Vocabulary size = branchingFactor^levels
+    // Higher branching = fewer levels but more comparisons per level
+    // Recommended: 8-10 for small databases, 10-20 for large databases
+    branchingFactor: 3,
+
+    // TREE DEPTH (used when adaptive=false)
     // Number of levels in vocabulary tree
     // Higher = more specific vocabulary but slower clustering
-    levels: 2,
+    // Vocabulary size = branchingFactor^levels
+    //   L=2: k=10 → 100 words (too small for most cases)
+    //   L=3: k=10 → 1,000 words (good for 10-50 targets)
+    //   L=4: k=10 → 10,000 words (good for 100+ targets)
+    // Recommended: 3 for most cases, 4 for large databases (200+ targets)
+    levels: 10,
 
+    // FEATURE SELECTION PER TARGET
     // Maximum features per target image for vocabulary building
-    // Reduced from 5000 to 2000 for faster processing
-    // Note: Actual clustering uses max 10000 sampled descriptors total
-    maxFeaturesPerTarget: 500
+    // Lower values = more selective, only strong features (like BRISK)
+    // Higher values = more features but includes weaker ones
+    // For small databases (3-10 targets): 200-300 recommended
+    // For large databases (50+ targets): 500-1000 recommended
+    // Note: BRISK used 200-300 features and worked well
+    maxFeaturesPerTarget: 300,
+
+    // WEIGHTING SCHEME FOR BOW SIMILARITY
+    // 'tfidf': Traditional TF-IDF weighting (standard)
+    // 'bm25': BM25 weighting (better term saturation, recommended)
+    // BM25 handles repeated visual words better than TF-IDF
+    // and provides better discrimination between targets
+    weightingScheme: 'bm25',
+
+    // SCORE GAP FILTERING (FALSE POSITIVE PREVENTION)
+    // Minimum score difference between top 2 candidates
+    // If gap < threshold, reject all candidates (ambiguous match)
+    // Higher = stricter (fewer false positives but may miss true matches)
+    // Recommended: 0.05-0.15 depending on application
+    //   0.05: Lenient (accepts closer scores)
+    //   0.10: Balanced (recommended for most cases)
+    //   0.15: Strict (only very confident matches)
+    minScoreGap: 0.05
   }
 };
 

@@ -98,10 +98,20 @@ class FeatureDetector {
 
         if (this.useVocabularyTree && this.vocabularyQuery && targets.length >= this.maxCandidates) {
             this.profiler?.startTimer('vocabulary_candidate_selection');
+
+            // Adaptive candidate count based on vocabulary size
+            const vocabSize = this.vocabularyQuery.vocabularySize;
+            let adaptiveMaxCandidates = this.maxCandidates;
+            if (vocabSize <= 512) {
+                adaptiveMaxCandidates = Math.min(3, targets.length); // Small vocab: check more
+            } else if (vocabSize > 2000) {
+                adaptiveMaxCandidates = Math.min(1, targets.length); // Large vocab: check fewer
+            }
+
             const candidates = this.vocabularyQuery.queryCandidates(
                 frameFeatures.descriptors,
                 targets,
-                this.maxCandidates
+                adaptiveMaxCandidates
             );
             this.profiler?.endTimer('vocabulary_candidate_selection');
 
@@ -110,10 +120,56 @@ class FeatureDetector {
                 score: c.score.toFixed(3)
             })));
 
-            // Extract just the target objects and filter by minimum score
+            // Adaptive similarity threshold based on vocabulary size
+            let minSimilarity = AppConfig.detection.minSimilarityThreshold;
+            if (minSimilarity === 0 || minSimilarity === undefined) {
+                // Auto-select threshold based on vocabulary size
+                if (vocabSize <= 512) {
+                    minSimilarity = 0.15;
+                } else if (vocabSize <= 2000) {
+                    minSimilarity = 0.20;
+                } else {
+                    minSimilarity = 0.25;
+                }
+                console.log(`[FeatureDetector] Adaptive similarity threshold: ${minSimilarity.toFixed(2)} (vocab: ${vocabSize} words)`);
+            }
+
+            // Score gap filtering: require significant gap between top candidates
+            const minScoreGap = AppConfig.vocabulary?.minScoreGap || 0.10;
+            let passedScoreGap = true;
+
+            if (candidates.length >= 2) {
+                const scoreGap = candidates[0].score - candidates[1].score;
+                passedScoreGap = scoreGap > minScoreGap;
+
+                console.log(`[FeatureDetector] Score gap: ${scoreGap.toFixed(3)} (threshold: ${minScoreGap}, ${passedScoreGap ? 'PASS ✓' : 'FAIL ✗'})`);
+
+                if (!passedScoreGap) {
+                    console.log('[FeatureDetector] ⚠️  Ambiguous match: top scores too similar, rejecting all candidates');
+                }
+            }
+
+            // Extract target objects with filtering
             targetsToMatch = candidates
-                .filter(c => c.score > AppConfig.detection.minSimilarityThreshold)
+                .filter(c => {
+                    // Apply similarity threshold
+                    if (c.score <= minSimilarity) {
+                        return false;
+                    }
+                    // Apply score gap filter: reject ALL candidates if gap is too small
+                    if (!passedScoreGap) {
+                        return false;
+                    }
+                    return true;
+                })
                 .map(c => c.target);
+
+            // FALLBACK: If vocabulary filtered everything out AND we have few targets,
+            // fall back to checking all targets (vocabulary not discriminative enough)
+            if (targetsToMatch.length === 0 && targets.length <= 5) {
+                console.log('[FeatureDetector] ⚠️  Vocabulary not discriminative, falling back to checking all targets');
+                targetsToMatch = targets;
+            }
 
             console.log('[FeatureDetector] Checking targets:', targetsToMatch.map(t => t.id));
         }
