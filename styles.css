@@ -919,8 +919,8 @@ body {
 }
 
 #output {
-    display: none; /* Hidden - using ARRenderer instead */
-    z-index: 10;
+    display: none; /* Hidden by default - shown when visualizeFlowPoints is enabled */
+    z-index: 15; /* Above AR canvas to show debug visualization */
     pointer-events: none;
 }
 

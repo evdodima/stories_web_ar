@@ -168,22 +168,41 @@ class OpticalFlowTracker {
         roi.delete(); roiCorners.delete();
 
         // Detect good features inside the quadrilateral
-        // Use much fewer features for optical flow (speed over accuracy)
+        // Detect more features initially, then filter for spatial distribution
         const maxFlowFeatures = AppConfig.opticalFlow.maxFlowFeatures;
-        let featurePoints = new cv.Mat();
+        let featurePointsRaw = new cv.Mat();
         cv.goodFeaturesToTrack(
             prevGray,
-            featurePoints,
-            maxFlowFeatures,
+            featurePointsRaw,
+            maxFlowFeatures * 2, // Detect 2x features for better spatial selection
             this.params.featureQualityLevel,
             this.params.featureMinDistance,
             prevMask
         );
 
-        if (!featurePoints || featurePoints.rows < 8) {
+        if (!featurePointsRaw || featurePointsRaw.rows < 8) {
             // Not enough points – return empty result
             prevGray.delete(); currentGray.delete(); prevMask.delete();
-            featurePoints.delete();
+            featurePointsRaw.delete();
+            return result;
+        }
+
+        // Apply spatial distribution filtering to ensure even coverage
+        let featurePoints = this.filterFeaturesWithSpatialDistribution(
+            featurePointsRaw,
+            prevCorners,
+            this.params.spatialGridSize
+        );
+
+        // Clean up raw features if a new filtered matrix was created
+        if (featurePoints !== featurePointsRaw) {
+            featurePointsRaw.delete();
+        }
+
+        if (!featurePoints || featurePoints.rows < 8) {
+            // Not enough points after filtering – return empty result
+            prevGray.delete(); currentGray.delete(); prevMask.delete();
+            if (featurePoints) featurePoints.delete();
             return result;
         }
 
@@ -434,6 +453,95 @@ class OpticalFlowTracker {
         }
 
         return result;
+    }
+
+    /**
+     * Filter features to ensure spatial distribution across a grid
+     * Divides the quad into NxN cells and ensures features are well-distributed
+     * @param {cv.Mat} featurePoints - Feature points from goodFeaturesToTrack
+     * @param {Array<cv.Point>} corners - Quadrilateral corners
+     * @param {number} gridSize - Grid dimension (e.g., 4 for 4x4 grid)
+     * @returns {cv.Mat} Filtered feature points with better spatial distribution
+     */
+    filterFeaturesWithSpatialDistribution(featurePoints, corners, gridSize = 4) {
+        if (!featurePoints || featurePoints.rows === 0) {
+            return featurePoints;
+        }
+
+        // Get bounding box of the quadrilateral
+        const xs = corners.map(c => c.x);
+        const ys = corners.map(c => c.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+
+        const cellWidth = (maxX - minX) / gridSize;
+        const cellHeight = (maxY - minY) / gridSize;
+
+        // Create grid cells and assign features to cells
+        const grid = new Map();
+
+        // Extract features and assign to grid cells
+        for (let i = 0; i < featurePoints.rows; i++) {
+            const x = featurePoints.data32F[i * 2];
+            const y = featurePoints.data32F[i * 2 + 1];
+
+            // Check if point is inside the quadrilateral
+            if (this.isPointInPolygon(corners, x, y)) {
+                // Calculate grid cell
+                const cellX = Math.floor((x - minX) / cellWidth);
+                const cellY = Math.floor((y - minY) / cellHeight);
+                const cellKey = `${cellX},${cellY}`;
+
+                if (!grid.has(cellKey)) {
+                    grid.set(cellKey, []);
+                }
+                grid.get(cellKey).push({ x, y, index: i });
+            }
+        }
+
+        // Select features from each cell (prioritize cells with fewer features)
+        const selectedFeatures = [];
+        const maxFeaturesPerCell = Math.ceil(this.params.maxFlowFeatures / (gridSize * gridSize));
+
+        // First pass: take at least one feature from each cell
+        for (const cellFeatures of grid.values()) {
+            if (cellFeatures.length > 0) {
+                // Take up to maxFeaturesPerCell from this cell
+                const count = Math.min(cellFeatures.length, maxFeaturesPerCell);
+                for (let i = 0; i < count; i++) {
+                    selectedFeatures.push(cellFeatures[i]);
+                }
+            }
+        }
+
+        // Second pass: if we haven't reached maxFlowFeatures, add more from populated cells
+        if (selectedFeatures.length < this.params.maxFlowFeatures) {
+            for (const cellFeatures of grid.values()) {
+                for (let i = maxFeaturesPerCell; i < cellFeatures.length; i++) {
+                    if (selectedFeatures.length >= this.params.maxFlowFeatures) {
+                        break;
+                    }
+                    selectedFeatures.push(cellFeatures[i]);
+                }
+                if (selectedFeatures.length >= this.params.maxFlowFeatures) {
+                    break;
+                }
+            }
+        }
+
+        // Convert back to cv.Mat format
+        if (selectedFeatures.length === 0) {
+            return featurePoints; // Return original if filtering failed
+        }
+
+        const filteredData = [];
+        for (const feature of selectedFeatures) {
+            filteredData.push(feature.x, feature.y);
+        }
+
+        return cv.matFromArray(selectedFeatures.length, 1, cv.CV_32FC2, filteredData);
     }
 
     // Generate additional tracking points inside the quadrilateral for better tracking

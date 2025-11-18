@@ -76,6 +76,10 @@ class UIManager {
         }
         if (this.visualizeFlowPointsToggle) {
             this.visualizeFlowPointsToggle.checked = state.visualizeFlowPoints;
+            // Set initial canvas visibility
+            if (this.canvas) {
+                this.canvas.style.display = state.visualizeFlowPoints ? 'block' : 'none';
+            }
         }
 
         if (this.detectionIntervalSlider) {
@@ -126,6 +130,10 @@ class UIManager {
         if (this.visualizeFlowPointsToggle) {
             this.visualizeFlowPointsToggle.addEventListener('change', () => {
                 this.tracker.state.visualizeFlowPoints = this.visualizeFlowPointsToggle.checked;
+                // Show/hide output canvas for feature visualization
+                if (this.canvas) {
+                    this.canvas.style.display = this.visualizeFlowPointsToggle.checked ? 'block' : 'none';
+                }
             });
         }
 

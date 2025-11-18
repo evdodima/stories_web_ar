@@ -32,7 +32,7 @@ const AppConfig = {
     // Pyramid decimation ratio (must be greater than 1)
     // Lower values = finer scale steps but slower
     // Recommended: 1.2 (standard), 1.1-1.15 (quality), 1.3-1.5 (performance)
-    scaleFactor: 1.1,
+    scaleFactor: 1.12,
 
     // Number of pyramid levels for multi-scale detection
     // More levels = better scale invariance but slower
@@ -62,7 +62,7 @@ const AppConfig = {
     // FAST threshold for corner detection
     // Lower values = more features detected (noisier), higher = fewer features (more robust)
     // Recommended: 10-15 (quality), 20-30 (performance)
-    fastThreshold: 30
+    fastThreshold: 15
   },
 
   // ======================================================================
@@ -115,7 +115,7 @@ const AppConfig = {
     // Enable Gaussian blur before CLAHE for live frames
     // Reduces noise but may slightly decrease sharpness
     // Only applies when useCLAHE is true
-    useBlur: false,
+    useBlur: true,
 
     // Gaussian blur kernel size (must be odd, e.g., 3, 5, 7)
     blurKernelSize: 3,
@@ -136,7 +136,7 @@ const AppConfig = {
     minSimilarityThreshold: 0,
 
     // Lowe's ratio test threshold (lower = stricter matching)
-    ratioThreshold: 0.75,
+    ratioThreshold: 0.85,
 
     // Multiplier for distance threshold calculation
     distanceThresholdMultiplier: 3,
@@ -174,7 +174,8 @@ const AppConfig = {
     featureMinDistance: 10,
 
     // Maximum number of features to track
-    maxFlowFeatures: 100,
+    // Higher = more robust tracking but slightly slower
+    maxFlowFeatures: 150,
 
     // RANSAC reprojection threshold in pixels
     ransacReprojThreshold: 3.0,
@@ -324,7 +325,7 @@ const AppConfig = {
     // Vocabulary size = branchingFactor^levels
     // Higher branching = fewer levels but more comparisons per level
     // Recommended: 8-10 for small databases, 10-20 for large databases
-    branchingFactor: 3,
+    branchingFactor: 8,
 
     // TREE DEPTH (used when adaptive=false)
     // Number of levels in vocabulary tree
@@ -334,7 +335,7 @@ const AppConfig = {
     //   L=3: k=10 → 1,000 words (good for 10-50 targets)
     //   L=4: k=10 → 10,000 words (good for 100+ targets)
     // Recommended: 3 for most cases, 4 for large databases (200+ targets)
-    levels: 10,
+    levels: 2,
 
     // FEATURE SELECTION PER TARGET
     // Maximum features per target image for vocabulary building
@@ -343,7 +344,7 @@ const AppConfig = {
     // For small databases (3-10 targets): 200-300 recommended
     // For large databases (50+ targets): 500-1000 recommended
     // Note: BRISK used 200-300 features and worked well
-    maxFeaturesPerTarget: 300,
+    maxFeaturesPerTarget: 500,
 
     // WEIGHTING SCHEME FOR BOW SIMILARITY
     // 'tfidf': Traditional TF-IDF weighting (standard)

@@ -145,6 +145,9 @@ class ImageTracker {
         this.detector = new FeatureDetector(this.state, this.profiler, vocabularyQuery);
         this.opticalFlow = new OpticalFlowTracker(this.state);
 
+        // Initialize visualizer for feature point visualization
+        this.visualizer = new Visualizer();
+
         // Handle orientation/resize changes
         this.setupOrientationHandling();
     }
@@ -737,6 +740,30 @@ class ImageTracker {
                 frameToProcess.cols,
                 frameToProcess.rows
             );
+
+            // Visualize optical flow feature points if enabled
+            if (this.state.visualizeFlowPoints && this.visualizer) {
+                // Find tracking result with feature points (from optical flow)
+                const resultWithFlow = trackingResults.find(r =>
+                    r.prevFeaturePoints && r.nextFeaturePoints
+                );
+
+                if (resultWithFlow) {
+                    this.profiler.startTimer('visualization');
+
+                    // Render to output canvas with feature points
+                    this.visualizer.renderResults(
+                        frameToProcess,
+                        resultWithFlow,
+                        this.ui.canvas,
+                        false, // drawKeypoints for ORB features
+                        resultWithFlow.nextFeaturePoints, // Flow points
+                        resultWithFlow.flowStatus // Flow status
+                    );
+
+                    this.profiler.endTimer('visualization');
+                }
+            }
 
             // Render AR overlays (tracking + videos + camera background)
             if (this.arRenderer) {
