@@ -211,13 +211,14 @@ class ReferenceImageManager {
         }
 
         // Convert descriptors to cv.Mat
+        // SIFT uses floating-point descriptors (CV_32F), not binary (CV_8U)
         const descriptorSize = database.metadata.descriptor_bytes;
         const numDescriptors = targetData.descriptors.length;
-        const descriptors = new cv.Mat(numDescriptors, descriptorSize, cv.CV_8U);
+        const descriptors = new cv.Mat(numDescriptors, descriptorSize, cv.CV_32F);
 
         for (let i = 0; i < numDescriptors; i++) {
             for (let j = 0; j < descriptorSize; j++) {
-                descriptors.ucharPtr(i, j)[0] = targetData.descriptors[i][j];
+                descriptors.data32F[i * descriptorSize + j] = targetData.descriptors[i][j];
             }
         }
 

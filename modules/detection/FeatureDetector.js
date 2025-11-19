@@ -1,52 +1,56 @@
 /**
  * Handles feature detection and matching
- * Uses ORB detector for keypoint detection and TEBLID descriptor for feature description
+ * Uses SIFT for keypoint detection and feature description
  */
 class FeatureDetector {
     constructor(state, profiler, vocabularyQuery = null) {
-        console.log('[FeatureDetector] ORB Detector Config:', AppConfig.orb);
-        console.log('[FeatureDetector] TEBLID Descriptor Config:', AppConfig.teblid);
+        console.log('[FeatureDetector] SIFT Config:', AppConfig.sift);
 
         // Check if required OpenCV functions exist
         console.log('[FeatureDetector] OpenCV function check:', {
-            hasORB: typeof cv.ORB,
-            hasXfeatures2d_TEBLID: typeof cv.xfeatures2d_TEBLID,
-            hasTEBLID_SIZE_512_BITS: typeof cv.TEBLID_SIZE_512_BITS,
-            hasTEBLID_SIZE_256_BITS: typeof cv.TEBLID_SIZE_256_BITS
+            hasSIFT: typeof cv.SIFT,
+            hasSIFT_create: typeof cv.SIFT_create
         });
 
-        // ORB detector for keypoint detection
-        console.log('[FeatureDetector] Creating ORB detector...');
-        this.detector = new cv.ORB(
-            AppConfig.orb.nfeatures,
-            AppConfig.orb.scaleFactor,
-            AppConfig.orb.nlevels,
-            AppConfig.orb.edgeThreshold,
-            AppConfig.orb.firstLevel,
-            AppConfig.orb.WTA_K,
-            AppConfig.orb.scoreType,
-            AppConfig.orb.patchSize,
-            AppConfig.orb.fastThreshold
-        );
-        console.log('[FeatureDetector] ✅ ORB detector created');
+        // SIFT for both keypoint detection and feature description
+        console.log('[FeatureDetector] Creating SIFT detector/descriptor...');
 
-        // TEBLID descriptor for feature description
-        // SIZE_512_BITS provides better matching quality than SIZE_256_BITS
-        console.log('[FeatureDetector] Creating TEBLID descriptor...');
-        const teblidSizeConstant = AppConfig.teblid.size === 512
-            ? cv.TEBLID_SIZE_512_BITS
-            : cv.TEBLID_SIZE_256_BITS;
-        console.log('[FeatureDetector] TEBLID size constant:', teblidSizeConstant);
+        // Try different SIFT creation methods depending on build
+        try {
+            if (typeof cv.SIFT_create === 'function') {
+                this.sift = cv.SIFT_create(
+                    AppConfig.sift.nfeatures,
+                    AppConfig.sift.nOctaveLayers,
+                    AppConfig.sift.contrastThreshold,
+                    AppConfig.sift.edgeThreshold,
+                    AppConfig.sift.sigma
+                );
+            } else if (typeof cv.SIFT === 'function') {
+                this.sift = new cv.SIFT(
+                    AppConfig.sift.nfeatures,
+                    AppConfig.sift.nOctaveLayers,
+                    AppConfig.sift.contrastThreshold,
+                    AppConfig.sift.edgeThreshold,
+                    AppConfig.sift.sigma
+                );
+            } else {
+                throw new Error('SIFT not available in this OpenCV.js build');
+            }
+            console.log('[FeatureDetector] ✅ SIFT created:', {
+                nfeatures: AppConfig.sift.nfeatures,
+                nOctaveLayers: AppConfig.sift.nOctaveLayers,
+                contrastThreshold: AppConfig.sift.contrastThreshold,
+                edgeThreshold: AppConfig.sift.edgeThreshold,
+                sigma: AppConfig.sift.sigma
+            });
+        } catch (error) {
+            console.error('[FeatureDetector] ❌ Failed to create SIFT:', error);
+            throw error;
+        }
 
-        this.descriptor = new cv.xfeatures2d_TEBLID(
-            AppConfig.teblid.scaleFactor,
-            teblidSizeConstant
-        );
-
-        console.log('[FeatureDetector] ✅ TEBLID descriptor initialized:', {
-            scaleFactor: AppConfig.teblid.scaleFactor,
-            size: AppConfig.teblid.size + '-bit'
-        });
+        // SIFT handles both detection and description
+        this.detector = this.sift;
+        this.descriptor = this.sift;
 
         this.state = state;
         this.profiler = profiler;
@@ -55,8 +59,8 @@ class FeatureDetector {
         this.useVocabularyTree = true; // Enable/disable vocabulary tree optimization
 
         // Reuse matcher across all targets to avoid recreation overhead
-        // TEBLID uses binary descriptors, so NORM_HAMMING is correct
-        this.matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
+        // SIFT uses floating-point descriptors, so NORM_L2 is correct
+        this.matcher = new cv.BFMatcher(cv.NORM_L2, false);
     }
 
     /**
@@ -291,17 +295,17 @@ class FeatureDetector {
                     frameSize: `${frame.cols}x${frame.rows}`,
                     frameType: frame.type(),
                     grayMean: cv.mean(frameGray)[0].toFixed(2),
-                    orbParams: {
-                        nfeatures: AppConfig.orb.nfeatures,
-                        fastThreshold: AppConfig.orb.fastThreshold,
-                        nlevels: AppConfig.orb.nlevels
+                    siftParams: {
+                        nfeatures: AppConfig.sift.nfeatures,
+                        contrastThreshold: AppConfig.sift.contrastThreshold,
+                        edgeThreshold: AppConfig.sift.edgeThreshold
                     }
                 });
             }
 
             if (frameKeypoints.size() > 0) {
                 this.profiler?.startTimer('detect_limit_features');
-                const maxFeatures = this.state?.maxFeatures || AppConfig.orb.nfeatures;
+                const maxFeatures = this.state?.maxFeatures || (AppConfig.sift.nfeatures > 0 ? AppConfig.sift.nfeatures : 2000);
                 const keypointsArray = [];
 
                 for (let i = 0; i < frameKeypoints.size(); i++) {
@@ -708,12 +712,11 @@ class FeatureDetector {
      * Cleanup OpenCV resources
      */
     cleanup() {
-        if (this.detector) {
-            this.detector.delete();
+        // SIFT is shared between detector and descriptor, so only delete once
+        if (this.sift) {
+            this.sift.delete();
+            this.sift = null;
             this.detector = null;
-        }
-        if (this.descriptor) {
-            this.descriptor.delete();
             this.descriptor = null;
         }
         if (this.matcher) {

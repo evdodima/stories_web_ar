@@ -1,18 +1,10 @@
 const AppConfig = {
-  orb: {
-    nfeatures: 2000,
-    scaleFactor: 1.12,
-    nlevels: 12,
-    edgeThreshold: 20,
-    firstLevel: 0,
-    WTA_K: 2,
-    scoreType: 0,
-    patchSize: 31,
-    fastThreshold: 15
-  },
-  teblid: {
-    scaleFactor: 1.0,
-    size: 512
+  sift: {
+    nfeatures: 0, // 0 means no limit
+    nOctaveLayers: 3,
+    contrastThreshold: 0.04,
+    edgeThreshold: 10,
+    sigma: 1.6
   },
   targetPreprocessing: {
     useCLAHE: true,
@@ -97,8 +89,7 @@ const AppConfig = {
     version: '1.0.0',
     getConfigSignature() {
       const criticalParams = {
-        orb: AppConfig.orb,
-        teblid: AppConfig.teblid,
+        sift: AppConfig.sift,
         vocabulary: {
           branchingFactor: AppConfig.vocabulary.branchingFactor,
           levels: AppConfig.vocabulary.levels,

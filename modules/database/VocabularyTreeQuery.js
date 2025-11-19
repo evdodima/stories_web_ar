@@ -12,9 +12,9 @@ class VocabularyTreeQuery {
     // Convert vocabulary to OpenCV Mat for fast matching (fallback if no tree)
     this.vocabularyMat = this.createVocabularyMat(vocabulary);
 
-    // Create BFMatcher for finding nearest visual words (Hamming distance for TEBLID)
+    // Create BFMatcher for finding nearest visual words (L2 distance for SIFT)
     // Only used if no hierarchical tree is available
-    this.matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
+    this.matcher = new cv.BFMatcher(cv.NORM_L2, false);
 
     console.log(`[VocabularyTreeQuery] Initialized with ${this.vocabularySize} words`);
     console.log(`[VocabularyTreeQuery] Hierarchical tree: ${vocabularyTree ? 'ENABLED (fast)' : 'DISABLED (slow)'}`);
@@ -29,15 +29,15 @@ class VocabularyTreeQuery {
     const numWords = vocabulary.length;
     const descriptorSize = vocabulary[0].length;
 
-    const flatData = new Uint8Array(numWords * descriptorSize);
+    const flatData = new Float32Array(numWords * descriptorSize);
     for (let i = 0; i < numWords; i++) {
       for (let j = 0; j < descriptorSize; j++) {
         flatData[i * descriptorSize + j] = vocabulary[i][j];
       }
     }
 
-    const mat = new cv.Mat(numWords, descriptorSize, cv.CV_8U);
-    mat.data.set(flatData);
+    const mat = new cv.Mat(numWords, descriptorSize, cv.CV_32F);
+    mat.data32F.set(flatData);
     return mat;
   }
 

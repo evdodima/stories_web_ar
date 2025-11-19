@@ -29,7 +29,7 @@ class ImageTracker {
             lastFrame: null, // Last processed frame for optical flow
             featurePoints: null, // Feature points used in optical flow tracking
             flowStatus: null, // Status of optical flow tracking points
-            maxFeatures: AppConfig.orb.nfeatures,
+            maxFeatures: AppConfig.sift.nfeatures > 0 ? AppConfig.sift.nfeatures : 2000,
             trackedTargets: new Map(), // Map of targetId -> {corners, lastFrame, featurePoints}
 
             // Single-video mode with center-priority selection
@@ -77,9 +77,9 @@ class ImageTracker {
                 cvType: cvExists ? typeof window.cv : 'undefined',
                 isFunction: cvExists ? typeof window.cv === 'function' : false,
                 hasBFMatcher: cvExists ? typeof window.cv.BFMatcher : 'N/A',
-                hasORB: cvExists ? typeof window.cv.ORB : 'N/A',
+                hasSIFT: cvExists ? typeof window.cv.SIFT : 'N/A',
+                hasSIFT_create: cvExists ? typeof window.cv.SIFT_create : 'N/A',
                 hasDMatchVector: cvExists ? typeof window.cv.DMatchVector : 'N/A',
-                hasXfeatures2d_TEBLID: cvExists ? typeof window.cv.xfeatures2d_TEBLID : 'N/A',
                 cvKeys: (cvExists && typeof window.cv === 'object') ? Object.keys(window.cv).slice(0, 20) : []
             });
 
@@ -88,7 +88,7 @@ class ImageTracker {
             if (typeof window.cv === 'undefined' ||
                 typeof window.cv === 'function' ||
                 typeof window.cv.BFMatcher !== 'function' ||
-                typeof window.cv.ORB !== 'function' ||
+                (typeof window.cv.SIFT !== 'function' && typeof window.cv.SIFT_create !== 'function') ||
                 typeof window.cv.DMatchVector !== 'function') {
 
                 console.warn('[OpenCV] Not fully loaded yet, retrying in 500ms...');
@@ -312,7 +312,7 @@ class ImageTracker {
         if (typeof window.cv === 'undefined' ||
             typeof window.cv === 'function' ||
             typeof window.cv.BFMatcher !== 'function' ||
-            typeof window.cv.ORB !== 'function' ||
+            (typeof window.cv.SIFT !== 'function' && typeof window.cv.SIFT_create !== 'function') ||
             typeof window.cv.DMatchVector !== 'function') {
 
             this.ui.updateStatus('Waiting for OpenCV to fully initialize...');
@@ -756,7 +756,7 @@ class ImageTracker {
                         frameToProcess,
                         resultWithFlow,
                         this.ui.canvas,
-                        false, // drawKeypoints for ORB features
+                        false, // drawKeypoints for SIFT features
                         resultWithFlow.nextFeaturePoints, // Flow points
                         resultWithFlow.flowStatus // Flow status
                     );

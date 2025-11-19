@@ -1,8 +1,8 @@
 /**
  * VocabularyBuilder.js
  *
- * Builds vocabulary tree from TEBLID descriptors using k-means clustering
- * Uses ORB detector for keypoint detection and TEBLID for feature description
+ * Builds vocabulary tree from SIFT descriptors using k-means clustering
+ * Uses SIFT for keypoint detection and feature description
  * Ported from Python build_vocabulary_tree.py for frontend use
  */
 
@@ -24,23 +24,13 @@ class VocabularyBuilder {
     this.idfWeights = null;
     this.targets = [];
 
-    // ORB detector params (must match live detector in FeatureDetector.js)
-    this.orbParams = {
-      nfeatures: AppConfig.orb.nfeatures,
-      scaleFactor: AppConfig.orb.scaleFactor,
-      nlevels: AppConfig.orb.nlevels,
-      edgeThreshold: AppConfig.orb.edgeThreshold,
-      firstLevel: AppConfig.orb.firstLevel,
-      WTA_K: AppConfig.orb.WTA_K,
-      scoreType: AppConfig.orb.scoreType,
-      patchSize: AppConfig.orb.patchSize,
-      fastThreshold: AppConfig.orb.fastThreshold
-    };
-
-    // TEBLID descriptor params (must match live descriptor in FeatureDetector.js)
-    this.teblidParams = {
-      scaleFactor: AppConfig.teblid.scaleFactor,
-      size: AppConfig.teblid.size
+    // SIFT params (must match live detector in FeatureDetector.js)
+    this.siftParams = {
+      nfeatures: AppConfig.sift.nfeatures,
+      nOctaveLayers: AppConfig.sift.nOctaveLayers,
+      contrastThreshold: AppConfig.sift.contrastThreshold,
+      edgeThreshold: AppConfig.sift.edgeThreshold,
+      sigma: AppConfig.sift.sigma
     };
 
     this.onProgress = options.onProgress || (() => {});
@@ -180,39 +170,38 @@ class VocabularyBuilder {
    * @returns {Object} Feature data
    */
   extractFeatures(imageMat, targetId) {
-    // ORB detector for keypoint detection
-    const detector = new cv.ORB(
-      this.orbParams.nfeatures,
-      this.orbParams.scaleFactor,
-      this.orbParams.nlevels,
-      this.orbParams.edgeThreshold,
-      this.orbParams.firstLevel,
-      this.orbParams.WTA_K,
-      this.orbParams.scoreType,
-      this.orbParams.patchSize,
-      this.orbParams.fastThreshold
-    );
-
-    // TEBLID descriptor for feature description
-    const teblidSizeConstant = this.teblidParams.size === 512
-      ? cv.TEBLID_SIZE_512_BITS
-      : cv.TEBLID_SIZE_256_BITS;
-    const descriptor = new cv.xfeatures2d_TEBLID(
-      this.teblidParams.scaleFactor,
-      teblidSizeConstant
-    );
+    // SIFT for both keypoint detection and feature description
+    let sift;
+    if (typeof cv.SIFT_create === 'function') {
+      sift = cv.SIFT_create(
+        this.siftParams.nfeatures,
+        this.siftParams.nOctaveLayers,
+        this.siftParams.contrastThreshold,
+        this.siftParams.edgeThreshold,
+        this.siftParams.sigma
+      );
+    } else if (typeof cv.SIFT === 'function') {
+      sift = new cv.SIFT(
+        this.siftParams.nfeatures,
+        this.siftParams.nOctaveLayers,
+        this.siftParams.contrastThreshold,
+        this.siftParams.edgeThreshold,
+        this.siftParams.sigma
+      );
+    } else {
+      throw new Error('SIFT not available in this OpenCV.js build');
+    }
 
     const keypoints = new cv.KeyPointVector();
     const descriptors = new cv.Mat();
 
-    // Detect keypoints with ORB, compute descriptors with TEBLID
-    detector.detect(imageMat, keypoints);
-    descriptor.compute(imageMat, keypoints, descriptors);
+    // Detect keypoints and compute descriptors with SIFT
+    sift.detect(imageMat, keypoints);
+    sift.compute(imageMat, keypoints, descriptors);
 
     if (descriptors.rows === 0) {
       console.warn(`No features found for ${targetId}`);
-      detector.delete();
-      descriptor.delete();
+      sift.delete();
       keypoints.delete();
       descriptors.delete();
       return null;
@@ -236,11 +225,11 @@ class VocabularyBuilder {
     const imageWidth = imageMat.cols;
     const imageHeight = imageMat.rows;
 
-    // Convert descriptors to Uint8Array (copy data before deletion)
-    const totalBytes = descriptors.rows * descriptorSize;
-    const descriptorsArray = new Uint8Array(totalBytes);
-    for (let i = 0; i < totalBytes; i++) {
-      descriptorsArray[i] = descriptors.data[i];
+    // Convert descriptors to Float32Array (SIFT uses floating-point descriptors)
+    const totalElements = descriptors.rows * descriptorSize;
+    const descriptorsArray = new Float32Array(totalElements);
+    for (let i = 0; i < totalElements; i++) {
+      descriptorsArray[i] = descriptors.data32F[i];
     }
 
     // Feature selection (keep best distributed features)
@@ -254,8 +243,7 @@ class VocabularyBuilder {
     console.log(`  ${targetId}: ${selected.keypoints.length} features`);
 
     // Clean up OpenCV objects
-    detector.delete();
-    descriptor.delete();
+    sift.delete();
     keypoints.delete();
     descriptors.delete();
 
@@ -1336,8 +1324,8 @@ class VocabularyBuilder {
         vocabulary_size: this.vocabularySize,
         branching_factor: this.k,
         levels: this.levels,
-        descriptor_type: 'TEBLID',
-        descriptor_bytes: this.targets[0]?.descriptorSize || 64,
+        descriptor_type: 'SIFT',
+        descriptor_bytes: this.targets[0]?.descriptorSize || 128,
         has_hierarchical_tree: this.vocabularyTree !== null,
         // Database versioning
         database_version: AppConfig.database.version,
@@ -1450,10 +1438,12 @@ class VocabularyBuilder {
     this.targets = database.targets.map(target => {
       const descriptorSize = database.metadata.descriptor_bytes;
 
-      // Convert descriptors back to flat Uint8Array
-      const descriptorsFlat = new Uint8Array(
-        target.descriptors.length * descriptorSize
-      );
+      // Convert descriptors back to flat array (Float32Array for SIFT, Uint8Array for binary)
+      const isSIFT = database.metadata.descriptor_type === 'SIFT';
+      const descriptorsFlat = isSIFT
+        ? new Float32Array(target.descriptors.length * descriptorSize)
+        : new Uint8Array(target.descriptors.length * descriptorSize);
+
       target.descriptors.forEach((desc, i) => {
         descriptorsFlat.set(desc, i * descriptorSize);
       });
