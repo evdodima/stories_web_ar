@@ -1,6 +1,6 @@
 const AppConfig = {
   sift: {
-    nfeatures: 0, // 0 means no limit
+    nfeatures: 800, // 0 means no limit
     nOctaveLayers: 3,
     contrastThreshold: 0.04,
     edgeThreshold: 10,
@@ -21,10 +21,10 @@ const AppConfig = {
   detection: {
     maxCandidates: 2,
     minSimilarityThreshold: 0,
-    ratioThreshold: 0.75,
+    ratioThreshold: 0.65,
     distanceThresholdMultiplier: 3,
-    minMatchesForHomography: 4,
-    detectionInterval: 30
+    minMatchesForHomography: 12,
+    detectionInterval: 15  // Reduced from 30 for drift correction
   },
   opticalFlow: {
     winSize: { width: 21, height: 21 },
@@ -36,48 +36,26 @@ const AppConfig = {
     minEigThreshold: 0.001,
     featureQualityLevel: 0.005,
     featureMinDistance: 10,
-    maxFlowFeatures: 150,
+    maxFlowFeatures: 100,
     ransacReprojThreshold: 3.0,
     maxRansacIterations: 2000,
     ransacConfidence: 0.995
   },
   tracking: {
-    fbErrorThreshold: 1.5,
-    fbErrorThresholdMax: 4.0,
+    fbErrorThreshold: 1.0,
     minInliers: 15,
-    minInliersStrict: 25,
     maxFlowMagnitude: 150,
-    featureRefreshInterval: 10,
     spatialGridSize: 4
   },
   geometry: {
-    maxScaleChange: 0.5,
-    maxRotationChange: 0.5,
-    maxAspectRatioChange: 0.25,
-    minAreaThreshold: 100,
-    minCompactnessThreshold: 0.05,
-    maxEdgeLengthRatio: 5.0,
-    minCornerAngle: 20 * Math.PI / 180,
-    maxCornerAngle: 160 * Math.PI / 180,
-    maxAspectRatio: 15.0,
-    parallelThreshold: 0.5
-  },
-  quality: {
-    qualityDegradationFrames: 3,
-    minQualityForContinuation: 0.4,
-    weights: {
-      inlierRatio: 0.4,
-      fbError: 0.3,
-      geometric: 0.3
-    },
-    smoothingAlpha: 0.3
+    minAreaThreshold: 100
   },
   targetSwitching: {
     minSwitchDelay: 1000,
     switchHysteresis: 1.3
   },
   frameProcessing: {
-    maxDimension: 720
+    maxDimension: 960
   },
   camera: {
     defaultWidth: 1920,
@@ -109,7 +87,7 @@ const AppConfig = {
   },
   vocabulary: {
     adaptive: true,
-    branchingFactor: 8,
+    branchingFactor: 10,
     levels: 2,
     maxFeaturesPerTarget: 500,
     weightingScheme: 'bm25',

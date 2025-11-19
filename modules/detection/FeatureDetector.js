@@ -284,9 +284,11 @@ class FeatureDetector {
             frameKeypoints = new cv.KeyPointVector();
             frameDescriptors = new cv.Mat();
 
-            this.profiler?.startTimer('detect_keypoints');
-            this.detector.detect(frameGray, frameKeypoints);
-            this.profiler?.endTimer('detect_keypoints');
+            // Use detectAndCompute for faster single-pass feature extraction
+            // SIFT internally limits to nfeatures and returns top features by response
+            this.profiler?.startTimer('detect_and_compute');
+            this.detector.detectAndCompute(frameGray, new cv.Mat(), frameKeypoints, frameDescriptors);
+            this.profiler?.endTimer('detect_and_compute');
 
             // Diagnostic logging for low feature detection
             if (frameKeypoints.size() < 50) {
@@ -301,31 +303,6 @@ class FeatureDetector {
                         edgeThreshold: AppConfig.sift.edgeThreshold
                     }
                 });
-            }
-
-            if (frameKeypoints.size() > 0) {
-                this.profiler?.startTimer('detect_limit_features');
-                const maxFeatures = this.state?.maxFeatures || (AppConfig.sift.nfeatures > 0 ? AppConfig.sift.nfeatures : 2000);
-                const keypointsArray = [];
-
-                for (let i = 0; i < frameKeypoints.size(); i++) {
-                    keypointsArray.push(frameKeypoints.get(i));
-                }
-
-                keypointsArray.sort((a, b) => b.response - a.response);
-
-                const limited = keypointsArray.slice(0, Math.min(maxFeatures, keypointsArray.length));
-
-                frameKeypoints.delete();
-                frameKeypoints = new cv.KeyPointVector();
-                for (const kp of limited) {
-                    frameKeypoints.push_back(kp);
-                }
-                this.profiler?.endTimer('detect_limit_features');
-
-                this.profiler?.startTimer('detect_compute_descriptors');
-                this.descriptor.compute(frameGray, frameKeypoints, frameDescriptors);
-                this.profiler?.endTimer('detect_compute_descriptors');
             }
 
             const keypointPoints = this.keypointsToPoints(frameKeypoints);

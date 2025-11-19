@@ -572,29 +572,8 @@ class ImageTracker {
             const targets = this.referenceManager.getTargets();
             let trackingResults = [];
 
-            // OPTIMIZATION: Skip detection if we have good tracking quality
-            // Check if we have good tracking quality for the active target
-            let hasGoodTracking = false;
-            if (this.state.activeVideoTarget && this.state.trackedTargets.has(this.state.activeVideoTarget)) {
-                const trackState = this.opticalFlow.getTrackingState(this.state.activeVideoTarget);
-                // Good tracking means: no consecutive poor frames and recent quality is good
-                if (trackState.qualityHistory.length > 0) {
-                    const recentQuality = trackState.qualityHistory[trackState.qualityHistory.length - 1];
-                    hasGoodTracking = trackState.consecutivePoorFrames === 0 &&
-                                     recentQuality > AppConfig.quality.minQualityForContinuation;
-
-                    if (hasGoodTracking && this.state.frameCount % this.state.detectionInterval === 0) {
-                        console.log('[ImageTracker] ⚡ Skipping detection - good tracking quality:', {
-                            quality: recentQuality.toFixed(3),
-                            threshold: AppConfig.quality.minQualityForContinuation,
-                            targetId: this.state.activeVideoTarget
-                        });
-                    }
-                }
-            }
-
-            // Only run detector if: no good tracking exists OR optical flow is disabled
-            let shouldRunDetector = (!hasGoodTracking && this.state.frameCount % this.state.detectionInterval === 0) ||
+            // Run detection at intervals or when optical flow is disabled
+            let shouldRunDetector = (this.state.frameCount % this.state.detectionInterval === 0) ||
                                    !this.state.useOpticalFlow;
 
             // OPTIMIZATION: Detect all targets but only track the selected one
@@ -626,13 +605,7 @@ class ImageTracker {
                         });
 
                         // Reset optical flow tracking state on new detection
-                        // This initializes Kalman filters and geometric state
-                        const trackState = this.opticalFlow.getTrackingState(result.targetId);
-                        trackState.framesSinceDetection = 0;
-                        trackState.consecutivePoorFrames = 0;
-                        trackState.prevScale = this.opticalFlow.calculateScale(result.corners);
-                        trackState.prevRotation = this.opticalFlow.calculateRotation(result.corners);
-                        trackState.prevAspectRatio = this.opticalFlow.calculateAspectRatio(result.corners);
+                        this.opticalFlow.resetTrackingState(result.targetId);
 
                         // Update target runtime status
                         this.referenceManager.updateTargetRuntime(result.targetId, {
